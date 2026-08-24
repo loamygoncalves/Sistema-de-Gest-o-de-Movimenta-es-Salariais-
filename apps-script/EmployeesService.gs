@@ -147,75 +147,119 @@ var EmployeesService = {
     return { batch: batch, totalRows: records.length, successRows: successRows, errors: errors };
   },
 
-  /** Compara a base atual de colaboradores com o orçamento do ano informado. */
-  compareWithBudget: function (year, scopedDirectorateId) {
-    var budgetEntries = Tables.budgetEntries.where(function (b) {
-      return Number(b.year) === Number(year) && (!scopedDirectorateId || b.directorateId === scopedDirectorateId);
+  /**
+   * Compara a base atual de colaboradores com o orçamento de um mês do ano
+   * informado. O orçamento não é vinculado a colaborador — a comparação é
+   * feita por "bucket" (diretoria + centro de custo + cargo): quantas vagas
+   * orçadas existem naquele mês para o bucket x quantos colaboradores
+   * ativos ocupam esse mesmo bucket hoje.
+   */
+  compareWithBudget: function (year, month, scopedDirectorateId) {
+    var referenceMonth = month || new Date().getMonth() + 1;
+
+    var allBudgetEntries = Tables.budgetEntries.where(function (b) {
+      if (Number(b.year) !== Number(year)) return false;
+      if (scopedDirectorateId && b.directorateId !== scopedDirectorateId) return false;
+      return true;
     });
+    var budgetEntries = allBudgetEntries.filter(function (entry) {
+      return monthValue_(entry, referenceMonth) !== null;
+    });
+
     var employees = Tables.employees.where(function (e) {
-      return !scopedDirectorateId || e.directorateId === scopedDirectorateId;
+      if (e.status !== EmployeeStatus.ATIVO) return false;
+      if (scopedDirectorateId && e.directorateId !== scopedDirectorateId) return false;
+      return true;
     });
 
-    var employeesByRegistration = {};
-    employees.forEach(function (e) {
-      employeesByRegistration[e.registration] = e;
+    var directorateNames = indexById_(Tables.directorates.all());
+    var costCenterNames = indexById_(Tables.costCenters.all());
+    var positionNames = indexById_(Tables.positions.all());
+
+    var buckets = {};
+    function bucketKey(directorateId, costCenterId, positionId) {
+      return directorateId + '|' + costCenterId + '|' + positionId;
+    }
+    function getBucket(directorateId, costCenterId, positionId) {
+      var key = bucketKey(directorateId, costCenterId, positionId);
+      if (!buckets[key]) {
+        buckets[key] = {
+          directorateId: directorateId,
+          directorateName: directorateNames[directorateId] ? directorateNames[directorateId].name : null,
+          costCenterId: costCenterId,
+          costCenterName: costCenterNames[costCenterId] ? costCenterNames[costCenterId].name : null,
+          positionId: positionId,
+          positionName: positionNames[positionId] ? positionNames[positionId].name : null,
+          budgetedCount: 0,
+          budgetedCost: 0,
+          currentCount: 0,
+          currentCost: 0,
+        };
+      }
+      return buckets[key];
+    }
+
+    budgetEntries.forEach(function (entry) {
+      var bucket = getBucket(entry.directorateId, entry.costCenterId, entry.positionId);
+      bucket.budgetedCount += 1;
+      bucket.budgetedCost += Number(monthValue_(entry, referenceMonth) || 0);
     });
 
-    var promotionsDone = 0;
-    var promotionsPending = 0;
+    employees.forEach(function (employee) {
+      if (!employee.costCenterId) return;
+      var bucket = getBucket(employee.directorateId, employee.costCenterId, employee.positionId);
+      bucket.currentCount += 1;
+      bucket.currentCost += Number(employee.currentSalary || 0);
+    });
+
+    var openPositions = 0;
+    var headcountExcess = 0;
     var budgetSavings = 0;
     var budgetOverrun = 0;
     var items = [];
 
-    budgetEntries.forEach(function (budget) {
-      if (budget.plannedSituation === PlannedSituation.NOVA_VAGA) {
+    Object.keys(buckets).forEach(function (key) {
+      var bucket = buckets[key];
+      var countDiff = bucket.budgetedCount - bucket.currentCount;
+      if (countDiff > 0) openPositions += countDiff;
+      if (countDiff < 0) headcountExcess += Math.abs(countDiff);
+
+      var costDiff = bucket.budgetedCost - bucket.currentCost;
+      if (costDiff > 0) budgetSavings += costDiff;
+      if (costDiff < 0) budgetOverrun += Math.abs(costDiff);
+
+      if (countDiff !== 0) {
         items.push({
-          type: 'VAGA_ABERTA',
-          registration: budget.registration,
-          name: budget.name,
-          plannedSalary: budget.plannedSalary,
+          type: countDiff > 0 ? 'VAGA_ABERTA' : 'EXCESSO_HC',
+          directorate: bucket.directorateName,
+          costCenter: bucket.costCenterName,
+          position: bucket.positionName,
+          budgetedCount: bucket.budgetedCount,
+          currentCount: bucket.currentCount,
+          budgetedCost: bucket.budgetedCost,
+          currentCost: bucket.currentCost,
         });
-        return;
       }
-
-      var employee = budget.registration ? employeesByRegistration[budget.registration] : null;
-      if (!employee) return;
-
-      if (budget.plannedSituation === PlannedSituation.PROMOCAO) {
-        if (Number(employee.currentSalary) >= Number(budget.plannedSalary)) {
-          promotionsDone += 1;
-        } else {
-          promotionsPending += 1;
-          items.push({
-            type: 'PROMOCAO_PENDENTE',
-            registration: employee.registration,
-            name: employee.name,
-            currentSalary: employee.currentSalary,
-            plannedSalary: budget.plannedSalary,
-          });
-        }
-      }
-
-      var diff = Number(budget.currentSalary) - Number(employee.currentSalary);
-      if (diff > 0) budgetSavings += diff;
-      if (diff < 0) budgetOverrun += Math.abs(diff);
     });
 
-    var openPositions = budgetEntries.filter(function (b) {
-      return b.plannedSituation === PlannedSituation.NOVA_VAGA;
-    }).length;
-
-    var headcountExcess = Math.max(0, employees.length - budgetEntries.length);
+    var movementsByType = {};
+    Object.keys(PlannedSituation).forEach(function (key) {
+      var type = PlannedSituation[key];
+      movementsByType[type] = budgetEntries.filter(function (entry) {
+        return entry.movementType === type;
+      }).length;
+    });
 
     return {
+      year: year,
+      month: referenceMonth,
       hcBudgeted: budgetEntries.length,
       hcCurrent: employees.length,
-      promotionsDone: promotionsDone,
-      promotionsPending: promotionsPending,
       openPositions: openPositions,
       headcountExcess: headcountExcess,
       budgetSavings: budgetSavings,
       budgetOverrun: budgetOverrun,
+      movementsByType: movementsByType,
       items: items,
     };
   },

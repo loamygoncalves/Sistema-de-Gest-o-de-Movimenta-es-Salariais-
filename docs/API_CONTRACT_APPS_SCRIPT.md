@@ -7,7 +7,7 @@ cliente (HtmlService) assim, nunca com `await`/Promise nativo:
 google.script.run
   .withSuccessHandler(function (result) { /* ... */ })
   .withFailureHandler(function (error) { /* error.message */ })
-  .api_getDashboardHeadcount(2026, null);
+  .api_getDashboardHeadcount(2026, 1, null);
 ```
 
 `Client_Core.html` envolve isso num helper `callApi(fnName, ...args)` que
@@ -47,12 +47,32 @@ filtro para essas roles.
 - `api_deactivateEmployee(id)`
 - `api_importEmployees(base64Data, mimeType, filename)` → `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
   (o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte base64 após a vírgula)
-- `api_getEmployeesComparison(year)` → `{ hcBudgeted, hcCurrent, promotionsDone, promotionsPending, openPositions, headcountExcess, budgetSavings, budgetOverrun, items[] }`
+- `api_getEmployeesComparison(year, month?)` → compara a base atual x orçada, agregando
+  por bucket (diretoria + centro de custo + cargo) no mês de referência
+  (`month` 1-12, padrão mês corrente) — o orçamento não é vinculado a
+  colaborador, então a comparação não casa por matrícula:
+  `{ year, month, hcBudgeted, hcCurrent, openPositions, headcountExcess, budgetSavings, budgetOverrun, movementsByType: {SEM_MOVIMENTACAO,PROMOCAO,MERITO,SUBSTITUICAO,AUMENTO_DE_QUADRO,DESLIGAMENTO}, items: [{type: 'VAGA_ABERTA'|'EXCESSO_HC', directorate, costCenter, position, budgetedCount, currentCount, budgetedCost, currentCost}] }`
 
 ## Orçamento — Módulo 1
-- `api_listBudgetEntries(year, directorateId?)`
-- `api_getBudgetDashboard(year, directorateId?)` → `{ hcBudgeted, hcCurrent, hcDifference, payrollBudgeted, payrollCurrent, financialDeviation, budgetConsumedPercent }`
-- `api_importBudget(base64Data, mimeType, filename, year)` → mesmo formato de retorno do import de colaboradores
+Orçamento por **diretoria + centro de custo + cargo** — não é vinculado a
+colaborador (sem matrícula/nome). Cada linha (`Tables.budgetEntries`) tem um
+`movementType` (`SEM_MOVIMENTACAO | PROMOCAO | MERITO | SUBSTITUICAO |
+AUMENTO_DE_QUADRO | DESLIGAMENTO`) e um custo orçado por mês (`jan`..`dez`,
+`null` fora do período orçado). Múltiplas linhas podem repetir a mesma
+combinação diretoria+centro de custo+cargo+tipo — cada uma representa uma
+vaga/assento orçado distinto (24 linhas idênticas = 24 vagas daquele tipo);
+não há rejeição de linha "duplicada" na importação.
+
+- `api_listBudgetEntries(year, directorateId?, costCenterId?, positionId?)`
+- `api_getBudgetDashboard(year, month?, directorateId?, costCenterId?)` →
+  `{ year, month, hcBudgeted, payrollBudgeted, annualBudgeted }` — `hcBudgeted`/
+  `payrollBudgeted` são do mês de referência (`month` 1-12, padrão mês
+  corrente); `annualBudgeted` é a soma de todas as 12 colunas de todas as
+  linhas (visão do ano inteiro).
+- `api_importBudget(base64Data, mimeType, filename, year)` → mesmo formato de retorno do import de colaboradores.
+  O `year` é sobreposto pelo ano derivado do cabeçalho de mês, quando este é
+  uma data real. Reimportar substitui integralmente o orçado do ano para as
+  diretorias presentes no arquivo.
 
 ## Simulador / encargos — Módulo 4
 - `api_listChargeParameters()`, `api_createChargeParameter({name,label,valueType,value,isBenefit})`, `api_updateChargeParameter(id, patch)`
@@ -87,10 +107,13 @@ filtro para essas roles.
 - `api_getSalaryPositioning({ directorateId?, positionId? })` → `[{ employee, currentSalary, marketP25, marketP50, marketP75, marketP90, classification }]`, `classification` ∈ `ABAIXO_DO_MERCADO | DENTRO_DO_MERCADO | ACIMA_DO_MERCADO | null`
 
 ## Dashboards executivos — Módulo 8
-- `api_getDashboardHeadcount(year, directorateId?)` → `{ hcBudgeted, hcCurrent, hcApproved, hcOpen }`
-- `api_getDashboardPayroll(year, directorateId?)` → mesmo formato de `api_getBudgetDashboard`
+- `api_getDashboardHeadcount(year, month?, directorateId?)` → `{ year, month, hcBudgeted, hcCurrent, hcApproved, hcOpen }`
+  (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente;
+  vaga em aberto = linha de orçamento com `movementType = AUMENTO_DE_QUADRO` ativa no mês)
+- `api_getDashboardPayroll(year, month?, directorateId?)` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
+  (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
 - `api_getDashboardMovements(year, directorateId?)` → `{ promotions, merits, headcountIncrease, transfers }`
-- `api_getDashboardFinancial(year, directorateId?)` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}] }`
+- `api_getDashboardFinancial(year, month?, directorateId?)` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}] }`
 
 ## Upload de arquivo (import)
 

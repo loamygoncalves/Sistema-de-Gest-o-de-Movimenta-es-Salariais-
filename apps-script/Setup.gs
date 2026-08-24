@@ -19,6 +19,8 @@ function setupSpreadsheet() {
     PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_PROPERTY, ss.getId());
   }
 
+  migrateLegacyBudgetSheet_(ss);
+
   Object.keys(TABLES_CONFIG).forEach(function (key) {
     var cfg = TABLES_CONFIG[key];
     var sheet = ss.getSheetByName(cfg.sheet);
@@ -43,6 +45,41 @@ function setupSpreadsheet() {
 
   Logger.log('Planilha configurada: ' + ss.getUrl());
   return ss.getUrl();
+}
+
+/**
+ * Migração de segurança: o modelo do orçamento mudou de "uma linha por
+ * colaborador" (registration/plannedSalary/plannedMonth/...) para "uma
+ * linha por diretoria+centro de custo+cargo+tipo de movimentação" com 12
+ * colunas mensais (jan..dez). Se a aba de orçamento já existir com o
+ * cabeçalho antigo, ela é renomeada (nunca apagada) e uma aba nova com o
+ * cabeçalho atual é criada em seu lugar pelo loop principal de
+ * setupSpreadsheet(), para que ninguém perca dados silenciosamente.
+ */
+function migrateLegacyBudgetSheet_(ss) {
+  var cfg = TABLES_CONFIG.budgetEntries;
+  var sheet = ss.getSheetByName(cfg.sheet);
+  if (!sheet || sheet.getLastRow() === 0) return;
+
+  var currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var matches =
+    currentHeaders.length === cfg.columns.length &&
+    cfg.columns.every(function (col, i) {
+      return currentHeaders[i] === col;
+    });
+  if (matches) return;
+
+  var legacyName = cfg.sheet + '_legado_' + new Date().getTime();
+  sheet.setName(legacyName);
+  Logger.log(
+    'Aba "' +
+      cfg.sheet +
+      '" com layout antigo de orçamento (por colaborador) renomeada para "' +
+      legacyName +
+      '" — dados preservados ali. Uma aba "' +
+      cfg.sheet +
+      '" nova, com o layout atual (diretoria+centro de custo+cargo+tipo de movimentação+jan..dez), será criada em seguida.',
+  );
 }
 
 function seedReferenceData_() {

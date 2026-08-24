@@ -165,26 +165,26 @@ function api_importEmployees(base64Data, mimeType, filename) {
   return EmployeesService.importFromFile(base64Data, mimeType, filename, user.email);
 }
 
-function api_getEmployeesComparison(year) {
+function api_getEmployeesComparison(year, month) {
   var user = requireUser_();
   var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return EmployeesService.compareWithBudget(year, scoped);
+  return EmployeesService.compareWithBudget(year, month, scoped);
 }
 
 // ---------------------------------------------------------------------------
 // Orçamento (Módulo 1)
 // ---------------------------------------------------------------------------
 
-function api_listBudgetEntries(year, directorateId) {
+function api_listBudgetEntries(year, directorateId, costCenterId, positionId) {
   var user = requireUser_();
   var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return stripRows_(BudgetService.listEntries(year, scoped));
+  return stripRows_(BudgetService.listEntries(year, scoped, costCenterId, positionId));
 }
 
-function api_getBudgetDashboard(year, directorateId) {
+function api_getBudgetDashboard(year, month, directorateId, costCenterId) {
   var user = requireUser_();
   var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return BudgetService.getDashboard(year, scoped);
+  return BudgetService.getDashboard(year, month, scoped, costCenterId);
 }
 
 function api_importBudget(base64Data, mimeType, filename, year) {
@@ -345,16 +345,16 @@ function api_getSalaryPositioning(filters) {
 // Dashboards executivos (Módulo 8)
 // ---------------------------------------------------------------------------
 
-function api_getDashboardHeadcount(year, directorateId) {
+function api_getDashboardHeadcount(year, month, directorateId) {
   var user = requireUser_();
   var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getHeadcount(year, scoped);
+  return DashboardService.getHeadcount(year, month, scoped);
 }
 
-function api_getDashboardPayroll(year, directorateId) {
+function api_getDashboardPayroll(year, month, directorateId) {
   var user = requireUser_();
   var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getPayroll(year, scoped);
+  return DashboardService.getPayroll(year, month, scoped);
 }
 
 function api_getDashboardMovements(year, directorateId) {
@@ -363,8 +363,8 @@ function api_getDashboardMovements(year, directorateId) {
   return DashboardService.getMovements(year, scoped);
 }
 
-function api_getDashboardFinancial(year, directorateId) {
+function api_getDashboardFinancial(year, month, directorateId) {
   var user = requireUser_();
   var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getFinancial(year, scoped);
+  return DashboardService.getFinancial(year, month, scoped);
 }

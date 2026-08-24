@@ -2,19 +2,29 @@
   /* =====================================================================
      Módulo 1 — Orçamento anual de pessoal
      api_listBudgetEntries / api_getBudgetDashboard / api_importBudget
+
+     Uma linha de orçamento é (diretoria + centro de custo + cargo + tipo de
+     movimentação) + custo orçado mês a mês (jan..dez) — NÃO é vinculada a
+     um colaborador. Múltiplas linhas podem repetir a mesma combinação:
+     cada uma representa uma vaga/assento orçado distinto.
      ===================================================================== */
+
+  var BUDGET_MONTH_COLUMNS_ = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  var BUDGET_MONTH_LABELS_ = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
   Views.budget = function (root) {
     var user = App.user;
     var canImport = canManage(user);
+    var now = new Date();
     var state = {
-      year: new Date().getFullYear(),
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
       directorateId: isScopedRole(user) ? user.directorateId || '' : '',
       tab: 'overview',
     };
 
     root.innerHTML =
-      '<div class="page-header"><div><h1>Orçamento</h1><p>Orçamento anual de pessoal por diretoria e comparação com a folha atual.</p></div></div>' +
+      '<div class="page-header"><div><h1>Orçamento</h1><p>Orçamento anual de pessoal por diretoria, centro de custo e cargo.</p></div></div>' +
       '<div class="filter-bar" id="budget-filters"></div>' +
       '<div class="tabs" id="budget-tabs"></div>' +
       '<div id="budget-body">' +
@@ -35,9 +45,21 @@
       }
       el.innerHTML =
         '<div class="col"><label>Ano</label><input type="number" id="budget-year" value="' + state.year + '" style="width:110px;"></div>' +
+        '<div class="col"><label>Mês de referência</label><select id="budget-month">' +
+        optionsHtml(
+          BUDGET_MONTH_LABELS_.map(function (label, i) {
+            return { id: i + 1, name: label };
+          }),
+          { selected: state.month },
+        ) +
+        '</select></div>' +
         directorateFilterHtml;
       document.getElementById('budget-year').addEventListener('change', function (e) {
         state.year = Number(e.target.value) || state.year;
+        renderTabBody();
+      });
+      document.getElementById('budget-month').addEventListener('change', function (e) {
+        state.month = Number(e.target.value) || state.month;
         renderTabBody();
       });
       var dirEl = document.getElementById('budget-directorate');
@@ -77,19 +99,13 @@
       var dirId = state.directorateId || null;
 
       if (state.tab === 'overview') {
-        callApi('api_getBudgetDashboard', state.year, dirId)
+        callApi('api_getBudgetDashboard', state.year, state.month, dirId)
           .then(function (d) {
             body.innerHTML =
-              '<div class="grid grid-4">' +
-              kpiTile('Headcount Orçado', fmt.number(d.hcBudgeted)) +
-              kpiTile('Headcount Atual', fmt.number(d.hcCurrent)) +
-              kpiTile('Diferença de Headcount', (d.hcDifference > 0 ? '+' : '') + fmt.number(d.hcDifference), d.hcDifference > 0 ? 'danger' : d.hcDifference < 0 ? 'good' : '') +
-              kpiTile('% Orçamento Consumido', fmt.percent(d.budgetConsumedPercent), d.budgetConsumedPercent > 100 ? 'danger' : '') +
-              '</div>' +
-              '<div class="grid grid-3" style="margin-top:16px;">' +
-              kpiTile('Folha Orçada', fmt.currency(d.payrollBudgeted)) +
-              kpiTile('Folha Atual', fmt.currency(d.payrollCurrent)) +
-              kpiTile('Desvio Financeiro', fmt.currency(d.financialDeviation), d.financialDeviation > 0 ? 'danger' : 'good') +
+              '<div class="grid grid-3">' +
+              kpiTile('Headcount Orçado (mês)', fmt.number(d.hcBudgeted)) +
+              kpiTile('Folha Orçada (mês)', fmt.currency(d.payrollBudgeted)) +
+              kpiTile('Custo Orçado (ano inteiro)', fmt.currency(d.annualBudgeted)) +
               '</div>';
           })
           .catch(function (err) {
@@ -119,40 +135,34 @@
       var body = document.getElementById('budget-body');
       var positions = idNameMap(org.positions);
       var directorates = idNameMap(org.directorates);
+      var costCenters = idNameMap(org.costCenters);
       if (!entries || entries.length === 0) {
         body.innerHTML = emptyStateHtml('Nenhum lançamento de orçamento para o ano/diretoria selecionados.');
         return;
       }
       body.innerHTML =
         '<div class="table-wrap"><table><thead><tr>' +
-        '<th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Diretoria</th><th>Situação Planejada</th>' +
-        '<th class="cell-num">Salário Atual</th><th class="cell-num">Salário Orçado</th><th>Mês Previsto</th>' +
-        '<th class="cell-num">Custo Mensal Orçado</th><th class="cell-num">Custo Anual Orçado</th>' +
+        '<th>Diretoria</th><th>Centro de Custo</th><th>Cargo</th><th>Tipo de Movimentação</th>' +
+        BUDGET_MONTH_LABELS_.map(function (label) {
+          return '<th class="cell-num">' + label + '</th>';
+        }).join('') +
         '</tr></thead><tbody>' +
         entries
           .map(function (e) {
             return (
               '<tr><td>' +
-              escapeHtml(e.registration || '—') +
+              escapeHtml(directorates[e.directorateId] || '—') +
               '</td><td>' +
-              escapeHtml(e.name || '—') +
+              escapeHtml(costCenters[e.costCenterId] || '—') +
               '</td><td>' +
               escapeHtml(positions[e.positionId] || '—') +
               '</td><td>' +
-              escapeHtml(directorates[e.directorateId] || '—') +
-              '</td><td>' +
-              badge('plannedSituation', e.plannedSituation) +
-              '</td><td class="cell-num">' +
-              fmt.currency(e.currentSalary) +
-              '</td><td class="cell-num">' +
-              fmt.currency(e.plannedSalary) +
-              '</td><td>' +
-              escapeHtml(e.plannedMonth || '—') +
-              '</td><td class="cell-num">' +
-              fmt.currency(e.monthlyBudgetedCost) +
-              '</td><td class="cell-num">' +
-              fmt.currency(e.annualBudgetedCost) +
-              '</td></tr>'
+              badge('plannedSituation', e.movementType) +
+              '</td>' +
+              BUDGET_MONTH_COLUMNS_.map(function (key) {
+                return '<td class="cell-num">' + (e[key] != null && e[key] !== '' ? fmt.currency(e[key]) : '—') + '</td>';
+              }).join('') +
+              '</tr>'
             );
           })
           .join('') +
@@ -163,7 +173,12 @@
       var body = document.getElementById('budget-body');
       body.innerHTML =
         cardOpen('Importar planilha de orçamento', {
-          subtitle: 'Colunas esperadas: matricula, nome, cargo, diretoria, cidade, estado, tipo_contrato, data_admissao, salario_atual, situacao_planejada, salario_orcado, mes_previsto, custo_mensal_orcado, custo_anual_orcado.',
+          subtitle:
+            'Colunas esperadas: DIRETORIA, CENTRO DE CUSTO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses ' +
+            '(jan a dez — o cabeçalho pode ser uma data de cada mês do ano orçado). Cada linha é uma vaga/assento orçado ' +
+            'distinto: linhas idênticas são válidas (ex.: 24 linhas iguais = 24 vagas). Tipos aceitos: Sem Movimentação, ' +
+            'Promoção, Mérito, Substituição, Aumento de Quadro, Desligamento. Use "-" ou deixe em branco para meses sem ' +
+            'custo orçado. Reimportar substitui integralmente o orçado do ano para as diretorias presentes no arquivo.',
         }) +
         '<div class="form-grid"><div class="field"><label>Ano de referência <span class="req">*</span></label>' +
         '<input type="number" id="budget-import-year" value="' + state.year + '"></div></div>' +

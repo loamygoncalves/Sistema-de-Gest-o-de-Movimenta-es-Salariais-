@@ -272,35 +272,55 @@
     }
 
     function comparisonItemRow(item) {
-      var typeLabel = item.type === 'VAGA_ABERTA' ? 'Vaga em Aberto' : 'Promoção Pendente';
-      var typeClass = item.type === 'VAGA_ABERTA' ? 'pill-blue' : 'pill-amber';
+      var typeLabel = item.type === 'VAGA_ABERTA' ? 'Vaga em Aberto' : 'Excesso de HC';
+      var typeClass = item.type === 'VAGA_ABERTA' ? 'pill-blue' : 'pill-red';
       return (
         '<tr><td><span class="pill ' +
         typeClass +
         '">' +
         typeLabel +
         '</span></td><td>' +
-        escapeHtml(item.registration || '—') +
+        escapeHtml(item.directorate || '—') +
         '</td><td>' +
-        escapeHtml(item.name || '—') +
+        escapeHtml(item.costCenter || '—') +
+        '</td><td>' +
+        escapeHtml(item.position || '—') +
         '</td><td class="cell-num">' +
-        (item.currentSalary != null ? fmt.currency(item.currentSalary) : '—') +
+        fmt.number(item.budgetedCount) +
         '</td><td class="cell-num">' +
-        (item.plannedSalary != null ? fmt.currency(item.plannedSalary) : '—') +
+        fmt.number(item.currentCount) +
+        '</td><td class="cell-num">' +
+        fmt.currency(item.budgetedCost) +
+        '</td><td class="cell-num">' +
+        fmt.currency(item.currentCost) +
         '</td></tr>'
       );
     }
 
     function renderComparisonTab() {
       var body = document.getElementById('emp-body');
+      var now = new Date();
+      if (!state.month) state.month = now.getMonth() + 1;
       body.innerHTML =
-        '<div class="filter-bar"><div class="col"><label>Ano</label><input type="number" id="emp-cmp-year" value="' +
-        state.year +
-        '" style="width:110px;"></div></div><div id="emp-cmp-body">' +
+        '<div class="filter-bar">' +
+        '<div class="col"><label>Ano</label><input type="number" id="emp-cmp-year" value="' + state.year + '" style="width:110px;"></div>' +
+        '<div class="col"><label>Mês de referência</label><select id="emp-cmp-month">' +
+        optionsHtml(
+          ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map(function (label, i) {
+            return { id: i + 1, name: label };
+          }),
+          { selected: state.month },
+        ) +
+        '</select></div>' +
+        '</div><div id="emp-cmp-body">' +
         loadingHtml() +
         '</div>';
       document.getElementById('emp-cmp-year').addEventListener('change', function (e) {
         state.year = Number(e.target.value) || state.year;
+        loadComparison();
+      });
+      document.getElementById('emp-cmp-month').addEventListener('change', function (e) {
+        state.month = Number(e.target.value) || state.month;
         loadComparison();
       });
       loadComparison();
@@ -310,28 +330,43 @@
       var wrap = document.getElementById('emp-cmp-body');
       if (!wrap) return;
       wrap.innerHTML = loadingHtml();
-      callApi('api_getEmployeesComparison', state.year)
+      callApi('api_getEmployeesComparison', state.year, state.month)
         .then(function (d) {
+          var movementsByTypeHtml = Object.keys(d.movementsByType || {})
+            .map(function (type) {
+              return (
+                '<div class="kpi-tile"><div class="kpi-label">' +
+                escapeHtml(labelFor('plannedSituation', type)) +
+                '</div><div class="kpi-value">' +
+                fmt.number(d.movementsByType[type]) +
+                '</div></div>'
+              );
+            })
+            .join('');
           wrap.innerHTML =
             '<div class="grid grid-4">' +
-            '<div class="kpi-tile"><div class="kpi-label">Headcount Orçado</div><div class="kpi-value">' + fmt.number(d.hcBudgeted) + '</div></div>' +
+            '<div class="kpi-tile"><div class="kpi-label">Headcount Orçado (mês)</div><div class="kpi-value">' + fmt.number(d.hcBudgeted) + '</div></div>' +
             '<div class="kpi-tile"><div class="kpi-label">Headcount Atual</div><div class="kpi-value">' + fmt.number(d.hcCurrent) + '</div></div>' +
-            '<div class="kpi-tile' + (d.headcountExcess > 0 ? ' danger' : '') + '"><div class="kpi-label">Excesso de Headcount</div><div class="kpi-value">' + fmt.number(d.headcountExcess) + '</div></div>' +
             '<div class="kpi-tile"><div class="kpi-label">Vagas em Aberto</div><div class="kpi-value">' + fmt.number(d.openPositions) + '</div></div>' +
+            '<div class="kpi-tile' + (d.headcountExcess > 0 ? ' danger' : '') + '"><div class="kpi-label">Excesso de Headcount</div><div class="kpi-value">' + fmt.number(d.headcountExcess) + '</div></div>' +
             '</div>' +
-            '<div class="grid grid-4" style="margin-top:16px;">' +
-            '<div class="kpi-tile good"><div class="kpi-label">Promoções Realizadas</div><div class="kpi-value">' + fmt.number(d.promotionsDone) + '</div></div>' +
-            '<div class="kpi-tile warn"><div class="kpi-label">Promoções Pendentes</div><div class="kpi-value">' + fmt.number(d.promotionsPending) + '</div></div>' +
+            '<div class="grid grid-2" style="margin-top:16px;">' +
             '<div class="kpi-tile good"><div class="kpi-label">Economia de Orçamento</div><div class="kpi-value">' + fmt.currency(d.budgetSavings) + '</div></div>' +
             '<div class="kpi-tile danger"><div class="kpi-label">Estouro de Orçamento</div><div class="kpi-value">' + fmt.currency(d.budgetOverrun) + '</div></div>' +
             '</div>' +
             '<div style="margin-top:20px;">' +
-            cardOpen('Itens de Atenção', { subtitle: 'Vagas em aberto e promoções previstas no orçamento ainda não realizadas' }) +
+            cardOpen('Movimentações Orçadas no Mês', { subtitle: 'Quantidade de linhas de orçamento ativas no mês, por tipo de movimentação (informativo)' }) +
+            '<div class="grid grid-3">' + movementsByTypeHtml + '</div>' +
+            cardClose() +
+            '</div>' +
+            '<div style="margin-top:20px;">' +
+            cardOpen('Itens de Atenção', { subtitle: 'Buckets (diretoria + centro de custo + cargo) com diferença entre vagas orçadas e colaboradores ativos' }) +
             (d.items && d.items.length > 0
-              ? '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Matrícula</th><th>Nome</th><th class="cell-num">Salário Atual</th><th class="cell-num">Salário Orçado</th></tr></thead><tbody>' +
+              ? '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Diretoria</th><th>Centro de Custo</th><th>Cargo</th>' +
+                '<th class="cell-num">Qtd. Orçada</th><th class="cell-num">Qtd. Atual</th><th class="cell-num">Custo Orçado</th><th class="cell-num">Custo Atual</th></tr></thead><tbody>' +
                 d.items.map(comparisonItemRow).join('') +
                 '</tbody></table></div>'
-              : emptyStateHtml('Nenhum item pendente para o ano selecionado.', '✅')) +
+              : emptyStateHtml('Nenhum item pendente para o mês selecionado.', '✅')) +
             cardClose() +
             '</div>';
         })

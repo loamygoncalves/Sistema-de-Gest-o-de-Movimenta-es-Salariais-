@@ -205,12 +205,16 @@ var TABLES_CONFIG = {
     ],
   },
   budgetEntries: {
+    // Linha de orçamento = (ano, diretoria, centro de custo, cargo, tipo de
+    // movimentação) + custo orçado mês a mês (jan..dez); não vinculada a um
+    // colaborador. Múltiplas linhas podem repetir a mesma combinação
+    // diretoria+centro de custo+cargo+tipo — cada uma representa uma
+    // vaga/assento orçado distinto (não há checagem de duplicata).
     sheet: 'Orcamento',
     columns: [
-      'id', 'year', 'registration', 'employeeId', 'name', 'positionId', 'directorateId',
-      'city', 'state', 'contractType', 'admissionDate', 'currentSalary',
-      'plannedSituation', 'plannedSalary', 'plannedMonth', 'monthlyBudgetedCost',
-      'annualBudgetedCost', 'createdAt',
+      'id', 'year', 'directorateId', 'costCenterId', 'positionId', 'movementType',
+      'jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez',
+      'importBatchId', 'createdAt', 'updatedAt',
     ],
   },
   chargeParameters: {

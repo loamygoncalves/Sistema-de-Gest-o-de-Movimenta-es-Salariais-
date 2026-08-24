@@ -48,6 +48,41 @@ function readXlsxViaDriveConversion_(base64Data, mimeType, filename) {
   }
 }
 
+/**
+ * Variante "crua" de parseUploadedSpreadsheet_: preserva os valores por
+ * posição de coluna (sem normalizar/chavear pelo nome do cabeçalho) —
+ * usado quando o layout tem colunas cujo cabeçalho não é um texto simples
+ * (ex.: datas de cada mês no orçamento) e o mapeamento precisa ser feito
+ * pelo chamador. Equivalente a parseExcelSheetRaw no backend NestJS, mas
+ * com índices 0-based (convenção já usada pelo restante deste arquivo).
+ * Devolve { headers: [...], rows: [{ rowNumber, values: [...] }, ...] }.
+ */
+function parseUploadedSpreadsheetRaw_(base64Data, mimeType, filename) {
+  var rows;
+  if (mimeType === 'text/csv' || /\.csv$/i.test(filename || '')) {
+    var text = Utilities.newBlob(Utilities.base64Decode(base64Data), mimeType, filename).getDataAsString('UTF-8');
+    rows = Utilities.parseCsv(text);
+  } else {
+    rows = readXlsxViaDriveConversion_(base64Data, mimeType, filename);
+  }
+  return rowsToRawSheet_(rows);
+}
+
+function rowsToRawSheet_(rows) {
+  if (!rows || rows.length === 0) return { headers: [], rows: [] };
+  var headers = rows[0];
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    var row = rows[i];
+    var hasValue = row.some(function (v) {
+      return v !== '' && v !== null && v !== undefined;
+    });
+    if (!hasValue) continue;
+    out.push({ rowNumber: i + 1, values: row });
+  }
+  return { headers: headers, rows: out };
+}
+
 function rowsToRecords_(rows) {
   if (!rows || rows.length === 0) return [];
   var headers = rows[0].map(normalizeHeader_);

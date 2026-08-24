@@ -5,10 +5,14 @@
      api_getDashboardMovements / api_getDashboardFinancial
      ===================================================================== */
 
+  var DASHBOARD_MONTH_LABELS_ = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
   Views.dashboard = function (root) {
     var user = App.user;
+    var now = new Date();
     var state = {
-      year: new Date().getFullYear(),
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
       directorateId: isScopedRole(user) ? user.directorateId || '' : '',
     };
 
@@ -75,11 +79,23 @@
         '<div class="col"><label>Ano</label><input type="number" id="dash-year" value="' +
         state.year +
         '" style="width:110px;"></div>' +
+        '<div class="col"><label>Mês de referência</label><select id="dash-month">' +
+        optionsHtml(
+          DASHBOARD_MONTH_LABELS_.map(function (label, i) {
+            return { id: i + 1, name: label };
+          }),
+          { selected: state.month },
+        ) +
+        '</select></div>' +
         directorateFilterHtml +
         '<div class="col" style="justify-content:flex-end;"><button class="btn btn-outline btn-sm" id="dash-refresh">Atualizar</button></div>';
 
       document.getElementById('dash-year').addEventListener('change', function (e) {
         state.year = Number(e.target.value) || state.year;
+        loadData();
+      });
+      document.getElementById('dash-month').addEventListener('change', function (e) {
+        state.month = Number(e.target.value) || state.month;
         loadData();
       });
       var dirEl = document.getElementById('dash-directorate');
@@ -97,10 +113,10 @@
       body.innerHTML = loadingHtml();
       var dirId = state.directorateId || null;
       Promise.all([
-        callApi('api_getDashboardHeadcount', state.year, dirId),
-        callApi('api_getDashboardPayroll', state.year, dirId),
+        callApi('api_getDashboardHeadcount', state.year, state.month, dirId),
+        callApi('api_getDashboardPayroll', state.year, state.month, dirId),
         callApi('api_getDashboardMovements', state.year, dirId),
-        callApi('api_getDashboardFinancial', state.year, dirId),
+        callApi('api_getDashboardFinancial', state.year, state.month, dirId),
       ])
         .then(function (results) {
           renderBody(results[0], results[1], results[2], results[3]);
@@ -115,16 +131,15 @@
       body.innerHTML =
         '<div class="stack">' +
         '<div class="grid grid-4">' +
-        kpiTile('Headcount Orçado', fmt.number(headcount.hcBudgeted)) +
+        kpiTile('Headcount Orçado (mês)', fmt.number(headcount.hcBudgeted)) +
         kpiTile('Headcount Atual', fmt.number(headcount.hcCurrent)) +
         kpiTile('Vagas Aprovadas (ano)', fmt.number(headcount.hcApproved), 'highlight') +
         kpiTile('Vagas em Aberto', fmt.number(headcount.hcOpen)) +
         '</div>' +
-        '<div class="grid grid-4">' +
-        kpiTile('Folha Orçada', fmt.currency(payroll.payrollBudgeted)) +
+        '<div class="grid grid-3">' +
+        kpiTile('Folha Orçada (mês)', fmt.currency(payroll.payrollBudgeted)) +
         kpiTile('Folha Atual', fmt.currency(payroll.payrollCurrent)) +
-        kpiTile('Desvio Financeiro', fmt.currency(payroll.financialDeviation), payroll.financialDeviation > 0 ? 'danger' : 'good') +
-        kpiTile('% Orçamento Consumido', fmt.percent(payroll.budgetConsumedPercent), payroll.budgetConsumedPercent > 100 ? 'danger' : '') +
+        kpiTile('Diferença (Atual − Orçado)', fmt.currency(payroll.difference), payroll.difference > 0 ? 'danger' : 'good') +
         '</div>' +
         '<div class="grid grid-4">' +
         kpiTile('Promoções', fmt.number(movements.promotions)) +

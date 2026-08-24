@@ -102,6 +102,12 @@ var OrgService = {
     });
   },
 
+  findCostCenterByName: function (name) {
+    return Tables.costCenters.findOne(function (r) {
+      return r.name === name;
+    });
+  },
+
   createCostCenter: function (input) {
     return Tables.costCenters.insert({
       code: input.code,

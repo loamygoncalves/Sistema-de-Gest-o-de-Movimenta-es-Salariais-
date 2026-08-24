@@ -3,8 +3,13 @@
  */
 
 var DashboardService = {
-  getHeadcount: function (year, directorateId) {
-    var budgetEntries = BudgetService.listEntries(year, directorateId);
+  getHeadcount: function (year, month, directorateId) {
+    var referenceMonth = month || new Date().getMonth() + 1;
+    var allBudgetEntries = BudgetService.listEntries(year, directorateId);
+    var budgetEntries = allBudgetEntries.filter(function (entry) {
+      return monthValue_(entry, referenceMonth) !== null;
+    });
+
     var hcCurrent = Tables.employees.where(function (e) {
       return !directorateId || e.directorateId === directorateId;
     }).length;
@@ -21,15 +26,43 @@ var DashboardService = {
     }, 0);
 
     var openPositions = budgetEntries.filter(function (b) {
-      return b.plannedSituation === PlannedSituation.NOVA_VAGA;
+      return b.movementType === PlannedSituation.AUMENTO_DE_QUADRO;
     }).length;
     var hcOpen = Math.max(0, openPositions - hcApproved);
 
-    return { hcBudgeted: budgetEntries.length, hcCurrent: hcCurrent, hcApproved: hcApproved, hcOpen: hcOpen };
+    return {
+      year: year,
+      month: referenceMonth,
+      hcBudgeted: budgetEntries.length,
+      hcCurrent: hcCurrent,
+      hcApproved: hcApproved,
+      hcOpen: hcOpen,
+    };
   },
 
-  getPayroll: function (year, directorateId) {
-    return BudgetService.getDashboard(year, directorateId);
+  getPayroll: function (year, month, directorateId) {
+    var referenceMonth = month || new Date().getMonth() + 1;
+    var allBudgetEntries = BudgetService.listEntries(year, directorateId);
+    var budgetEntries = allBudgetEntries.filter(function (entry) {
+      return monthValue_(entry, referenceMonth) !== null;
+    });
+
+    var employees = Tables.employees.where(function (e) {
+      return !directorateId || e.directorateId === directorateId;
+    });
+
+    var payrollBudgeted = budgetEntries.reduce(function (sum, b) {
+      return sum + Number(monthValue_(b, referenceMonth) || 0);
+    }, 0);
+    var payrollCurrent = sumBy_(employees, 'currentSalary');
+
+    return {
+      year: year,
+      month: referenceMonth,
+      payrollCurrent: payrollCurrent,
+      payrollBudgeted: payrollBudgeted,
+      difference: payrollCurrent - payrollBudgeted,
+    };
   },
 
   getMovements: function (year, directorateId) {
@@ -46,7 +79,7 @@ var DashboardService = {
     };
   },
 
-  getFinancial: function (year, directorateId) {
+  getFinancial: function (year, month, directorateId) {
     var historyRecords = Tables.movementHistory.where(function (h) {
       if (String(h.effectiveDate).slice(0, 4) !== String(year)) return false;
       if (directorateId && h.directorateId !== directorateId) return false;
@@ -56,7 +89,7 @@ var DashboardService = {
     var monthlyImpact = sumBy_(historyRecords, 'monthlyImpact');
     var annualImpact = sumBy_(historyRecords, 'annualImpact');
 
-    var payroll = BudgetService.getDashboard(year, directorateId);
+    var payroll = this.getPayroll(year, month, directorateId);
     var budgetConsumedPercent = payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
     return {
