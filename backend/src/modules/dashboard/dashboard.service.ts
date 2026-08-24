@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MovementStatus, MovementType, PlannedSituation } from '../../common/enums';
+import { monthValue } from '../../common/utils/months.util';
 import { Employee } from '../employees/entities/employee.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { Directorate } from '../org/entities/directorate.entity';
@@ -26,10 +27,15 @@ export class DashboardService {
     private readonly historyRepo: Repository<MovementHistory>,
   ) {}
 
-  async getHeadcount(year: number, directorateId?: string) {
+  async getHeadcount(year: number, month: number | undefined, directorateId?: string) {
+    const referenceMonth = month ?? new Date().getMonth() + 1;
+
     const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
     if (directorateId) budgetQb.andWhere('b.directorateId = :d', { d: directorateId });
-    const budgetEntries = await budgetQb.getMany();
+    const allBudgetEntries = await budgetQb.getMany();
+    const budgetEntries = allBudgetEntries.filter(
+      (entry) => monthValue(entry as any, referenceMonth) !== null,
+    );
 
     const employeeQb = this.employeeRepo.createQueryBuilder('e');
     if (directorateId) employeeQb.andWhere('e.directorateId = :d', { d: directorateId });
@@ -45,11 +51,13 @@ export class DashboardService {
     const hcApproved = approvedIncreases.reduce((sum, m) => sum + Number(m.quantity ?? 0), 0);
 
     const openPositions = budgetEntries.filter(
-      (b) => b.plannedSituation === PlannedSituation.NOVA_VAGA,
+      (b) => b.movementType === PlannedSituation.AUMENTO_DE_QUADRO,
     ).length;
     const hcOpen = Math.max(0, openPositions - hcApproved);
 
     return {
+      year,
+      month: referenceMonth,
       hcBudgeted: budgetEntries.length,
       hcCurrent,
       hcApproved,
@@ -57,19 +65,29 @@ export class DashboardService {
     };
   }
 
-  async getPayroll(year: number, directorateId?: string) {
+  async getPayroll(year: number, month: number | undefined, directorateId?: string) {
+    const referenceMonth = month ?? new Date().getMonth() + 1;
+
     const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
     if (directorateId) budgetQb.andWhere('b.directorateId = :d', { d: directorateId });
-    const budgetEntries = await budgetQb.getMany();
+    const allBudgetEntries = await budgetQb.getMany();
+    const budgetEntries = allBudgetEntries.filter(
+      (entry) => monthValue(entry as any, referenceMonth) !== null,
+    );
 
     const employeeQb = this.employeeRepo.createQueryBuilder('e');
     if (directorateId) employeeQb.andWhere('e.directorateId = :d', { d: directorateId });
     const employees = await employeeQb.getMany();
 
-    const payrollBudgeted = budgetEntries.reduce((sum, b) => sum + Number(b.annualBudgetedCost || 0), 0);
-    const payrollCurrent = employees.reduce((sum, e) => sum + Number(e.currentSalary || 0), 0) * 12;
+    const payrollBudgeted = budgetEntries.reduce(
+      (sum, b) => sum + Number(monthValue(b as any, referenceMonth) ?? 0),
+      0,
+    );
+    const payrollCurrent = employees.reduce((sum, e) => sum + Number(e.currentSalary || 0), 0);
 
     return {
+      year,
+      month: referenceMonth,
       payrollCurrent,
       payrollBudgeted,
       difference: payrollCurrent - payrollBudgeted,
@@ -91,7 +109,7 @@ export class DashboardService {
     };
   }
 
-  async getFinancial(year: number, directorateId?: string) {
+  async getFinancial(year: number, month: number | undefined, directorateId?: string) {
     const historyQb = this.historyRepo
       .createQueryBuilder('h')
       .where('EXTRACT(YEAR FROM h.effectiveDate) = :year', { year });
@@ -101,7 +119,7 @@ export class DashboardService {
     const monthlyImpact = historyRecords.reduce((sum, h) => sum + Number(h.monthlyImpact || 0), 0);
     const annualImpact = historyRecords.reduce((sum, h) => sum + Number(h.annualImpact || 0), 0);
 
-    const payroll = await this.getPayroll(year, directorateId);
+    const payroll = await this.getPayroll(year, month, directorateId);
     const budgetConsumedPercent =
       payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 

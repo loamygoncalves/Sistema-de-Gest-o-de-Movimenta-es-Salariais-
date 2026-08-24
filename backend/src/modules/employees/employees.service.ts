@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { EmployeeStatus, ImportType, PlannedSituation } from '../../common/enums';
 import { parseExcelBuffer, toDate, toNumber } from '../../common/utils/excel.util';
+import { monthValue } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
@@ -174,84 +175,133 @@ export class EmployeesService {
   }
 
   /**
-   * Compara a base atual de colaboradores com o orçamento do ano informado,
-   * casando registros por matrícula.
+   * Compara a base atual de colaboradores com o orçamento de um mês do ano
+   * informado. O orçamento não é vinculado a colaborador — a comparação é
+   * feita por "bucket" (diretoria + centro de custo + cargo): quantas vagas
+   * orçadas existem naquele mês para o bucket x quantos colaboradores ativos
+   * ocupam esse mesmo bucket hoje.
    */
-  async compareWithBudget(year: number, scopedDirectorateId?: string) {
-    const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
+  async compareWithBudget(year: number, month: number | undefined, scopedDirectorateId?: string) {
+    const referenceMonth = month ?? new Date().getMonth() + 1;
+
+    const budgetQb = this.budgetRepo
+      .createQueryBuilder('b')
+      .where('b.year = :year', { year });
     if (scopedDirectorateId) budgetQb.andWhere('b.directorateId = :d', { d: scopedDirectorateId });
-    const budgetEntries = await budgetQb.getMany();
+    const allBudgetEntries = await budgetQb.getMany();
+    const budgetEntries = allBudgetEntries.filter(
+      (entry) => monthValue(entry as any, referenceMonth) !== null,
+    );
 
     const employeeQb = this.employeeRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.position', 'position')
-      .leftJoinAndSelect('e.directorate', 'directorate');
+      .leftJoinAndSelect('e.directorate', 'directorate')
+      .where('e.status = :status', { status: EmployeeStatus.ATIVO });
     if (scopedDirectorateId) employeeQb.andWhere('e.directorateId = :d', { d: scopedDirectorateId });
     const employees = await employeeQb.getMany();
 
-    const employeesByRegistration = new Map(employees.map((e) => [e.registration, e]));
-    const budgetByRegistration = new Map(
-      budgetEntries.filter((b) => b.registration).map((b) => [b.registration as string, b]),
-    );
+    type Bucket = {
+      directorateId: string;
+      directorateName?: string;
+      costCenterId: string;
+      costCenterName?: string;
+      positionId: string;
+      positionName?: string;
+      budgetedCount: number;
+      budgetedCost: number;
+      currentCount: number;
+      currentCost: number;
+    };
+    const buckets = new Map<string, Bucket>();
+    const bucketKey = (directorateId: string, costCenterId: string, positionId: string) =>
+      `${directorateId}|${costCenterId}|${positionId}`;
 
-    let promotionsDone = 0;
-    let promotionsPending = 0;
+    for (const entry of budgetEntries) {
+      const key = bucketKey(entry.directorateId, entry.costCenterId, entry.positionId);
+      const bucket = buckets.get(key) ?? {
+        directorateId: entry.directorateId,
+        directorateName: entry.directorate?.name,
+        costCenterId: entry.costCenterId,
+        costCenterName: entry.costCenter?.name,
+        positionId: entry.positionId,
+        positionName: entry.position?.name,
+        budgetedCount: 0,
+        budgetedCost: 0,
+        currentCount: 0,
+        currentCost: 0,
+      };
+      bucket.budgetedCount += 1;
+      bucket.budgetedCost += Number(monthValue(entry as any, referenceMonth) ?? 0);
+      buckets.set(key, bucket);
+    }
+
+    for (const employee of employees) {
+      if (!employee.costCenterId) continue;
+      const key = bucketKey(employee.directorateId, employee.costCenterId, employee.positionId);
+      const bucket = buckets.get(key) ?? {
+        directorateId: employee.directorateId,
+        directorateName: employee.directorate?.name,
+        costCenterId: employee.costCenterId,
+        positionId: employee.positionId,
+        positionName: employee.position?.name,
+        budgetedCount: 0,
+        budgetedCost: 0,
+        currentCount: 0,
+        currentCost: 0,
+      };
+      bucket.currentCount += 1;
+      bucket.currentCost += Number(employee.currentSalary || 0);
+      buckets.set(key, bucket);
+    }
+
+    let openPositions = 0;
+    let headcountExcess = 0;
     let budgetSavings = 0;
     let budgetOverrun = 0;
     const items: any[] = [];
 
-    for (const budget of budgetEntries) {
-      const employee = budget.registration ? employeesByRegistration.get(budget.registration) : undefined;
+    for (const bucket of buckets.values()) {
+      const countDiff = bucket.budgetedCount - bucket.currentCount;
+      if (countDiff > 0) openPositions += countDiff;
+      if (countDiff < 0) headcountExcess += Math.abs(countDiff);
 
-      if (budget.plannedSituation === PlannedSituation.NOVA_VAGA) {
+      const costDiff = bucket.budgetedCost - bucket.currentCost;
+      if (costDiff > 0) budgetSavings += costDiff;
+      if (costDiff < 0) budgetOverrun += Math.abs(costDiff);
+
+      if (countDiff !== 0) {
         items.push({
-          type: 'VAGA_ABERTA',
-          registration: budget.registration,
-          name: budget.name,
-          position: budget.position?.name,
-          directorate: budget.directorate?.name,
-          plannedSalary: budget.plannedSalary,
+          type: countDiff > 0 ? 'VAGA_ABERTA' : 'EXCESSO_HC',
+          directorate: bucket.directorateName,
+          costCenter: bucket.costCenterName,
+          position: bucket.positionName,
+          budgetedCount: bucket.budgetedCount,
+          currentCount: bucket.currentCount,
+          budgetedCost: bucket.budgetedCost,
+          currentCost: bucket.currentCost,
         });
-        continue;
       }
-
-      if (!employee) continue;
-
-      if (budget.plannedSituation === PlannedSituation.PROMOCAO) {
-        if (employee.currentSalary >= budget.plannedSalary) {
-          promotionsDone += 1;
-        } else {
-          promotionsPending += 1;
-          items.push({
-            type: 'PROMOCAO_PENDENTE',
-            registration: employee.registration,
-            name: employee.name,
-            currentSalary: employee.currentSalary,
-            plannedSalary: budget.plannedSalary,
-          });
-        }
-      }
-
-      const diff = budget.currentSalary - employee.currentSalary;
-      if (diff > 0) budgetSavings += diff;
-      if (diff < 0) budgetOverrun += Math.abs(diff);
     }
 
-    const openPositions = budgetEntries.filter(
-      (b) => b.plannedSituation === PlannedSituation.NOVA_VAGA,
-    ).length;
-
-    const headcountExcess = Math.max(0, employees.length - budgetEntries.length);
+    const movementsByType = Object.values(PlannedSituation).reduce(
+      (acc, type) => {
+        acc[type] = budgetEntries.filter((entry) => entry.movementType === type).length;
+        return acc;
+      },
+      {} as Record<PlannedSituation, number>,
+    );
 
     return {
+      year,
+      month: referenceMonth,
       hcBudgeted: budgetEntries.length,
       hcCurrent: employees.length,
-      promotionsDone,
-      promotionsPending,
       openPositions,
       headcountExcess,
       budgetSavings,
       budgetOverrun,
+      movementsByType,
       items,
     };
   }

@@ -115,4 +115,8 @@ export class OrgService {
   findDirectorateByName(name: string) {
     return this.directorateRepo.findOne({ where: { name } });
   }
+
+  findCostCenterByName(name: string) {
+    return this.costCenterRepo.findOne({ where: { name } });
+  }
 }

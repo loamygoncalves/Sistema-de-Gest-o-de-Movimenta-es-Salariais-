@@ -20,12 +20,20 @@ export class DashboardController {
 
   @Get('headcount')
   getHeadcount(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getHeadcount(query.year, this.resolveDirectorateId(query, user));
+    return this.dashboardService.getHeadcount(
+      query.year,
+      query.month,
+      this.resolveDirectorateId(query, user),
+    );
   }
 
   @Get('payroll')
   getPayroll(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getPayroll(query.year, this.resolveDirectorateId(query, user));
+    return this.dashboardService.getPayroll(
+      query.year,
+      query.month,
+      this.resolveDirectorateId(query, user),
+    );
   }
 
   @Get('movements')
@@ -35,6 +43,10 @@ export class DashboardController {
 
   @Get('financial')
   getFinancial(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getFinancial(query.year, this.resolveDirectorateId(query, user));
+    return this.dashboardService.getFinancial(
+      query.year,
+      query.month,
+      this.resolveDirectorateId(query, user),
+    );
   }
 }

@@ -27,14 +27,40 @@ diretoria (o backend filtra automaticamente pelo escopo do token).
 - `POST /employees/import` (multipart `file`) → processa Excel, retorna `ImportBatch`
   com `{ id, totalRows, successRows, errorRows, errors: [{row, field, message}] }`
 - `GET /employees/import/:batchId`
-- `GET /employees/comparison?year=` → compara base atual x orçada:
-  `{ promotionsDone, promotionsPending, openPositions, headcountExcess, budgetSavings, budgetOverrun, items: [...] }`
+- `GET /employees/comparison?year=&month=` → compara base atual x orçada, agregando
+  por bucket (diretoria + centro de custo + cargo) no mês de referência
+  (`month` 1-12, padrão mês corrente) — o orçamento não é vinculado a
+  colaborador, então a comparação não casa por matrícula:
+  ```json
+  {
+    "year": 2026, "month": 1,
+    "hcBudgeted": 85, "hcCurrent": 80,
+    "openPositions": 8, "headcountExcess": 3,
+    "budgetSavings": 12000, "budgetOverrun": 4000,
+    "movementsByType": { "SEM_MOVIMENTACAO": 73, "PROMOCAO": 2, "MERITO": 1, "SUBSTITUICAO": 1, "AUMENTO_DE_QUADRO": 4, "DESLIGAMENTO": 4 },
+    "items": [{ "type": "VAGA_ABERTA", "directorate": "...", "costCenter": "...", "position": "...", "budgetedCount": 2, "currentCount": 1, "budgetedCost": 8400, "currentCost": 4200 }]
+  }
+  ```
 
 ## Budget (orçamento) — módulo 1
-- `POST /budget/import?year=` (multipart `file`) → `ImportBatch`
-- `GET /budget/entries?year=&directorateId=&page=&limit=`
-- `GET /budget/dashboard?year=&directorateId=` →
-  `{ hcBudgeted, hcCurrent, hcDifference, payrollBudgeted, payrollCurrent, financialDeviation, budgetConsumedPercent }`
+Orçamento por **diretoria + centro de custo + cargo** — não é vinculado a
+colaborador (sem matrícula/nome). Cada linha tem um `movementType`
+(`SEM_MOVIMENTACAO | PROMOCAO | MERITO | SUBSTITUICAO | AUMENTO_DE_QUADRO |
+DESLIGAMENTO`) e um custo orçado por mês (`jan`..`dez`, `null` fora do
+período orçado). Múltiplas linhas podem repetir a mesma combinação
+diretoria+centro de custo+cargo+tipo — cada uma representa uma vaga/assento
+orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
+
+- `POST /budget/import?year=` (multipart `file`) → `ImportBatch`. O `year` é
+  sobreposto pelo ano derivado do cabeçalho de mês, quando este é uma data
+  real (ver planilha abaixo). Reimportar substitui integralmente o orçado
+  do ano para as diretorias presentes no arquivo.
+- `GET /budget/entries?year=&directorateId=&costCenterId=&positionId=&page=&limit=`
+- `GET /budget/dashboard?year=&month=&directorateId=&costCenterId=` →
+  `{ year, month, hcBudgeted, payrollBudgeted, annualBudgeted }` — `hcBudgeted`/
+  `payrollBudgeted` são do mês de referência (`month` 1-12, padrão mês
+  corrente); `annualBudgeted` é a soma de todas as 12 colunas de todas as
+  linhas (visão do ano inteiro).
 
 ## Movements (solicitações) — módulo 3
 - `GET /movements?status=&type=&directorateId=&page=&limit=`
@@ -86,10 +112,12 @@ diretoria (o backend filtra automaticamente pelo escopo do token).
   onde `classification` ∈ `ABAIXO_DO_MERCADO | DENTRO_DO_MERCADO | ACIMA_DO_MERCADO`
 
 ## Dashboards executivos — módulo 8
-- `GET /dashboard/headcount?year=&directorateId=` → `{ hcBudgeted, hcCurrent, hcApproved, hcOpen }`
-- `GET /dashboard/payroll?year=&directorateId=` → `{ payrollCurrent, payrollBudgeted, difference }`
+- `GET /dashboard/headcount?year=&month=&directorateId=` → `{ year, month, hcBudgeted, hcCurrent, hcApproved, hcOpen }`
+  (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente)
+- `GET /dashboard/payroll?year=&month=&directorateId=` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
+  (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease, transfers }`
-- `GET /dashboard/financial?year=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}] }`
+- `GET /dashboard/financial?year=&month=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}] }`
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).

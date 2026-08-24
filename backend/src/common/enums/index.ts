@@ -20,13 +20,43 @@ export enum EmployeeStatus {
   AFASTADO = 'AFASTADO',
 }
 
+/**
+ * "Tipo de movimentação" de uma linha orçamentária (budget_entries). Uma
+ * linha é (diretoria, centro de custo, cargo) + este tipo — não está mais
+ * vinculada a uma matrícula/colaborador específico (ver módulo Orçamento).
+ */
 export enum PlannedSituation {
   SEM_MOVIMENTACAO = 'SEM_MOVIMENTACAO',
   PROMOCAO = 'PROMOCAO',
   MERITO = 'MERITO',
-  TRANSFERENCIA = 'TRANSFERENCIA',
-  NOVA_VAGA = 'NOVA_VAGA',
+  SUBSTITUICAO = 'SUBSTITUICAO',
+  AUMENTO_DE_QUADRO = 'AUMENTO_DE_QUADRO',
+  DESLIGAMENTO = 'DESLIGAMENTO',
 }
+
+/**
+ * As 12 colunas mensais de uma linha de orçamento (jan..dez), na ordem em
+ * que aparecem na planilha de importação e nas tabelas do sistema. Cada
+ * coluna guarda o custo orçado daquele mês para a linha (diretoria +
+ * centro de custo + cargo + tipo de movimentação); null/vazio = sem custo
+ * orçado naquele mês (vaga ainda não aberta, já desligada, etc.).
+ */
+export const MONTH_KEYS = [
+  'jan',
+  'fev',
+  'mar',
+  'abr',
+  'mai',
+  'jun',
+  'jul',
+  'ago',
+  'set',
+  'out',
+  'nov',
+  'dez',
+] as const;
+
+export type MonthKey = (typeof MONTH_KEYS)[number];
 
 export enum MovementType {
   PROMOCAO = 'PROMOCAO',

@@ -57,6 +57,53 @@ export async function parseExcelBuffer(buffer: Buffer): Promise<ParsedExcelRow[]
   return rows;
 }
 
+export interface RawExcelSheet {
+  /** Valores brutos da linha de cabeçalho (linha 1), 1-based (índice 0 vazio). */
+  headers: any[];
+  /** Uma entrada por linha de dados, com os valores brutos de cada coluna (1-based, índice 0 vazio). */
+  rows: { rowNumber: number; values: any[] }[];
+}
+
+/**
+ * Lê a primeira planilha preservando os valores brutos por posição de
+ * coluna (sem normalizar nomes de cabeçalho) — usado quando o layout tem
+ * colunas cujo cabeçalho não é um texto simples (ex.: datas de cada mês no
+ * orçamento) e o mapeamento precisa ser feito pelo chamador.
+ */
+export async function parseExcelSheetRaw(buffer: Buffer): Promise<RawExcelSheet> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as any);
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) return { headers: [], rows: [] };
+
+  function cellValue(cell: ExcelJS.Cell): any {
+    let value: any = cell.value;
+    if (value && typeof value === 'object' && 'text' in value) value = (value as any).text;
+    if (value && typeof value === 'object' && 'result' in value) value = (value as any).result;
+    return value;
+  }
+
+  const headers: any[] = [];
+  worksheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    headers[colNumber] = cellValue(cell);
+  });
+
+  const rows: { rowNumber: number; values: any[] }[] = [];
+  worksheet.eachRow((row, rowNumber) => {
+    if (rowNumber === 1) return;
+    const values: any[] = [];
+    let hasValue = false;
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const value = cellValue(cell);
+      if (value !== null && value !== undefined && value !== '') hasValue = true;
+      values[colNumber] = value;
+    });
+    if (hasValue) rows.push({ rowNumber, values });
+  });
+
+  return { headers, rows };
+}
+
 export async function buildExcelBuffer(
   sheetName: string,
   columns: { header: string; key: string; width?: number }[],

@@ -40,10 +40,12 @@ export class EmployeesController {
   @Get('comparison')
   compareWithBudget(
     @Query('year') year: string,
+    @Query('month') month: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.employeesService.compareWithBudget(
       parseInt(year, 10) || new Date().getFullYear(),
+      month ? parseInt(month, 10) : undefined,
       isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
     );
   }

@@ -7,15 +7,22 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { ContractType, PlannedSituation } from '../../../common/enums';
+import { PlannedSituation } from '../../../common/enums';
 import { Directorate } from '../../org/entities/directorate.entity';
-import { Management } from '../../org/entities/management.entity';
-import { Coordination } from '../../org/entities/coordination.entity';
 import { Position } from '../../org/entities/position.entity';
 import { CostCenter } from '../../org/entities/cost-center.entity';
-import { Employee } from '../../employees/entities/employee.entity';
 import { ImportBatch } from '../../imports/entities/import-batch.entity';
 
+/**
+ * Linha de orçamento anual: (ano, diretoria, centro de custo, cargo, tipo de
+ * movimentação) + custo orçado mês a mês (jan..dez). Não é vinculada a um
+ * colaborador — o orçamento é por diretoria/centro de custo/cargo, não por
+ * matrícula. Uma mesma combinação diretoria+centro de custo+cargo pode ter
+ * várias linhas ao longo do ano (ex.: uma linha "Sem Movimentação" cobrindo
+ * jan-fev e outra "Promoção" cobrindo mar-dez, representando a mesma vaga
+ * mudando de situação no meio do ano); cada coluna mensal null/vazia
+ * significa que a linha não tem custo orçado naquele mês.
+ */
 @Entity('budget_entries')
 export class BudgetEntry {
   @PrimaryGeneratedColumn('uuid')
@@ -24,18 +31,19 @@ export class BudgetEntry {
   @Column()
   year: number;
 
-  @Column({ length: 30, nullable: true })
-  registration?: string;
+  @ManyToOne(() => Directorate, { eager: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'directorate_id' })
+  directorate: Directorate;
 
-  @ManyToOne(() => Employee, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'employee_id' })
-  employee?: Employee;
+  @Column({ name: 'directorate_id' })
+  directorateId: string;
 
-  @Column({ name: 'employee_id', nullable: true })
-  employeeId?: string;
+  @ManyToOne(() => CostCenter, { eager: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'cost_center_id' })
+  costCenter: CostCenter;
 
-  @Column({ length: 200, nullable: true })
-  name?: string;
+  @Column({ name: 'cost_center_id' })
+  costCenterId: string;
 
   @ManyToOne(() => Position, { eager: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'position_id' })
@@ -44,83 +52,49 @@ export class BudgetEntry {
   @Column({ name: 'position_id' })
   positionId: string;
 
-  @ManyToOne(() => Directorate, { eager: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'directorate_id' })
-  directorate: Directorate;
-
-  @Column({ name: 'directorate_id' })
-  directorateId: string;
-
-  @ManyToOne(() => Management, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'management_id' })
-  management?: Management;
-
-  @Column({ name: 'management_id', nullable: true })
-  managementId?: string;
-
-  @ManyToOne(() => Coordination, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'coordination_id' })
-  coordination?: Coordination;
-
-  @Column({ name: 'coordination_id', nullable: true })
-  coordinationId?: string;
-
-  @ManyToOne(() => CostCenter, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'cost_center_id' })
-  costCenter?: CostCenter;
-
-  @Column({ name: 'cost_center_id', nullable: true })
-  costCenterId?: string;
-
-  @Column({ length: 120, nullable: true })
-  city?: string;
-
-  @Column({ length: 2, nullable: true })
-  state?: string;
-
-  @Column({
-    type: 'enum',
-    enum: ContractType,
-    default: ContractType.CLT,
-    name: 'contract_type',
-  })
-  contractType: ContractType;
-
-  @Column({ type: 'date', name: 'admission_date', nullable: true })
-  admissionDate?: string;
-
-  @Column('numeric', { precision: 14, scale: 2, default: 0, name: 'current_salary' })
-  currentSalary: number;
-
   @Column({
     type: 'enum',
     enum: PlannedSituation,
     default: PlannedSituation.SEM_MOVIMENTACAO,
-    name: 'planned_situation',
+    name: 'movement_type',
   })
-  plannedSituation: PlannedSituation;
+  movementType: PlannedSituation;
 
-  @Column('numeric', { precision: 14, scale: 2, default: 0, name: 'planned_salary' })
-  plannedSalary: number;
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  jan?: number | null;
 
-  @Column({ type: 'smallint', nullable: true, name: 'planned_month' })
-  plannedMonth?: number;
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  fev?: number | null;
 
-  @Column('numeric', {
-    precision: 14,
-    scale: 2,
-    default: 0,
-    name: 'monthly_budgeted_cost',
-  })
-  monthlyBudgetedCost: number;
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  mar?: number | null;
 
-  @Column('numeric', {
-    precision: 14,
-    scale: 2,
-    default: 0,
-    name: 'annual_budgeted_cost',
-  })
-  annualBudgetedCost: number;
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  abr?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  mai?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  jun?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  jul?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  ago?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  set?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  out?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  nov?: number | null;
+
+  @Column('numeric', { precision: 14, scale: 2, nullable: true })
+  dez?: number | null;
 
   @ManyToOne(() => ImportBatch, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'import_batch_id' })

@@ -122,10 +122,15 @@ Senha padrão: `Senha@123`
 
 Colunas esperadas (case-insensitive, acentos e espaços são normalizados):
 
-- **Orçamento** (`POST /budget/import?year=`): `matricula, nome, cargo,
-  diretoria, gerencia, coordenacao, centro_de_custo, cidade, estado,
-  tipo_contrato, data_admissao, salario_atual, situacao_planejada,
-  salario_orcado, mes_previsto, custo_mensal_orcado, custo_anual_orcado`.
+- **Orçamento** (`POST /budget/import?year=`): `DIRETORIA, CENTRO DE CUSTO,
+  CARGO, TIPO DE MOVIMENTAÇÃO` seguidas de 12 colunas de meses (jan a dez,
+  idealmente como datas no cabeçalho — o ano é lido daí quando possível).
+  Cada linha é uma vaga/assento orçado daquela diretoria+centro de
+  custo+cargo — **não há matrícula/nome**; múltiplas linhas idênticas
+  representam vagas distintas do mesmo tipo. `TIPO DE MOVIMENTAÇÃO` aceita:
+  `Sem Movimentação, Promoção, Mérito, Substituição, Aumento de Quadro,
+  Desligamento`. Nas colunas de mês, `-` (ou vazio) significa sem custo
+  orçado naquele mês.
 - **Base de colaboradores** (`POST /employees/import`): `matricula, nome,
   cargo, diretoria, salario_atual, data_admissao, status`.
 - **Estudo salarial** (`POST /salary-studies/import`): `cargo, empresa,

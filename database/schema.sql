@@ -37,12 +37,14 @@ CREATE TYPE employee_status AS ENUM (
   'AFASTADO'
 );
 
+-- "Tipo de movimentação" de uma linha de orçamento (budget_entries.movement_type)
 CREATE TYPE planned_situation AS ENUM (
   'SEM_MOVIMENTACAO',
   'PROMOCAO',
   'MERITO',
-  'TRANSFERENCIA',
-  'NOVA_VAGA'
+  'SUBSTITUICAO',
+  'AUMENTO_DE_QUADRO',
+  'DESLIGAMENTO'
 );
 
 CREATE TYPE movement_type AS ENUM (
@@ -223,36 +225,40 @@ CREATE INDEX idx_employees_status ON employees(status);
 -- ORÇAMENTO ANUAL (HC + FOLHA ORÇADA)
 -- ============================================================================
 
+-- Linha de orçamento: (ano, diretoria, centro de custo, cargo, tipo de
+-- movimentação) + custo orçado mês a mês. NÃO é vinculada a um colaborador —
+-- o orçamento é por diretoria/centro de custo/cargo, não por matrícula.
+-- Múltiplas linhas podem repetir a mesma combinação diretoria+centro de
+-- custo+cargo+tipo (cada linha = uma vaga/assento orçado; não há chave
+-- única natural além do id).
 CREATE TABLE budget_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   year INT NOT NULL,
-  registration VARCHAR(30), -- matrícula (nulo quando NOVA_VAGA)
-  employee_id UUID REFERENCES employees(id) ON DELETE SET NULL,
-  name VARCHAR(200),
-  position_id UUID NOT NULL REFERENCES positions(id) ON DELETE RESTRICT,
   directorate_id UUID NOT NULL REFERENCES directorates(id) ON DELETE RESTRICT,
-  management_id UUID REFERENCES managements(id) ON DELETE SET NULL,
-  coordination_id UUID REFERENCES coordinations(id) ON DELETE SET NULL,
-  cost_center_id UUID REFERENCES cost_centers(id) ON DELETE SET NULL,
-  city VARCHAR(120),
-  state CHAR(2),
-  contract_type contract_type NOT NULL DEFAULT 'CLT',
-  admission_date DATE,
-  current_salary NUMERIC(14,2) NOT NULL DEFAULT 0,
-  planned_situation planned_situation NOT NULL DEFAULT 'SEM_MOVIMENTACAO',
-  planned_salary NUMERIC(14,2) NOT NULL DEFAULT 0,
-  planned_month SMALLINT CHECK (planned_month BETWEEN 1 AND 12),
-  monthly_budgeted_cost NUMERIC(14,2) NOT NULL DEFAULT 0,
-  annual_budgeted_cost NUMERIC(14,2) NOT NULL DEFAULT 0,
+  cost_center_id UUID NOT NULL REFERENCES cost_centers(id) ON DELETE RESTRICT,
+  position_id UUID NOT NULL REFERENCES positions(id) ON DELETE RESTRICT,
+  movement_type planned_situation NOT NULL,
+  jan NUMERIC(14,2),
+  fev NUMERIC(14,2),
+  mar NUMERIC(14,2),
+  abr NUMERIC(14,2),
+  mai NUMERIC(14,2),
+  jun NUMERIC(14,2),
+  jul NUMERIC(14,2),
+  ago NUMERIC(14,2),
+  "set" NUMERIC(14,2),
+  "out" NUMERIC(14,2),
+  nov NUMERIC(14,2),
+  dez NUMERIC(14,2),
   import_batch_id UUID REFERENCES import_batches(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (year, registration)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_budget_entries_year ON budget_entries(year);
 CREATE INDEX idx_budget_entries_directorate ON budget_entries(directorate_id);
-CREATE INDEX idx_budget_entries_employee ON budget_entries(employee_id);
+CREATE INDEX idx_budget_entries_cost_center ON budget_entries(cost_center_id);
+CREATE INDEX idx_budget_entries_position ON budget_entries(position_id);
 
 -- ============================================================================
 -- PARÂMETROS DE ENCARGOS E BENEFÍCIOS

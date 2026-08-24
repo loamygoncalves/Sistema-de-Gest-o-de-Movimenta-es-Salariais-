@@ -22,7 +22,7 @@ erDiagram
     USERS ||--o{ SALARY_STUDIES : importa
     USERS ||--o{ AUDIT_LOGS : gera
 
-    EMPLOYEES ||--o{ BUDGET_ENTRIES : vincula
+    COST_CENTERS ||--o{ BUDGET_ENTRIES : referencia
     EMPLOYEES ||--o{ MOVEMENT_REQUESTS : sofre
     EMPLOYEES ||--o{ MOVEMENT_HISTORY : sofre
 
@@ -53,14 +53,14 @@ erDiagram
     BUDGET_ENTRIES {
         uuid id PK
         int year
-        string registration
-        uuid position_id FK
         uuid directorate_id FK
-        string planned_situation
-        numeric planned_salary
-        int planned_month
-        numeric monthly_budgeted_cost
-        numeric annual_budgeted_cost
+        uuid cost_center_id FK
+        uuid position_id FK
+        string movement_type
+        numeric jan
+        numeric fev
+        numeric mar
+        numeric dez
     }
     MOVEMENT_REQUESTS {
         uuid id PK
@@ -118,10 +118,20 @@ erDiagram
 
 ## Notas de modelagem
 
-- **Snapshot vs. referência viva**: `budget_entries` e `movement_history` guardam
-  campos "achatados" (nome, cargo, diretoria no momento do fato) além das FKs,
-  para que relatórios históricos não mudem retroativamente se um cargo for
-  renomeado ou um colaborador transferido depois.
+- **Snapshot vs. referência viva**: `movement_history` guarda campos
+  "achatados" (cargo, diretoria no momento do fato) além das FKs, para que
+  relatórios históricos não mudem retroativamente se um cargo for renomeado
+  depois.
+- **`budget_entries` não é vinculada a colaborador**: o orçamento é por
+  (diretoria, centro de custo, cargo, tipo de movimentação), com o custo
+  orçado em 12 colunas mensais (`jan`..`dez`, nulas fora do período orçado).
+  Não há matrícula/nome nem chave única — múltiplas linhas repetindo a mesma
+  combinação diretoria+centro de custo+cargo+tipo representam vagas/assentos
+  distintos daquele tipo (ex.: 24 linhas idênticas de "Analista I / Sem
+  Movimentação" no mesmo centro de custo = 24 vagas orçadas para esse cargo).
+  A comparação com a base atual de colaboradores (módulo 2) é feita
+  agregando por esse mesmo bucket (diretoria+centro de custo+cargo) num mês
+  de referência, não por matrícula.
 - **`movement_requests` é polimórfica por `type`**: os campos específicos de cada
   tipo (mérito, transferência, aumento de quadro) ficam nullable na mesma
   tabela para permitir consultas e workflow unificados; a validação de

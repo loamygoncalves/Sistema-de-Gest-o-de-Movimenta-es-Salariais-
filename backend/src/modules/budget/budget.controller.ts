@@ -37,7 +37,9 @@ export class BudgetController {
   getDashboard(@Query() query: BudgetDashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.budgetService.getDashboard(
       query.year,
+      query.month,
       isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : query.directorateId,
+      query.costCenterId,
     );
   }
 
