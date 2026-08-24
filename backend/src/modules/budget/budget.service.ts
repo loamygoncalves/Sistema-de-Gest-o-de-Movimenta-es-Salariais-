@@ -259,6 +259,7 @@ export class BudgetService {
       await this.budgetRepo.save(toInsert as BudgetEntry[]);
     }
 
-    return this.importBatchService.finish(batch.id, rows.length, successRows, errors);
+    const finished = await this.importBatchService.finish(batch.id, rows.length, successRows, errors);
+    return { ...finished, errors };
   }
 }

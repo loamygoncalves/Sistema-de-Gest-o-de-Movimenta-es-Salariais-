@@ -92,6 +92,7 @@ export enum ImportType {
   ORCAMENTO = 'ORCAMENTO',
   BASE_COLABORADORES = 'BASE_COLABORADORES',
   ESTUDO_SALARIAL = 'ESTUDO_SALARIAL',
+  CENTRO_CUSTO = 'CENTRO_CUSTO',
 }
 
 export enum ImportStatus {

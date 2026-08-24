@@ -7,11 +7,18 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  AuthenticatedUser,
+  CurrentUser,
+} from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums';
 import { OrgService } from './org.service';
 import {
@@ -113,5 +120,21 @@ export class OrgController {
   @Roles(...MANAGE_ROLES)
   createCostCenter(@Body() dto: CreateCostCenterDto) {
     return this.orgService.createCostCenter(dto);
+  }
+
+  @Post('cost-centers/import')
+  @Roles(...MANAGE_ROLES)
+  @UseInterceptors(FileInterceptor('file'))
+  importCostCenters(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.orgService.importCostCentersFromExcel(file.buffer, file.originalname, user.id);
+  }
+
+  @Get('cost-centers/import/:batchId')
+  @Roles(...MANAGE_ROLES)
+  getCostCenterImportBatch(@Param('batchId') batchId: string) {
+    return this.orgService.getCostCenterImportBatch(batchId);
   }
 }

@@ -33,6 +33,12 @@ filtro para essas roles.
 - `api_createCoordination({ name, managementId })`
 - `api_createPosition({ name, careerLevel })`, `api_updatePosition(id, patch)`
 - `api_createCostCenter({ code, name, directorateId })`
+- `api_importCostCenters(base64Data, mimeType, filename)` → `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }` —
+  importação em massa a partir de uma planilha contendo **apenas os nomes**
+  dos centros de custo (uma coluna; aceita cabeçalho `NOME`/`CENTRO DE
+  CUSTO` ou nenhum cabeçalho). O `code` é gerado automaticamente a partir
+  do nome, com sufixo numérico em caso de colisão. Rejeita nome vazio,
+  duplicado na planilha ou já cadastrado.
 
 ## Usuários (ADMIN)
 - `api_listUsers()` → `[{ id, name, email, role, directorateId, active }]`

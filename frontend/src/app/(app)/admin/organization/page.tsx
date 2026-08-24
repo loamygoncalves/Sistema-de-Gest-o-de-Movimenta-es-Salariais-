@@ -7,11 +7,14 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Select } from "@/components/ui/Input";
 import { Table, Column } from "@/components/ui/Table";
+import { FileDropzone } from "@/components/ui/FileDropzone";
+import { ImportResultCard } from "@/components/shared/ImportResultCard";
 import { useCrudResource } from "@/hooks/useCrudResource";
 import { useDirectorates, useManagements } from "@/hooks/useOrgOptions";
 import { useToast } from "@/lib/toast";
+import { api } from "@/lib/api";
 import { getErrorMessage, formatCurrency } from "@/lib/format";
-import { Coordination, CostCenter, Directorate, Management, Position } from "@/types";
+import { Coordination, CostCenter, Directorate, ImportBatch, Management, Position } from "@/types";
 
 type Tab = "directorates" | "managements" | "coordinations" | "positions" | "costCenters";
 
@@ -360,10 +363,35 @@ function PositionsTab() {
 
 function CostCentersTab() {
   const { directorates } = useDirectorates();
-  const { items, loading, create, update } = useCrudResource<CostCenter>("/cost-centers");
+  const { items, loading, create, update, reload } = useCrudResource<CostCenter>("/cost-centers");
   const { showToast } = useToast();
   const [modalItem, setModalItem] = useState<Partial<CostCenter> | null>(null);
   const [saving, setSaving] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importBatch, setImportBatch] = useState<ImportBatch | null>(null);
+
+  async function handleImport() {
+    if (!importFile) {
+      showToast("Selecione um arquivo para importar.", "error");
+      return;
+    }
+    setImporting(true);
+    setImportBatch(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      const res = await api.upload<ImportBatch>("/cost-centers/import", formData);
+      setImportBatch(res);
+      showToast("Importação de centros de custo concluída.", "success");
+      setImportFile(null);
+      await reload();
+    } catch (err) {
+      showToast(getErrorMessage(err), "error");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   const columns: Column<CostCenter>[] = [
     { key: "code", header: "Código", render: (r) => r.code },
@@ -402,31 +430,48 @@ function CostCentersTab() {
   }
 
   return (
-    <Card title="Centros de Custo" actions={<Button size="sm" onClick={() => setModalItem({})}>Novo centro de custo</Button>}>
-      <Table columns={columns} data={items} rowKey={(r) => r.id} loading={loading} />
-      <Modal
-        open={!!modalItem}
-        onClose={() => setModalItem(null)}
-        title={modalItem?.id ? "Editar centro de custo" : "Novo centro de custo"}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setModalItem(null)}>Cancelar</Button>
-            <Button onClick={handleSave} loading={saving}>Salvar</Button>
-          </>
-        }
+    <div className="flex flex-col gap-6">
+      <Card
+        title="Importar centros de custo"
+        subtitle="Envie uma planilha (.xlsx) com apenas os nomes dos centros de custo — o código é gerado automaticamente."
       >
         <div className="flex flex-col gap-4">
-          <Input label="Código" required value={modalItem?.code ?? ""} onChange={(e) => setModalItem((m) => ({ ...m, code: e.target.value }))} />
-          <Input label="Nome" required value={modalItem?.name ?? ""} onChange={(e) => setModalItem((m) => ({ ...m, name: e.target.value }))} />
-          <Select
-            label="Diretoria (opcional)"
-            placeholder="Nenhuma"
-            options={directorates.map((d) => ({ value: d.id, label: d.name }))}
-            value={modalItem?.directorateId ?? ""}
-            onChange={(e) => setModalItem((m) => ({ ...m, directorateId: e.target.value }))}
-          />
+          <FileDropzone file={importFile} onFileSelected={setImportFile} accept=".xlsx,.xls" />
+          <div>
+            <Button onClick={handleImport} loading={importing} disabled={!importFile}>
+              Importar planilha
+            </Button>
+          </div>
         </div>
-      </Modal>
-    </Card>
+      </Card>
+      {importBatch && <ImportResultCard batch={importBatch} />}
+
+      <Card title="Centros de Custo" actions={<Button size="sm" onClick={() => setModalItem({})}>Novo centro de custo</Button>}>
+        <Table columns={columns} data={items} rowKey={(r) => r.id} loading={loading} />
+        <Modal
+          open={!!modalItem}
+          onClose={() => setModalItem(null)}
+          title={modalItem?.id ? "Editar centro de custo" : "Novo centro de custo"}
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setModalItem(null)}>Cancelar</Button>
+              <Button onClick={handleSave} loading={saving}>Salvar</Button>
+            </>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Input label="Código" required value={modalItem?.code ?? ""} onChange={(e) => setModalItem((m) => ({ ...m, code: e.target.value }))} />
+            <Input label="Nome" required value={modalItem?.name ?? ""} onChange={(e) => setModalItem((m) => ({ ...m, name: e.target.value }))} />
+            <Select
+              label="Diretoria (opcional)"
+              placeholder="Nenhuma"
+              options={directorates.map((d) => ({ value: d.id, label: d.name }))}
+              value={modalItem?.directorateId ?? ""}
+              onChange={(e) => setModalItem((m) => ({ ...m, directorateId: e.target.value }))}
+            />
+          </div>
+        </Modal>
+      </Card>
+    </div>
   );
 }

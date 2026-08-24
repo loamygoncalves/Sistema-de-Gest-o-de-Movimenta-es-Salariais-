@@ -374,6 +374,51 @@
         })
         .join('');
       tableShell('Centros de Custo', '+ Novo Centro de Custo', function () { openCostCenterModal(org); }, rows, ['Código', 'Nome', 'Diretoria', 'Status']);
+      renderCostCenterImportCard();
+    }
+
+    function renderCostCenterImportCard() {
+      // Anexa um novo nó (em vez de concatenar em body.innerHTML) para não
+      // recriar os elementos já renderizados por tableShell — reatribuir
+      // innerHTML destruiria o botão "+ Novo Centro de Custo" e seu listener.
+      var wrapper = document.createElement('div');
+      wrapper.innerHTML =
+        cardOpen('Importar centros de custo', {
+          subtitle: 'Envie uma planilha (.csv ou .xlsx) com apenas os nomes dos centros de custo — o código é gerado automaticamente.',
+        }) +
+        '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="cc-import-file" accept=".csv,.xlsx"></div>' +
+        '<div class="form-actions"><button class="btn" id="cc-import-btn">Importar</button></div>' +
+        '<div id="cc-import-result" style="margin-top:16px;"></div>' +
+        cardClose();
+      document.getElementById('org-body').appendChild(wrapper);
+
+      wrapper.querySelector('#cc-import-btn').addEventListener('click', function () {
+        var btn = this;
+        var fileInput = wrapper.querySelector('#cc-import-file');
+        var file = fileInput.files[0];
+        if (!file) {
+          toast('Selecione um arquivo para importar.', 'error');
+          return;
+        }
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        readFileAsBase64(file)
+          .then(function (base64) {
+            return callApi('api_importCostCenters', base64, file.type || 'text/csv', file.name);
+          })
+          .then(function (result) {
+            document.getElementById('cc-import-result').innerHTML = renderImportResultHtml(result);
+            toast('Importação concluída: ' + result.successRows + ' de ' + result.totalRows + ' linha(s).', result.errors.length > 0 ? 'info' : 'success');
+            renderBody();
+          })
+          .catch(function (err) {
+            toastError(err);
+          })
+          .finally(function () {
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
+          });
+      });
     }
 
     function openCostCenterModal(org) {

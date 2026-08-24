@@ -98,6 +98,12 @@ function api_createCostCenter(input) {
   return stripRow_(OrgService.createCostCenter(input));
 }
 
+function api_importCostCenters(base64Data, mimeType, filename) {
+  var user = requireUser_();
+  requireRole_(user, manageRoles_());
+  return OrgService.importCostCentersFromFile(base64Data, mimeType, filename, user.email);
+}
+
 // ---------------------------------------------------------------------------
 // Usuários
 // ---------------------------------------------------------------------------

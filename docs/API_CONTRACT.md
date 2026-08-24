@@ -18,6 +18,14 @@ diretoria (o backend filtra automaticamente pelo escopo do token).
 - `GET/POST /coordinations` (`?managementId=`)
 - `GET/POST /positions`, `GET/PATCH/DELETE /positions/:id`
 - `GET/POST /cost-centers`
+- `POST /cost-centers/import` (multipart `file`) — importação em massa a partir de uma
+  planilha contendo **apenas os nomes** dos centros de custo (uma coluna; aceita
+  cabeçalho `NOME`/`CENTRO DE CUSTO` ou nenhum cabeçalho — nesse caso a primeira
+  linha já é tratada como dado). O `code` (exigido pelo cadastro) é gerado
+  automaticamente a partir do nome, com sufixo numérico em caso de colisão.
+  Rejeita nome vazio, duplicado na planilha ou já cadastrado. Retorna `ImportBatch`
+  (mesmo formato abaixo).
+- `GET /cost-centers/import/:batchId`
 - `GET/POST /users` (ADMIN only), `PATCH /users/:id`, `PATCH /users/:id/password`
 
 ## Employees (base atual) — módulo 2
@@ -25,7 +33,7 @@ diretoria (o backend filtra automaticamente pelo escopo do token).
 - `GET /employees/:id`
 - `POST /employees` / `PATCH /employees/:id` / `DELETE /employees/:id`
 - `POST /employees/import` (multipart `file`) → processa Excel, retorna `ImportBatch`
-  com `{ id, totalRows, successRows, errorRows, errors: [{row, field, message}] }`
+  com `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
 - `GET /employees/import/:batchId`
 - `GET /employees/comparison?year=&month=` → compara base atual x orçada, agregando
   por bucket (diretoria + centro de custo + cargo) no mês de referência

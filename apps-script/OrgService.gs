@@ -117,4 +117,96 @@ var OrgService = {
       createdAt: nowIso_(),
     });
   },
+
+  /**
+   * Cadastro de centros de custo em massa a partir de uma planilha contendo
+   * apenas os nomes (uma coluna) — equivalente a
+   * backend/src/modules/org/org.service.ts#importCostCentersFromExcel.
+   * Aceita um cabeçalho reconhecido (NOME, CENTRO DE CUSTO, ...) na primeira
+   * linha; se não bater com nenhum alias conhecido, a própria primeira linha
+   * é tratada como dado (planilha sem cabeçalho). O `code` — exigido pelo
+   * cadastro mas ausente na planilha — é gerado a partir do nome.
+   */
+  importCostCentersFromFile: function (base64Data, mimeType, filename, importedByEmail) {
+    var sheet = parseUploadedSpreadsheetRaw_(base64Data, mimeType, filename);
+    var headers = sheet.headers;
+    var rows = sheet.rows;
+
+    var nameAliases = ['NOME', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'CENTROS DE CUSTO'];
+    var hasRecognizedHeader = nameAliases.indexOf(normalizeCostCenterLabel_(headers[0])) !== -1;
+    var dataRows = hasRecognizedHeader ? rows : [{ rowNumber: 1, values: headers }].concat(rows);
+
+    var existing = this.listCostCenters();
+    var existingNames = {};
+    existing.forEach(function (c) {
+      existingNames[normalizeCostCenterLabel_(c.name)] = true;
+    });
+    var usedCodes = {};
+    existing.forEach(function (c) {
+      usedCodes[c.code] = true;
+    });
+    var seenInFile = {};
+
+    var errors = [];
+    var successRows = 0;
+
+    dataRows.forEach(function (row) {
+      var name = String(row.values[0] || '').trim();
+      if (!name) {
+        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Nome é obrigatório' });
+        return;
+      }
+      var key = normalizeCostCenterLabel_(name);
+      if (seenInFile[key]) {
+        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Nome duplicado na planilha: ' + name });
+        return;
+      }
+      if (existingNames[key]) {
+        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Centro de custo já cadastrado: ' + name });
+        return;
+      }
+      seenInFile[key] = true;
+      var code = generateCostCenterCode_(name, usedCodes);
+      usedCodes[code] = true;
+      Tables.costCenters.insert({
+        code: code,
+        name: name,
+        directorateId: '',
+        active: true,
+        createdAt: nowIso_(),
+      });
+      successRows += 1;
+    });
+
+    var batch = logImportBatch_('CENTRO_CUSTO', null, importedByEmail, dataRows.length, successRows, errors);
+    return { batch: batch, totalRows: dataRows.length, successRows: successRows, errors: errors };
+  },
 };
+
+function normalizeCostCenterLabel_(value) {
+  return String(value === null || value === undefined ? '' : value)
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '');
+}
+
+/**
+ * Gera um código único a partir do nome (planilha traz só o nome, mas o
+ * cadastro exige um `code` único) — desambigua com sufixo numérico contra os
+ * códigos já usados (existentes + já gerados nesta importação).
+ */
+function generateCostCenterCode_(name, usedCodes) {
+  var base = normalizeCostCenterLabel_(name)
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 45);
+  if (!base) base = 'CC';
+  var code = base;
+  var suffix = 2;
+  while (usedCodes[code]) {
+    code = (base + '_' + suffix).slice(0, 50);
+    suffix += 1;
+  }
+  return code;
+}

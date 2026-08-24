@@ -7,6 +7,7 @@ import { Position } from './entities/position.entity';
 import { CostCenter } from './entities/cost-center.entity';
 import { OrgService } from './org.service';
 import { OrgController } from './org.controller';
+import { ImportsModule } from '../imports/imports.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { OrgController } from './org.controller';
       Position,
       CostCenter,
     ]),
+    ImportsModule,
   ],
   providers: [OrgService],
   controllers: [OrgController],

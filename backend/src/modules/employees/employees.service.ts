@@ -165,7 +165,8 @@ export class EmployeesService {
       successRows += 1;
     }
 
-    return this.importBatchService.finish(batch.id, rows.length, successRows, errors);
+    const finished = await this.importBatchService.finish(batch.id, rows.length, successRows, errors);
+    return { ...finished, errors };
   }
 
   async getImportBatch(batchId: string) {
