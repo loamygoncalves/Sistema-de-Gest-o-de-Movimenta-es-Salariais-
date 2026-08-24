@@ -59,7 +59,7 @@ export default function HistoryPage() {
       .get<Paginated<MovementHistoryEntry>>("/history", { ...filters, page, limit })
       .then((res) => {
         if (!active) return;
-        setEntries(res.data ?? []);
+        setEntries(res.items ?? []);
         setTotal(res.total ?? 0);
       })
       .catch((err) => showToast(getErrorMessage(err), "error"))

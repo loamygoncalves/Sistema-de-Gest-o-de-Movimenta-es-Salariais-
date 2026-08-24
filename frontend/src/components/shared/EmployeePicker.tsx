@@ -33,7 +33,7 @@ export function EmployeePicker({ label = "Colaborador", required, error, value, 
           page: 1,
           limit: 8,
         })
-        .then((res) => setResults(res.data ?? []))
+        .then((res) => setResults(res.items ?? []))
         .catch(() => setResults([]))
         .finally(() => setLoading(false));
     }, 250);

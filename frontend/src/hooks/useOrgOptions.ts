@@ -5,13 +5,11 @@ import { api } from "@/lib/api";
 import { CostCenter, Directorate, Management, Position } from "@/types";
 
 // Fetches org-structure reference lists used to populate filter/select
-// dropdowns across several screens. The contract doesn't document a
-// pagination envelope for these simple catalog endpoints, so we accept
-// either a bare array or a `{ data: [...] }` envelope — a defensive
-// judgment call, since GET /directorates etc. read-only lists are more
-// likely to return an unpaginated array in practice.
-function normalizeList<T>(res: T[] | { data: T[] }): T[] {
-  return Array.isArray(res) ? res : res.data ?? [];
+// dropdowns across several screens. GET /directorates etc. return a bare
+// array (see OrgService.findAllDirectorates() and friends in the backend),
+// but we still accept the paginated `{ items: [...] }` envelope defensively.
+function normalizeList<T>(res: T[] | { items: T[] }): T[] {
+  return Array.isArray(res) ? res : res.items ?? [];
 }
 
 export function useDirectorates() {
@@ -21,7 +19,7 @@ export function useDirectorates() {
   useEffect(() => {
     let active = true;
     api
-      .get<Directorate[] | { data: Directorate[] }>("/directorates")
+      .get<Directorate[] | { items: Directorate[] }>("/directorates")
       .then((res) => {
         if (active) setDirectorates(normalizeList(res));
       })
@@ -46,7 +44,7 @@ export function usePositions() {
   useEffect(() => {
     let active = true;
     api
-      .get<Position[] | { data: Position[] }>("/positions")
+      .get<Position[] | { items: Position[] }>("/positions")
       .then((res) => {
         if (active) setPositions(normalizeList(res));
       })
@@ -71,7 +69,7 @@ export function useCostCenters() {
   useEffect(() => {
     let active = true;
     api
-      .get<CostCenter[] | { data: CostCenter[] }>("/cost-centers")
+      .get<CostCenter[] | { items: CostCenter[] }>("/cost-centers")
       .then((res) => {
         if (active) setCostCenters(normalizeList(res));
       })
@@ -97,7 +95,7 @@ export function useManagements(directorateId?: string) {
     let active = true;
     setLoading(true);
     api
-      .get<Management[] | { data: Management[] }>("/managements", { directorateId })
+      .get<Management[] | { items: Management[] }>("/managements", { directorateId })
       .then((res) => {
         if (active) setManagements(normalizeList(res));
       })

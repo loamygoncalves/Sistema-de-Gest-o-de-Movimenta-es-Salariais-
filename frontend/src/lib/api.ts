@@ -1,4 +1,5 @@
 import { ApiErrorBody } from "@/types";
+import { flattenRelations } from "./normalize";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const TOKEN_KEY = "sgms.token";
@@ -103,7 +104,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   if (contentType.includes("application/json")) {
-    return (await res.json()) as T;
+    return flattenRelations((await res.json()) as T);
   }
 
   return undefined as unknown as T;

@@ -144,9 +144,15 @@ export class SalaryStudiesService {
       const market = marketByPosition.get(employee.positionId);
       if (!market || market.count === 0) {
         return {
-          employee: { id: employee.id, name: employee.name, registration: employee.registration },
-          position: employee.position?.name,
-          directorate: employee.directorate?.name,
+          employee: {
+            id: employee.id,
+            name: employee.name,
+            registration: employee.registration,
+            positionId: employee.positionId,
+            positionName: employee.position?.name,
+            directorateId: employee.directorateId,
+            directorateName: employee.directorate?.name,
+          },
           currentSalary: employee.currentSalary,
           marketP25: null,
           marketP50: null,
@@ -167,9 +173,15 @@ export class SalaryStudiesService {
       else classification = MarketPosition.DENTRO_DO_MERCADO;
 
       return {
-        employee: { id: employee.id, name: employee.name, registration: employee.registration },
-        position: employee.position?.name,
-        directorate: employee.directorate?.name,
+        employee: {
+          id: employee.id,
+          name: employee.name,
+          registration: employee.registration,
+          positionId: employee.positionId,
+          positionName: employee.position?.name,
+          directorateId: employee.directorateId,
+          directorateName: employee.directorate?.name,
+        },
         currentSalary: employee.currentSalary,
         marketP25: Number(p25.toFixed(2)),
         marketP50: Number(p50.toFixed(2)),

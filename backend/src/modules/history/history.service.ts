@@ -16,7 +16,12 @@ export class HistoryService {
   ) {}
 
   private buildFilteredQuery(query: HistoryQueryDto, scopedDirectorateId?: string) {
-    const qb = this.historyRepo.createQueryBuilder('h');
+    const qb = this.historyRepo
+      .createQueryBuilder('h')
+      .leftJoinAndSelect('h.employee', 'employee')
+      .leftJoinAndSelect('h.directorate', 'directorate')
+      .leftJoinAndSelect('h.position', 'position')
+      .leftJoinAndSelect('h.costCenter', 'costCenter');
     const directorateId = scopedDirectorateId ?? query.directorateId;
     if (directorateId) qb.andWhere('h.directorateId = :directorateId', { directorateId });
     if (query.positionId) qb.andWhere('h.positionId = :positionId', { positionId: query.positionId });

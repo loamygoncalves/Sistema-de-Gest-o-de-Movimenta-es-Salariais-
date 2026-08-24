@@ -7,8 +7,8 @@ interface WithId {
   id: string;
 }
 
-function normalizeList<T>(res: T[] | { data: T[] }): T[] {
-  return Array.isArray(res) ? res : res.data ?? [];
+function normalizeList<T>(res: T[] | { items: T[] }): T[] {
+  return Array.isArray(res) ? res : res.items ?? [];
 }
 
 /**
@@ -24,7 +24,7 @@ export function useCrudResource<T extends WithId>(path: string, params?: Record<
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<T[] | { data: T[] }>(path, params);
+      const res = await api.get<T[] | { items: T[] }>(path, params);
       setItems(normalizeList(res));
     } finally {
       setLoading(false);

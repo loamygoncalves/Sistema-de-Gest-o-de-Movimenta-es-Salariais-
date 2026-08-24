@@ -1,12 +1,12 @@
-// Shared response shapes. The contract documents list endpoints with
-// `page`/`limit` query params but does not spell out the exact pagination
-// envelope — `Paginated<T>` below is a judgment call using the most common
-// Nest/TypeORM convention (`data` + `total` + `page` + `limit`).
+// Shared response shapes. Matches the backend's paginate() helper
+// (backend/src/common/dto/pagination-query.dto.ts): `items` + `total` +
+// `page` + `limit` + `totalPages`.
 export interface Paginated<T> {
-  data: T[];
+  items: T[];
   total: number;
   page: number;
   limit: number;
+  totalPages: number;
 }
 
 export interface ApiErrorBody {

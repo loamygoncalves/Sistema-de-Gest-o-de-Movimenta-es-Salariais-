@@ -36,6 +36,8 @@ export class BudgetService {
     const limit = query.limit ?? 20;
     const qb = this.budgetRepo
       .createQueryBuilder('b')
+      .leftJoinAndSelect('b.position', 'position')
+      .leftJoinAndSelect('b.directorate', 'directorate')
       .where('b.year = :year', { year: query.year });
 
     const directorateId = scopedDirectorateId ?? query.directorateId;

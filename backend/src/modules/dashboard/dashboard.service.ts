@@ -153,7 +153,7 @@ export class DashboardService {
       byMonth.set(date.toISOString().slice(0, 7), 0);
     }
     for (const row of rows) {
-      const month = String(row.effectiveDate).slice(0, 7);
+      const month = new Date(row.effectiveDate).toISOString().slice(0, 7);
       if (byMonth.has(month)) {
         byMonth.set(month, byMonth.get(month)! + Number(row.impact ?? 0));
       }

@@ -48,7 +48,7 @@ export default function MovementsPage() {
       })
       .then((res) => {
         if (!active) return;
-        setMovements(res.data ?? []);
+        setMovements(res.items ?? []);
         setTotal(res.total ?? 0);
       })
       .catch((err) => showToast(getErrorMessage(err), "error"))

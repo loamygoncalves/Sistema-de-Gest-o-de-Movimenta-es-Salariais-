@@ -9,6 +9,7 @@ import { MovementStatusBadge, ApprovalStatusBadge } from "@/components/ui/Status
 import { api } from "@/lib/api";
 import { formatCurrency, formatDate, formatDateTime, formatPercent, getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
+import { normalizeSimulation } from "@/lib/normalize";
 import {
   APPROVAL_STEP_ROLE_LABELS,
   ApprovalStep,
@@ -35,7 +36,7 @@ export default function MovementDetailPage() {
     try {
       const res = await api.get<MovementRequest>(`/movements/${params.id}`);
       setMovement(res);
-      setSimulation(res.simulation ?? null);
+      setSimulation(res.simulation ? normalizeSimulation(res.simulation) : null);
     } catch (err) {
       showToast(getErrorMessage(err), "error");
     } finally {
@@ -66,7 +67,7 @@ export default function MovementDetailPage() {
     setSimulating(true);
     try {
       const res = await api.post<MovementSimulation>(`/movements/${params.id}/simulate`);
-      setSimulation(res);
+      setSimulation(normalizeSimulation(res));
     } catch (err) {
       showToast(getErrorMessage(err), "error");
     } finally {

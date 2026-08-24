@@ -32,7 +32,15 @@ export class MovementsService {
   async findAll(query: MovementQueryDto, scopedDirectorateId?: string) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const qb = this.movementRepo.createQueryBuilder('m');
+    const qb = this.movementRepo
+      .createQueryBuilder('m')
+      .leftJoinAndSelect('m.employee', 'employee')
+      .leftJoinAndSelect('m.directorate', 'directorate')
+      .leftJoinAndSelect('m.currentPosition', 'currentPosition')
+      .leftJoinAndSelect('m.newPosition', 'newPosition')
+      .leftJoinAndSelect('m.originDirectorate', 'originDirectorate')
+      .leftJoinAndSelect('m.destinationDirectorate', 'destinationDirectorate')
+      .leftJoinAndSelect('m.requestedBy', 'requestedBy');
 
     const directorateId = scopedDirectorateId ?? query.directorateId;
     if (directorateId) qb.andWhere('m.directorateId = :directorateId', { directorateId });

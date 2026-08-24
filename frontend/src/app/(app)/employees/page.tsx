@@ -103,7 +103,7 @@ function EmployeeListTab() {
       })
       .then((res) => {
         if (!active) return;
-        setEmployees(res.data ?? []);
+        setEmployees(res.items ?? []);
         setTotal(res.total ?? 0);
       })
       .catch((err) => showToast(getErrorMessage(err), "error"))

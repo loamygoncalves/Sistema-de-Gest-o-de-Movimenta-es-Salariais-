@@ -52,15 +52,32 @@ export class ApprovalsService {
     return this.stepRepo.save(steps);
   }
 
-  async findTimeline(movementRequestId: string): Promise<ApprovalStep[]> {
-    return this.stepRepo.find({
+  /** DTO alinhado ao que o frontend consome (ver docs/API_CONTRACT.md). */
+  private toStepDto(step: ApprovalStep) {
+    return {
+      id: step.id,
+      movementId: step.movementRequestId,
+      order: step.stepOrder,
+      role: step.approverRole,
+      status: step.status,
+      approverId: step.approverUserId ?? null,
+      approverName: step.approverUser?.name ?? null,
+      comment: step.comment ?? null,
+      decidedAt: step.decidedAt ?? null,
+      createdAt: step.createdAt,
+    };
+  }
+
+  async findTimeline(movementRequestId: string) {
+    const steps = await this.stepRepo.find({
       where: { movementRequestId },
       order: { stepOrder: 'ASC' },
       relations: ['approverUser'],
     });
+    return steps.map((step) => this.toStepDto(step));
   }
 
-  async findPending(user: AuthenticatedUser): Promise<ApprovalStep[]> {
+  async findPending(user: AuthenticatedUser) {
     const approverRole = ROLE_TO_APPROVER_ROLE[user.role];
     if (!approverRole) return [];
 
@@ -81,7 +98,25 @@ export class ApprovalsService {
       });
     }
 
-    return qb.orderBy('movement.createdAt', 'ASC').getMany();
+    const steps = await qb.orderBy('movement.createdAt', 'ASC').getMany();
+
+    const simulations = await Promise.all(
+      steps.map((step) =>
+        this.simulationRepo.findOne({
+          where: { movementRequestId: step.movementRequestId },
+          order: { createdAt: 'DESC' },
+        }),
+      ),
+    );
+
+    return steps.map((step, index) => ({
+      ...this.toStepDto(step),
+      movementType: step.movementRequest.type,
+      employeeName: step.movementRequest.employee?.name,
+      directorateName: step.movementRequest.directorate?.name,
+      effectiveDate: step.movementRequest.effectiveDate,
+      totalAnnualImpact: simulations[index]?.totalAnnualImpact ?? null,
+    }));
   }
 
   private statusForApproverRole(role: ApproverRole): MovementStatus {

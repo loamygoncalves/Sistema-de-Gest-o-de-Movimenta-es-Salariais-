@@ -15,7 +15,7 @@ import { useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
-import { BudgetDashboard, BudgetEntry, ImportBatch, Paginated } from "@/types";
+import { BudgetDashboard, BudgetEntry, ImportBatch, Paginated, PLANNED_SITUATION_LABELS } from "@/types";
 
 export default function BudgetPage() {
   const { hasRole } = useAuth();
@@ -67,7 +67,7 @@ export default function BudgetPage() {
       })
       .then((res) => {
         if (!active) return;
-        setEntries(res.data ?? []);
+        setEntries(res.items ?? []);
         setTotal(res.total ?? 0);
       })
       .catch((err) => showToast(getErrorMessage(err), "error"))
@@ -100,10 +100,21 @@ export default function BudgetPage() {
   }
 
   const columns: Column<BudgetEntry>[] = [
+    { key: "name", header: "Colaborador / Vaga", render: (r) => r.name ?? "—" },
     { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
     { key: "position", header: "Cargo", render: (r) => r.positionName ?? "—" },
-    { key: "hc", header: "HC Orçado", render: (r) => formatNumber(r.budgetedHeadcount), align: "right" },
-    { key: "salary", header: "Folha Orçada", render: (r) => formatCurrency(r.budgetedSalary), align: "right" },
+    {
+      key: "situation",
+      header: "Situação Planejada",
+      render: (r) => PLANNED_SITUATION_LABELS[r.plannedSituation] ?? r.plannedSituation,
+    },
+    { key: "plannedSalary", header: "Salário Orçado", render: (r) => formatCurrency(r.plannedSalary), align: "right" },
+    {
+      key: "annualCost",
+      header: "Custo Anual Orçado",
+      render: (r) => formatCurrency(r.annualBudgetedCost),
+      align: "right",
+    },
   ];
 
   return (
