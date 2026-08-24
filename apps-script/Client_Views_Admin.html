@@ -1,0 +1,644 @@
+<script>
+  /* =====================================================================
+     Administração — restrito por perfil (verificado também no servidor):
+       - Estrutura Organizacional: ADMIN, RH_REMUNERACAO
+       - Usuários: ADMIN
+       - Encargos & Benefícios: ADMIN, RH_REMUNERACAO
+     api_getOrgLookups / api_create*|api_update* (diretorias, gerências,
+     coordenações, cargos, centros de custo) / api_listUsers /
+     api_createUser / api_updateUser / api_listChargeParameters /
+     api_createChargeParameter / api_updateChargeParameter
+     ===================================================================== */
+
+  function adminAccessDenied(root, message) {
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Acesso restrito</h1></div></div>' +
+      '<div class="banner banner-danger">' +
+      escapeHtml(message || 'Seu perfil não tem permissão para acessar esta área.') +
+      '</div>';
+  }
+
+  function activePill(active) {
+    return active ? '<span class="pill pill-green">Ativo</span>' : '<span class="pill pill-slate">Inativo</span>';
+  }
+
+  function renderAdminTabs(containerId, tabs, state, onChange) {
+    var el = document.getElementById(containerId);
+    el.innerHTML = tabs
+      .map(function (t) {
+        return '<button class="tab-btn' + (state.tab === t.key ? ' active' : '') + '" data-tab="' + t.key + '">' + escapeHtml(t.label) + '</button>';
+      })
+      .join('');
+    el.querySelectorAll('.tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.tab = btn.getAttribute('data-tab');
+        renderAdminTabs(containerId, tabs, state, onChange);
+        onChange();
+      });
+    });
+  }
+
+  /** Modal genérico com campos de texto/número/select/checkbox — usado pelas telas de administração. */
+  function openEntityModal(opts) {
+    // opts: {title, fields:[{id,label,type,required,options,placeholder,value,checked}], onSubmit(values, done, fail)}
+    var fieldsHtml = opts.fields
+      .map(function (f) {
+        var id = 'em-' + f.id;
+        if (f.type === 'select') {
+          return (
+            '<div class="field"><label>' +
+            escapeHtml(f.label) +
+            (f.required ? ' <span class="req">*</span>' : '') +
+            '</label><select id="' +
+            id +
+            '">' +
+            optionsHtml(f.options, { placeholder: f.placeholder, selected: f.value }) +
+            '</select></div>'
+          );
+        }
+        if (f.type === 'checkbox') {
+          return (
+            '<div class="field checkbox-row"><input type="checkbox" id="' +
+            id +
+            '"' +
+            (f.checked ? ' checked' : '') +
+            '><label for="' +
+            id +
+            '">' +
+            escapeHtml(f.label) +
+            '</label></div>'
+          );
+        }
+        return (
+          '<div class="field"><label>' +
+          escapeHtml(f.label) +
+          (f.required ? ' <span class="req">*</span>' : '') +
+          '</label><input type="' +
+          (f.type || 'text') +
+          '" id="' +
+          id +
+          '" value="' +
+          escapeHtml(f.value !== undefined && f.value !== null ? f.value : '') +
+          '"' +
+          (f.step ? ' step="' + f.step + '"' : '') +
+          '></div>'
+        );
+      })
+      .join('');
+
+    var html =
+      '<div class="modal-header"><h3>' +
+      escapeHtml(opts.title) +
+      '</h3><button class="modal-close" data-action="modal-close">&times;</button></div>' +
+      fieldsHtml +
+      '<p class="field-error" id="em-error" style="display:none;"></p>' +
+      '<div class="form-actions"><button class="btn btn-outline" data-action="modal-close">Cancelar</button>' +
+      '<button class="btn" id="em-save-btn">Salvar</button></div>';
+
+    var modalEl = Modal.open(html);
+    modalEl.querySelector('#em-save-btn').addEventListener('click', function () {
+      var btn = this;
+      var values = {};
+      opts.fields.forEach(function (f) {
+        var el = modalEl.querySelector('#em-' + f.id);
+        if (f.type === 'checkbox') values[f.id] = el.checked;
+        else if (f.type === 'number') values[f.id] = el.value === '' ? null : Number(el.value);
+        else values[f.id] = el.value.trim ? el.value.trim() : el.value;
+      });
+      var errEl = modalEl.querySelector('#em-error');
+      var validationError = opts.validate ? opts.validate(values) : null;
+      if (validationError) {
+        errEl.textContent = validationError;
+        errEl.style.display = 'block';
+        return;
+      }
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      opts
+        .onSubmit(values)
+        .then(function () {
+          Modal.close();
+          if (opts.onSuccess) opts.onSuccess();
+        })
+        .catch(function (err) {
+          errEl.textContent = apiErrorMessage(err);
+          errEl.style.display = 'block';
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.classList.remove('is-loading');
+        });
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Estrutura Organizacional
+  // -----------------------------------------------------------------------
+  Views.adminOrg = function (root) {
+    var user = App.user;
+    if (!canManage(user)) {
+      adminAccessDenied(root);
+      return;
+    }
+    var state = { tab: 'directorates' };
+    var tabs = [
+      { key: 'directorates', label: 'Diretorias' },
+      { key: 'managements', label: 'Gerências' },
+      { key: 'coordinations', label: 'Coordenações' },
+      { key: 'positions', label: 'Cargos' },
+      { key: 'costCenters', label: 'Centros de Custo' },
+    ];
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Estrutura Organizacional</h1>' +
+      '<p>Diretorias, gerências, coordenações, cargos e centros de custo.</p></div></div>' +
+      '<div class="tabs" id="org-tabs"></div><div id="org-body">' +
+      loadingHtml() +
+      '</div>';
+
+    renderAdminTabs('org-tabs', tabs, state, renderBody);
+    renderBody();
+
+    function renderBody() {
+      var body = document.getElementById('org-body');
+      body.innerHTML = loadingHtml();
+      getOrgLookups(true)
+        .then(function (org) {
+          if (state.tab === 'directorates') renderDirectorates(org);
+          else if (state.tab === 'managements') renderManagements(org);
+          else if (state.tab === 'coordinations') renderCoordinations(org);
+          else if (state.tab === 'positions') renderPositions(org);
+          else renderCostCenters(org);
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function tableShell(title, newLabel, onNew, rowsHtml, headerCols) {
+      var body = document.getElementById('org-body');
+      body.innerHTML =
+        cardOpen(title, { actions: '<button class="btn btn-sm" id="org-new-btn">' + escapeHtml(newLabel) + '</button>' }) +
+        '<div class="table-wrap"><table><thead><tr>' +
+        headerCols.map(function (c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') +
+        '</tr></thead><tbody>' +
+        (rowsHtml || '<tr><td colspan="' + headerCols.length + '" class="table-empty">Nenhum registro cadastrado.</td></tr>') +
+        '</tbody></table></div>' +
+        cardClose();
+      document.getElementById('org-new-btn').addEventListener('click', onNew);
+    }
+
+    function renderDirectorates(org) {
+      var rows = (org.directorates || [])
+        .map(function (d) {
+          return (
+            '<tr><td>' +
+            escapeHtml(d.name) +
+            '</td><td class="cell-num">' +
+            fmt.currency(d.annualBudget) +
+            '</td><td>' +
+            activePill(d.active) +
+            '</td><td><button class="btn btn-outline btn-sm" data-edit="' +
+            d.id +
+            '">Editar</button></td></tr>'
+          );
+        })
+        .join('');
+      tableShell('Diretorias', '+ Nova Diretoria', function () { openDirectorateModal(null); }, rows, ['Nome', 'Orçamento Anual', 'Status', '']);
+      document.querySelectorAll('[data-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var item = (org.directorates || []).filter(function (d) { return d.id === btn.getAttribute('data-edit'); })[0];
+          openDirectorateModal(item);
+        });
+      });
+    }
+
+    function openDirectorateModal(existing) {
+      openEntityModal({
+        title: existing ? 'Editar Diretoria' : 'Nova Diretoria',
+        fields: [
+          { id: 'name', label: 'Nome', required: true, value: existing ? existing.name : '' },
+          { id: 'annualBudget', label: 'Orçamento Anual', type: 'number', step: '0.01', value: existing ? existing.annualBudget : '' },
+          existing ? { id: 'active', label: 'Diretoria ativa', type: 'checkbox', checked: !!existing.active } : null,
+        ].filter(Boolean),
+        validate: function (v) {
+          if (!v.name) return 'Informe o nome da diretoria.';
+          return null;
+        },
+        onSubmit: function (v) {
+          var payload = { name: v.name, annualBudget: v.annualBudget || 0 };
+          if (existing) {
+            payload.active = v.active;
+            return callApi('api_updateDirectorate', existing.id, payload);
+          }
+          return callApi('api_createDirectorate', payload);
+        },
+        onSuccess: function () {
+          toast(existing ? 'Diretoria atualizada.' : 'Diretoria criada.', 'success');
+          renderBody();
+        },
+      });
+    }
+
+    function renderManagements(org) {
+      var directorates = idNameMap(org.directorates);
+      var rows = (org.managements || [])
+        .map(function (m) {
+          return '<tr><td>' + escapeHtml(m.name) + '</td><td>' + escapeHtml(directorates[m.directorateId] || '—') + '</td><td>' + activePill(m.active) + '</td></tr>';
+        })
+        .join('');
+      tableShell('Gerências', '+ Nova Gerência', function () { openManagementModal(org); }, rows, ['Nome', 'Diretoria', 'Status']);
+    }
+
+    function openManagementModal(org) {
+      openEntityModal({
+        title: 'Nova Gerência',
+        fields: [
+          { id: 'name', label: 'Nome', required: true },
+          { id: 'directorateId', label: 'Diretoria', type: 'select', required: true, options: org.directorates, placeholder: 'Selecione' },
+        ],
+        validate: function (v) {
+          if (!v.name) return 'Informe o nome da gerência.';
+          if (!v.directorateId) return 'Selecione a diretoria.';
+          return null;
+        },
+        onSubmit: function (v) {
+          return callApi('api_createManagement', { name: v.name, directorateId: v.directorateId });
+        },
+        onSuccess: function () {
+          toast('Gerência criada.', 'success');
+          renderBody();
+        },
+      });
+    }
+
+    function renderCoordinations(org) {
+      var managements = idNameMap(org.managements);
+      var rows = (org.coordinations || [])
+        .map(function (c) {
+          return '<tr><td>' + escapeHtml(c.name) + '</td><td>' + escapeHtml(managements[c.managementId] || '—') + '</td><td>' + activePill(c.active) + '</td></tr>';
+        })
+        .join('');
+      tableShell('Coordenações', '+ Nova Coordenação', function () { openCoordinationModal(org); }, rows, ['Nome', 'Gerência', 'Status']);
+    }
+
+    function openCoordinationModal(org) {
+      openEntityModal({
+        title: 'Nova Coordenação',
+        fields: [
+          { id: 'name', label: 'Nome', required: true },
+          { id: 'managementId', label: 'Gerência', type: 'select', required: true, options: org.managements, placeholder: 'Selecione' },
+        ],
+        validate: function (v) {
+          if (!v.name) return 'Informe o nome da coordenação.';
+          if (!v.managementId) return 'Selecione a gerência.';
+          return null;
+        },
+        onSubmit: function (v) {
+          return callApi('api_createCoordination', { name: v.name, managementId: v.managementId });
+        },
+        onSuccess: function () {
+          toast('Coordenação criada.', 'success');
+          renderBody();
+        },
+      });
+    }
+
+    function renderPositions(org) {
+      var rows = (org.positions || [])
+        .map(function (p) {
+          return (
+            '<tr><td>' +
+            escapeHtml(p.name) +
+            '</td><td>' +
+            escapeHtml(p.careerLevel || '—') +
+            '</td><td>' +
+            activePill(p.active) +
+            '</td><td><button class="btn btn-outline btn-sm" data-edit="' +
+            p.id +
+            '">Editar</button></td></tr>'
+          );
+        })
+        .join('');
+      tableShell('Cargos', '+ Novo Cargo', function () { openPositionModal(null); }, rows, ['Nome', 'Nível de Carreira', 'Status', '']);
+      document.querySelectorAll('[data-edit]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var item = (org.positions || []).filter(function (p) { return p.id === btn.getAttribute('data-edit'); })[0];
+          openPositionModal(item);
+        });
+      });
+    }
+
+    function openPositionModal(existing) {
+      openEntityModal({
+        title: existing ? 'Editar Cargo' : 'Novo Cargo',
+        fields: [
+          { id: 'name', label: 'Nome', required: true, value: existing ? existing.name : '' },
+          { id: 'careerLevel', label: 'Nível de Carreira', value: existing ? existing.careerLevel : '' },
+          existing ? { id: 'active', label: 'Cargo ativo', type: 'checkbox', checked: !!existing.active } : null,
+        ].filter(Boolean),
+        validate: function (v) {
+          if (!v.name) return 'Informe o nome do cargo.';
+          return null;
+        },
+        onSubmit: function (v) {
+          var payload = { name: v.name, careerLevel: v.careerLevel || '' };
+          if (existing) {
+            payload.active = v.active;
+            return callApi('api_updatePosition', existing.id, payload);
+          }
+          return callApi('api_createPosition', payload);
+        },
+        onSuccess: function () {
+          toast(existing ? 'Cargo atualizado.' : 'Cargo criado.', 'success');
+          renderBody();
+        },
+      });
+    }
+
+    function renderCostCenters(org) {
+      var directorates = idNameMap(org.directorates);
+      var rows = (org.costCenters || [])
+        .map(function (c) {
+          return (
+            '<tr><td>' +
+            escapeHtml(c.code) +
+            '</td><td>' +
+            escapeHtml(c.name) +
+            '</td><td>' +
+            escapeHtml(directorates[c.directorateId] || '—') +
+            '</td><td>' +
+            activePill(c.active) +
+            '</td></tr>'
+          );
+        })
+        .join('');
+      tableShell('Centros de Custo', '+ Novo Centro de Custo', function () { openCostCenterModal(org); }, rows, ['Código', 'Nome', 'Diretoria', 'Status']);
+    }
+
+    function openCostCenterModal(org) {
+      openEntityModal({
+        title: 'Novo Centro de Custo',
+        fields: [
+          { id: 'code', label: 'Código', required: true },
+          { id: 'name', label: 'Nome', required: true },
+          { id: 'directorateId', label: 'Diretoria', type: 'select', options: org.directorates, placeholder: 'Nenhuma' },
+        ],
+        validate: function (v) {
+          if (!v.code) return 'Informe o código do centro de custo.';
+          if (!v.name) return 'Informe o nome do centro de custo.';
+          return null;
+        },
+        onSubmit: function (v) {
+          return callApi('api_createCostCenter', { code: v.code, name: v.name, directorateId: v.directorateId || '' });
+        },
+        onSuccess: function () {
+          toast('Centro de custo criado.', 'success');
+          renderBody();
+        },
+      });
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Usuários (ADMIN)
+  // -----------------------------------------------------------------------
+  Views.adminUsers = function (root) {
+    var user = App.user;
+    if (!isAdminRole(user)) {
+      adminAccessDenied(root);
+      return;
+    }
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Usuários</h1><p>Contas Google autorizadas a acessar o sistema, com perfil e escopo de diretoria.</p></div>' +
+      '<button class="btn" id="users-new-btn">+ Novo Usuário</button></div>' +
+      '<div id="users-body">' +
+      loadingHtml() +
+      '</div>';
+
+    document.getElementById('users-new-btn').addEventListener('click', function () {
+      openUserModal(null);
+    });
+
+    getOrgLookups().then(renderBody).catch(function (err) {
+      document.getElementById('users-body').innerHTML = errorStateHtml(apiErrorMessage(err));
+    });
+
+    function renderBody() {
+      var body = document.getElementById('users-body');
+      body.innerHTML = loadingHtml();
+      callApi('api_listUsers')
+        .then(function (users) {
+          var directorates = idNameMap(App.orgLookups.directorates);
+          if (!users || users.length === 0) {
+            body.innerHTML = emptyStateHtml('Nenhum usuário cadastrado ainda.');
+            return;
+          }
+          body.innerHTML =
+            '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Diretoria</th><th>Status</th><th></th></tr></thead><tbody>' +
+            users
+              .map(function (u) {
+                return (
+                  '<tr><td>' +
+                  escapeHtml(u.name) +
+                  '</td><td>' +
+                  escapeHtml(u.email) +
+                  '</td><td>' +
+                  escapeHtml(labelFor('role', u.role)) +
+                  '</td><td>' +
+                  escapeHtml(directorates[u.directorateId] || '—') +
+                  '</td><td>' +
+                  activePill(u.active) +
+                  '</td><td><div class="row"><button class="btn btn-outline btn-sm" data-edit="' +
+                  u.id +
+                  '">Editar</button><button class="btn btn-sm ' +
+                  (u.active ? 'btn-danger' : 'btn-success') +
+                  '" data-toggle="' +
+                  u.id +
+                  '">' +
+                  (u.active ? 'Desativar' : 'Ativar') +
+                  '</button></div></td></tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table></div>';
+
+          body.querySelectorAll('[data-edit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var item = users.filter(function (u) { return u.id === btn.getAttribute('data-edit'); })[0];
+              openUserModal(item);
+            });
+          });
+          body.querySelectorAll('[data-toggle]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var item = users.filter(function (u) { return u.id === btn.getAttribute('data-toggle'); })[0];
+              callApi('api_updateUser', item.id, { active: !item.active })
+                .then(function () {
+                  toast(item.active ? 'Usuário desativado.' : 'Usuário ativado.', 'success');
+                  renderBody();
+                })
+                .catch(toastError);
+            });
+          });
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function openUserModal(existing) {
+      var org = App.orgLookups;
+      openEntityModal({
+        title: existing ? 'Editar Usuário' : 'Novo Usuário',
+        fields: [
+          { id: 'name', label: 'Nome', required: true, value: existing ? existing.name : '' },
+          { id: 'email', label: 'E-mail (conta Google)', type: 'email', required: true, value: existing ? existing.email : '' },
+          {
+            id: 'role',
+            label: 'Perfil',
+            type: 'select',
+            required: true,
+            value: existing ? existing.role : '',
+            placeholder: 'Selecione',
+            options: Object.keys(LABELS.role).map(function (k) { return { id: k, name: LABELS.role[k] }; }),
+          },
+          {
+            id: 'directorateId',
+            label: 'Diretoria (escopo — apenas para Diretor/Gestor)',
+            type: 'select',
+            value: existing ? existing.directorateId : '',
+            placeholder: 'Nenhuma',
+            options: org.directorates,
+          },
+        ],
+        validate: function (v) {
+          if (!v.name) return 'Informe o nome.';
+          if (!v.email) return 'Informe o e-mail da conta Google.';
+          if (!v.role) return 'Selecione o perfil.';
+          return null;
+        },
+        onSubmit: function (v) {
+          var payload = { name: v.name, email: v.email, role: v.role, directorateId: v.directorateId || '' };
+          if (existing) return callApi('api_updateUser', existing.id, payload);
+          return callApi('api_createUser', payload);
+        },
+        onSuccess: function () {
+          toast(existing ? 'Usuário atualizado.' : 'Usuário criado.', 'success');
+          renderBody();
+        },
+      });
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Encargos & Benefícios (Módulo 4 — parametrização do simulador)
+  // -----------------------------------------------------------------------
+  Views.adminCharges = function (root) {
+    var user = App.user;
+    if (!canManage(user)) {
+      adminAccessDenied(root);
+      return;
+    }
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Encargos & Benefícios</h1>' +
+      '<p>Parâmetros usados pelo simulador de impacto financeiro das movimentações.</p></div>' +
+      '<button class="btn" id="charges-new-btn">+ Novo Parâmetro</button></div>' +
+      '<div id="charges-body">' +
+      loadingHtml() +
+      '</div>';
+
+    document.getElementById('charges-new-btn').addEventListener('click', function () {
+      openChargeModal(null);
+    });
+
+    renderBody();
+
+    function renderBody() {
+      var body = document.getElementById('charges-body');
+      body.innerHTML = loadingHtml();
+      callApi('api_listChargeParameters')
+        .then(function (list) {
+          if (!list || list.length === 0) {
+            body.innerHTML = emptyStateHtml('Nenhum parâmetro cadastrado ainda.');
+            return;
+          }
+          body.innerHTML =
+            '<div class="table-wrap"><table><thead><tr><th>Chave</th><th>Rótulo</th><th>Categoria</th><th>Tipo de Valor</th>' +
+            '<th class="cell-num">Valor</th><th>Status</th><th></th></tr></thead><tbody>' +
+            list
+              .map(function (c) {
+                return (
+                  '<tr><td>' +
+                  escapeHtml(c.name) +
+                  '</td><td>' +
+                  escapeHtml(c.label) +
+                  '</td><td>' +
+                  (c.isBenefit ? '<span class="pill pill-blue">Benefício</span>' : '<span class="pill pill-indigo">Encargo</span>') +
+                  '</td><td>' +
+                  escapeHtml(labelFor('chargeValueType', c.valueType)) +
+                  '</td><td class="cell-num">' +
+                  (c.valueType === 'PERCENTUAL' ? fmt.percent(c.value) : fmt.currency(c.value)) +
+                  '</td><td>' +
+                  activePill(c.active) +
+                  '</td><td><button class="btn btn-outline btn-sm" data-edit="' +
+                  c.id +
+                  '">Editar</button></td></tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table></div>';
+
+          body.querySelectorAll('[data-edit]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var item = list.filter(function (c) { return c.id === btn.getAttribute('data-edit'); })[0];
+              openChargeModal(item);
+            });
+          });
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function openChargeModal(existing) {
+      openEntityModal({
+        title: existing ? 'Editar Parâmetro' : 'Novo Parâmetro',
+        fields: [
+          { id: 'name', label: 'Chave interna (ex: inss, fgts, vale_refeicao)', required: true, value: existing ? existing.name : '' },
+          { id: 'label', label: 'Rótulo de exibição', required: true, value: existing ? existing.label : '' },
+          {
+            id: 'valueType',
+            label: 'Tipo de Valor',
+            type: 'select',
+            required: true,
+            value: existing ? existing.valueType : 'PERCENTUAL',
+            options: Object.keys(LABELS.chargeValueType).map(function (k) { return { id: k, name: LABELS.chargeValueType[k] }; }),
+          },
+          { id: 'value', label: 'Valor (% ou R$, conforme o tipo)', type: 'number', step: '0.01', required: true, value: existing ? existing.value : '' },
+          { id: 'isBenefit', label: 'É um benefício (desmarcado = encargo)', type: 'checkbox', checked: existing ? !!existing.isBenefit : false },
+          existing ? { id: 'active', label: 'Parâmetro ativo', type: 'checkbox', checked: !!existing.active } : null,
+        ].filter(Boolean),
+        validate: function (v) {
+          if (!v.name) return 'Informe a chave interna.';
+          if (!v.label) return 'Informe o rótulo de exibição.';
+          if (v.value === null || isNaN(Number(v.value))) return 'Informe um valor numérico válido.';
+          return null;
+        },
+        onSubmit: function (v) {
+          var payload = { name: v.name, label: v.label, valueType: v.valueType, value: Number(v.value), isBenefit: v.isBenefit };
+          if (existing) {
+            payload.active = v.active;
+            return callApi('api_updateChargeParameter', existing.id, payload);
+          }
+          return callApi('api_createChargeParameter', payload);
+        },
+        onSuccess: function () {
+          toast(existing ? 'Parâmetro atualizado.' : 'Parâmetro criado.', 'success');
+          renderBody();
+        },
+      });
+    }
+  };
+</script>

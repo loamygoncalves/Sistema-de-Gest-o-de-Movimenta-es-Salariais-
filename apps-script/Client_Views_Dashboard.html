@@ -1,0 +1,170 @@
+<script>
+  /* =====================================================================
+     Módulo 8 — Dashboards executivos
+     api_getDashboardHeadcount / api_getDashboardPayroll /
+     api_getDashboardMovements / api_getDashboardFinancial
+     ===================================================================== */
+
+  Views.dashboard = function (root) {
+    var user = App.user;
+    var state = {
+      year: new Date().getFullYear(),
+      directorateId: isScopedRole(user) ? user.directorateId || '' : '',
+    };
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Dashboard Executivo</h1>' +
+      '<p>Indicadores consolidados de headcount, folha, movimentações e impacto financeiro.</p></div></div>' +
+      '<div class="filter-bar" id="dash-filters"></div>' +
+      '<div id="dash-body">' +
+      loadingHtml() +
+      '</div>';
+
+    function kpiTile(label, value, variant, hint) {
+      return (
+        '<div class="kpi-tile' +
+        (variant ? ' ' + variant : '') +
+        '"><div class="kpi-label">' +
+        escapeHtml(label) +
+        '</div><div class="kpi-value">' +
+        value +
+        '</div>' +
+        (hint ? '<div class="kpi-hint">' + escapeHtml(hint) + '</div>' : '') +
+        '</div>'
+      );
+    }
+
+    function rankingTableHtml(items) {
+      if (!items || items.length === 0) return emptyStateHtml('Nenhuma diretoria cadastrada.');
+      return (
+        '<div class="table-wrap"><table><thead><tr><th>Diretoria</th><th class="cell-num">Folha Atual</th>' +
+        '<th class="cell-num">Orçamento Anual</th><th class="cell-num">% Consumido</th></tr></thead><tbody>' +
+        items
+          .map(function (r) {
+            return (
+              '<tr><td>' +
+              escapeHtml(r.directorate) +
+              '</td><td class="cell-num">' +
+              fmt.currency(r.currentPayroll) +
+              '</td><td class="cell-num">' +
+              fmt.currency(r.annualBudget) +
+              '</td><td class="cell-num ' +
+              (r.consumedPercent > 100 ? 'text-danger' : '') +
+              '" style="' +
+              (r.consumedPercent > 100 ? 'color:var(--red-600);font-weight:600;' : '') +
+              '">' +
+              fmt.percent(r.consumedPercent) +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>'
+      );
+    }
+
+    function renderFilters() {
+      var el = document.getElementById('dash-filters');
+      var directorateFilterHtml = '';
+      if (!isScopedRole(user)) {
+        directorateFilterHtml =
+          '<div class="col"><label>Diretoria</label><select id="dash-directorate"><option value="">Todas as diretorias</option>' +
+          optionsHtml((App.orgLookups && App.orgLookups.directorates) || [], { selected: state.directorateId }) +
+          '</select></div>';
+      }
+      el.innerHTML =
+        '<div class="col"><label>Ano</label><input type="number" id="dash-year" value="' +
+        state.year +
+        '" style="width:110px;"></div>' +
+        directorateFilterHtml +
+        '<div class="col" style="justify-content:flex-end;"><button class="btn btn-outline btn-sm" id="dash-refresh">Atualizar</button></div>';
+
+      document.getElementById('dash-year').addEventListener('change', function (e) {
+        state.year = Number(e.target.value) || state.year;
+        loadData();
+      });
+      var dirEl = document.getElementById('dash-directorate');
+      if (dirEl) {
+        dirEl.addEventListener('change', function (e) {
+          state.directorateId = e.target.value;
+          loadData();
+        });
+      }
+      document.getElementById('dash-refresh').addEventListener('click', loadData);
+    }
+
+    function loadData() {
+      var body = document.getElementById('dash-body');
+      body.innerHTML = loadingHtml();
+      var dirId = state.directorateId || null;
+      Promise.all([
+        callApi('api_getDashboardHeadcount', state.year, dirId),
+        callApi('api_getDashboardPayroll', state.year, dirId),
+        callApi('api_getDashboardMovements', state.year, dirId),
+        callApi('api_getDashboardFinancial', state.year, dirId),
+      ])
+        .then(function (results) {
+          renderBody(results[0], results[1], results[2], results[3]);
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function renderBody(headcount, payroll, movements, financial) {
+      var body = document.getElementById('dash-body');
+      body.innerHTML =
+        '<div class="stack">' +
+        '<div class="grid grid-4">' +
+        kpiTile('Headcount Orçado', fmt.number(headcount.hcBudgeted)) +
+        kpiTile('Headcount Atual', fmt.number(headcount.hcCurrent)) +
+        kpiTile('Vagas Aprovadas (ano)', fmt.number(headcount.hcApproved), 'highlight') +
+        kpiTile('Vagas em Aberto', fmt.number(headcount.hcOpen)) +
+        '</div>' +
+        '<div class="grid grid-4">' +
+        kpiTile('Folha Orçada', fmt.currency(payroll.payrollBudgeted)) +
+        kpiTile('Folha Atual', fmt.currency(payroll.payrollCurrent)) +
+        kpiTile('Desvio Financeiro', fmt.currency(payroll.financialDeviation), payroll.financialDeviation > 0 ? 'danger' : 'good') +
+        kpiTile('% Orçamento Consumido', fmt.percent(payroll.budgetConsumedPercent), payroll.budgetConsumedPercent > 100 ? 'danger' : '') +
+        '</div>' +
+        '<div class="grid grid-4">' +
+        kpiTile('Promoções', fmt.number(movements.promotions)) +
+        kpiTile('Méritos', fmt.number(movements.merits)) +
+        kpiTile('Aumento de Quadro', fmt.number(movements.headcountIncrease)) +
+        kpiTile('Transferências', fmt.number(movements.transfers)) +
+        '</div>' +
+        '<div class="grid grid-2">' +
+        cardOpen('Projeção de Impacto — Próximos 12 meses', { subtitle: 'Movimentações aprovadas ou em fluxo de aprovação' }) +
+        renderBarChart(
+          (financial.projection12Months || []).map(function (p) {
+            return { label: fmt.monthLabel(p.month), value: p.impact };
+          }),
+          { formatter: fmt.currency }
+        ) +
+        cardClose() +
+        cardOpen('Ranking de Diretorias por Consumo Orçamentário') +
+        rankingTableHtml(financial.directorateRanking) +
+        cardClose() +
+        '</div>' +
+        '<div class="grid grid-3">' +
+        kpiTile('Impacto Mensal (histórico aprovado)', fmt.currency(financial.monthlyImpact)) +
+        kpiTile('Impacto Anual (histórico aprovado)', fmt.currency(financial.annualImpact)) +
+        kpiTile('% Orçamento Consumido (Financeiro)', fmt.percent(financial.budgetConsumedPercent), financial.budgetConsumedPercent > 100 ? 'danger' : '') +
+        '</div>' +
+        '</div>';
+    }
+
+    if (isScopedRole(user)) {
+      renderFilters();
+      loadData();
+    } else {
+      getOrgLookups()
+        .then(function () {
+          renderFilters();
+          loadData();
+        })
+        .catch(function (err) {
+          document.getElementById('dash-body').innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+  };
+</script>

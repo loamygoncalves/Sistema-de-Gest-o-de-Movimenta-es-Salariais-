@@ -1,0 +1,214 @@
+<script>
+  /* =====================================================================
+     Módulo 1 — Orçamento anual de pessoal
+     api_listBudgetEntries / api_getBudgetDashboard / api_importBudget
+     ===================================================================== */
+
+  Views.budget = function (root) {
+    var user = App.user;
+    var canImport = canManage(user);
+    var state = {
+      year: new Date().getFullYear(),
+      directorateId: isScopedRole(user) ? user.directorateId || '' : '',
+      tab: 'overview',
+    };
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Orçamento</h1><p>Orçamento anual de pessoal por diretoria e comparação com a folha atual.</p></div></div>' +
+      '<div class="filter-bar" id="budget-filters"></div>' +
+      '<div class="tabs" id="budget-tabs"></div>' +
+      '<div id="budget-body">' +
+      loadingHtml() +
+      '</div>';
+
+    var tabs = [{ key: 'overview', label: 'Visão Geral' }, { key: 'entries', label: 'Lançamentos' }];
+    if (canImport) tabs.push({ key: 'import', label: 'Importar Orçamento' });
+
+    function renderFilters() {
+      var el = document.getElementById('budget-filters');
+      var directorateFilterHtml = '';
+      if (!isScopedRole(user)) {
+        directorateFilterHtml =
+          '<div class="col"><label>Diretoria</label><select id="budget-directorate"><option value="">Todas as diretorias</option>' +
+          optionsHtml((App.orgLookups && App.orgLookups.directorates) || [], { selected: state.directorateId }) +
+          '</select></div>';
+      }
+      el.innerHTML =
+        '<div class="col"><label>Ano</label><input type="number" id="budget-year" value="' + state.year + '" style="width:110px;"></div>' +
+        directorateFilterHtml;
+      document.getElementById('budget-year').addEventListener('change', function (e) {
+        state.year = Number(e.target.value) || state.year;
+        renderTabBody();
+      });
+      var dirEl = document.getElementById('budget-directorate');
+      if (dirEl) {
+        dirEl.addEventListener('change', function (e) {
+          state.directorateId = e.target.value;
+          renderTabBody();
+        });
+      }
+    }
+
+    function renderTabs() {
+      var el = document.getElementById('budget-tabs');
+      el.innerHTML = tabs
+        .map(function (t) {
+          return '<button class="tab-btn' + (state.tab === t.key ? ' active' : '') + '" data-tab="' + t.key + '">' + escapeHtml(t.label) + '</button>';
+        })
+        .join('');
+      el.querySelectorAll('.tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          state.tab = btn.getAttribute('data-tab');
+          renderTabs();
+          renderTabBody();
+        });
+      });
+    }
+
+    function kpiTile(label, value, variant) {
+      return (
+        '<div class="kpi-tile' + (variant ? ' ' + variant : '') + '"><div class="kpi-label">' + escapeHtml(label) + '</div><div class="kpi-value">' + value + '</div></div>'
+      );
+    }
+
+    function renderTabBody() {
+      var body = document.getElementById('budget-body');
+      body.innerHTML = loadingHtml();
+      var dirId = state.directorateId || null;
+
+      if (state.tab === 'overview') {
+        callApi('api_getBudgetDashboard', state.year, dirId)
+          .then(function (d) {
+            body.innerHTML =
+              '<div class="grid grid-4">' +
+              kpiTile('Headcount Orçado', fmt.number(d.hcBudgeted)) +
+              kpiTile('Headcount Atual', fmt.number(d.hcCurrent)) +
+              kpiTile('Diferença de Headcount', (d.hcDifference > 0 ? '+' : '') + fmt.number(d.hcDifference), d.hcDifference > 0 ? 'danger' : d.hcDifference < 0 ? 'good' : '') +
+              kpiTile('% Orçamento Consumido', fmt.percent(d.budgetConsumedPercent), d.budgetConsumedPercent > 100 ? 'danger' : '') +
+              '</div>' +
+              '<div class="grid grid-3" style="margin-top:16px;">' +
+              kpiTile('Folha Orçada', fmt.currency(d.payrollBudgeted)) +
+              kpiTile('Folha Atual', fmt.currency(d.payrollCurrent)) +
+              kpiTile('Desvio Financeiro', fmt.currency(d.financialDeviation), d.financialDeviation > 0 ? 'danger' : 'good') +
+              '</div>';
+          })
+          .catch(function (err) {
+            body.innerHTML = errorStateHtml(apiErrorMessage(err));
+          });
+        return;
+      }
+
+      if (state.tab === 'entries') {
+        Promise.all([callApi('api_listBudgetEntries', state.year, dirId), getOrgLookups()])
+          .then(function (results) {
+            renderEntriesTable(results[0], results[1]);
+          })
+          .catch(function (err) {
+            body.innerHTML = errorStateHtml(apiErrorMessage(err));
+          });
+        return;
+      }
+
+      if (state.tab === 'import') {
+        renderImportTab();
+        return;
+      }
+    }
+
+    function renderEntriesTable(entries, org) {
+      var body = document.getElementById('budget-body');
+      var positions = idNameMap(org.positions);
+      var directorates = idNameMap(org.directorates);
+      if (!entries || entries.length === 0) {
+        body.innerHTML = emptyStateHtml('Nenhum lançamento de orçamento para o ano/diretoria selecionados.');
+        return;
+      }
+      body.innerHTML =
+        '<div class="table-wrap"><table><thead><tr>' +
+        '<th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Diretoria</th><th>Situação Planejada</th>' +
+        '<th class="cell-num">Salário Atual</th><th class="cell-num">Salário Orçado</th><th>Mês Previsto</th>' +
+        '<th class="cell-num">Custo Mensal Orçado</th><th class="cell-num">Custo Anual Orçado</th>' +
+        '</tr></thead><tbody>' +
+        entries
+          .map(function (e) {
+            return (
+              '<tr><td>' +
+              escapeHtml(e.registration || '—') +
+              '</td><td>' +
+              escapeHtml(e.name || '—') +
+              '</td><td>' +
+              escapeHtml(positions[e.positionId] || '—') +
+              '</td><td>' +
+              escapeHtml(directorates[e.directorateId] || '—') +
+              '</td><td>' +
+              badge('plannedSituation', e.plannedSituation) +
+              '</td><td class="cell-num">' +
+              fmt.currency(e.currentSalary) +
+              '</td><td class="cell-num">' +
+              fmt.currency(e.plannedSalary) +
+              '</td><td>' +
+              escapeHtml(e.plannedMonth || '—') +
+              '</td><td class="cell-num">' +
+              fmt.currency(e.monthlyBudgetedCost) +
+              '</td><td class="cell-num">' +
+              fmt.currency(e.annualBudgetedCost) +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>';
+    }
+
+    function renderImportTab() {
+      var body = document.getElementById('budget-body');
+      body.innerHTML =
+        cardOpen('Importar planilha de orçamento', {
+          subtitle: 'Colunas esperadas: matricula, nome, cargo, diretoria, cidade, estado, tipo_contrato, data_admissao, salario_atual, situacao_planejada, salario_orcado, mes_previsto, custo_mensal_orcado, custo_anual_orcado.',
+        }) +
+        '<div class="form-grid"><div class="field"><label>Ano de referência <span class="req">*</span></label>' +
+        '<input type="number" id="budget-import-year" value="' + state.year + '"></div></div>' +
+        '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="budget-import-file" accept=".csv,.xlsx"></div>' +
+        '<div class="form-actions"><button class="btn" id="budget-import-btn">Importar</button></div>' +
+        '<div id="budget-import-result" style="margin-top:16px;"></div>' +
+        cardClose();
+
+      document.getElementById('budget-import-btn').addEventListener('click', function () {
+        var btn = this;
+        var fileInput = document.getElementById('budget-import-file');
+        var year = Number(document.getElementById('budget-import-year').value) || state.year;
+        var file = fileInput.files[0];
+        if (!file) {
+          toast('Selecione um arquivo para importar.', 'error');
+          return;
+        }
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        readFileAsBase64(file)
+          .then(function (base64) {
+            return callApi('api_importBudget', base64, file.type || 'text/csv', file.name, year);
+          })
+          .then(function (result) {
+            document.getElementById('budget-import-result').innerHTML = renderImportResultHtml(result);
+            toast('Importação concluída: ' + result.successRows + ' de ' + result.totalRows + ' linha(s).', result.errors.length > 0 ? 'info' : 'success');
+          })
+          .catch(function (err) {
+            toastError(err);
+          })
+          .finally(function () {
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
+          });
+      });
+    }
+
+    getOrgLookups()
+      .then(function () {
+        renderFilters();
+        renderTabs();
+        renderTabBody();
+      })
+      .catch(function (err) {
+        document.getElementById('budget-body').innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+  };
+</script>

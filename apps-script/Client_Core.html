@@ -1,0 +1,838 @@
+<script>
+  /* =====================================================================
+     SGMS — Client Core
+     Estado global, roteador por hash, wrapper de google.script.run,
+     helpers de formatação/DOM/toast/modal compartilhados por todas as
+     views. Ver docs/API_CONTRACT_APPS_SCRIPT.md para o contrato de API.
+     ===================================================================== */
+
+  // -----------------------------------------------------------------------
+  // callApi: google.script.run -> Promise
+  // -----------------------------------------------------------------------
+  function callApi(fnName) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        reject(new Error('Ambiente do Apps Script indisponível (google.script.run não encontrado).'));
+        return;
+      }
+      var runner = google.script.run
+        .withSuccessHandler(function (result) {
+          resolve(result);
+        })
+        .withFailureHandler(function (error) {
+          reject(error);
+        });
+      runner[fnName].apply(runner, args);
+    });
+  }
+
+  function apiErrorMessage(err) {
+    if (!err) return 'Erro desconhecido.';
+    var msg = err.message || String(err);
+    return msg;
+  }
+
+  // -----------------------------------------------------------------------
+  // Estado global da aplicação
+  // -----------------------------------------------------------------------
+  var App = {
+    user: null,
+    orgLookups: null,
+  };
+
+  function isScopedRole(user) {
+    return !!user && (user.role === 'DIRETOR' || user.role === 'GESTOR');
+  }
+  function canManage(user) {
+    return !!user && (user.role === 'ADMIN' || user.role === 'RH_REMUNERACAO');
+  }
+  function isAdminRole(user) {
+    return !!user && user.role === 'ADMIN';
+  }
+
+  /** Carrega (e cacheia) diretorias/cargos/centros de custo/gerências/coordenações. */
+  function getOrgLookups(forceRefresh) {
+    if (App.orgLookups && !forceRefresh) return Promise.resolve(App.orgLookups);
+    return callApi('api_getOrgLookups').then(function (data) {
+      App.orgLookups = data;
+      return data;
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Rótulos e cores de status (pt-BR) — espelham frontend/src/types/enums.ts
+  // -----------------------------------------------------------------------
+  var LABELS = {
+    role: {
+      ADMIN: 'Administrador',
+      RH_REMUNERACAO: 'RH Remuneração',
+      DIRETOR: 'Diretor',
+      FINANCEIRO: 'Financeiro',
+      GESTOR: 'Gestor',
+    },
+    movementType: {
+      PROMOCAO: 'Promoção',
+      MERITO: 'Mérito',
+      TRANSFERENCIA: 'Transferência',
+      AUMENTO_QUADRO: 'Aumento de Quadro',
+    },
+    movementStatus: {
+      RASCUNHO: 'Rascunho',
+      PENDENTE_DIRETOR: 'Pendente Diretor',
+      PENDENTE_RH: 'Pendente RH',
+      PENDENTE_FINANCEIRO: 'Pendente Financeiro',
+      APROVADO: 'Aprovado',
+      REPROVADO: 'Reprovado',
+      CANCELADO: 'Cancelado',
+    },
+    approvalStatus: {
+      PENDENTE: 'Pendente',
+      APROVADO: 'Aprovado',
+      REPROVADO: 'Reprovado',
+      PULADO: 'Pulado',
+    },
+    approverRole: {
+      DIRETOR: 'Diretor',
+      RH_REMUNERACAO: 'RH Remuneração',
+      FINANCEIRO: 'Financeiro',
+    },
+    employeeStatus: {
+      ATIVO: 'Ativo',
+      INATIVO: 'Inativo',
+      AFASTADO: 'Afastado',
+    },
+    marketPosition: {
+      ABAIXO_DO_MERCADO: 'Abaixo do mercado',
+      DENTRO_DO_MERCADO: 'Dentro do mercado',
+      ACIMA_DO_MERCADO: 'Acima do mercado',
+    },
+    contractType: {
+      CLT: 'CLT',
+      PJ: 'PJ',
+      ESTAGIO: 'Estágio',
+      APRENDIZ: 'Aprendiz',
+      TEMPORARIO: 'Temporário',
+    },
+    plannedSituation: {
+      SEM_MOVIMENTACAO: 'Sem movimentação',
+      PROMOCAO: 'Promoção',
+      MERITO: 'Mérito',
+      TRANSFERENCIA: 'Transferência',
+      NOVA_VAGA: 'Nova vaga',
+    },
+    chargeValueType: {
+      PERCENTUAL: 'Percentual',
+      FIXO: 'Valor fixo',
+    },
+  };
+
+  var BADGE_CLASS = {
+    movementStatus: {
+      RASCUNHO: 'pill-slate',
+      PENDENTE_DIRETOR: 'pill-amber',
+      PENDENTE_RH: 'pill-amber',
+      PENDENTE_FINANCEIRO: 'pill-amber',
+      APROVADO: 'pill-green',
+      REPROVADO: 'pill-red',
+      CANCELADO: 'pill-slate',
+    },
+    approvalStatus: {
+      PENDENTE: 'pill-amber',
+      APROVADO: 'pill-green',
+      REPROVADO: 'pill-red',
+      PULADO: 'pill-slate',
+    },
+    marketPosition: {
+      ABAIXO_DO_MERCADO: 'pill-amber',
+      DENTRO_DO_MERCADO: 'pill-green',
+      ACIMA_DO_MERCADO: 'pill-red',
+    },
+    employeeStatus: {
+      ATIVO: 'pill-green',
+      INATIVO: 'pill-slate',
+      AFASTADO: 'pill-amber',
+    },
+  };
+
+  /** Devolve o HTML de uma pill colorida para um enum conhecido (kind em BADGE_CLASS/LABELS). */
+  function badge(kind, value) {
+    if (value === null || value === undefined || value === '') {
+      return '<span class="pill pill-slate">—</span>';
+    }
+    var cls = (BADGE_CLASS[kind] && BADGE_CLASS[kind][value]) || 'pill-slate';
+    var label = (LABELS[kind] && LABELS[kind][value]) || value;
+    return '<span class="pill ' + cls + '">' + escapeHtml(label) + '</span>';
+  }
+
+  function labelFor(kind, value) {
+    if (value === null || value === undefined || value === '') return '—';
+    return (LABELS[kind] && LABELS[kind][value]) || value;
+  }
+
+  // -----------------------------------------------------------------------
+  // Navegação lateral — espelha frontend/src/lib/nav.ts
+  // -----------------------------------------------------------------------
+  var NAV_GROUPS = [
+    { title: 'Visão Geral', items: [{ label: 'Dashboard Executivo', href: '#/dashboard' }] },
+    {
+      title: 'Orçamento & Quadro',
+      items: [
+        { label: 'Orçamento', href: '#/budget', roles: ['ADMIN', 'RH_REMUNERACAO', 'FINANCEIRO', 'DIRETOR'] },
+        { label: 'Colaboradores', href: '#/employees' },
+      ],
+    },
+    {
+      title: 'Movimentações',
+      items: [
+        { label: 'Movimentações', href: '#/movements' },
+        { label: 'Aprovações', href: '#/approvals', roles: ['ADMIN', 'DIRETOR', 'FINANCEIRO', 'RH_REMUNERACAO'] },
+        { label: 'Histórico', href: '#/history' },
+      ],
+    },
+    {
+      title: 'Mercado',
+      items: [{ label: 'Estudos Salariais', href: '#/salary-studies', roles: ['ADMIN', 'RH_REMUNERACAO', 'DIRETOR', 'FINANCEIRO'] }],
+    },
+    {
+      title: 'Administração',
+      items: [
+        { label: 'Estrutura Organizacional', href: '#/admin/organization', roles: ['ADMIN', 'RH_REMUNERACAO'] },
+        { label: 'Usuários', href: '#/admin/users', roles: ['ADMIN'] },
+        { label: 'Encargos & Benefícios', href: '#/admin/charge-parameters', roles: ['ADMIN', 'RH_REMUNERACAO'] },
+      ],
+    },
+  ];
+
+  // -----------------------------------------------------------------------
+  // Roteador (hash-based)
+  // -----------------------------------------------------------------------
+  var Views = {}; // cada Client_Views_*.html registra suas funções aqui
+
+  var ROUTES = [
+    { segments: ['dashboard'], title: 'Dashboard Executivo', view: function (root) { Views.dashboard(root); } },
+    { segments: ['movements', 'new'], title: 'Nova Movimentação', view: function (root) { Views.movementNew(root); } },
+    { segments: ['movements', ':id'], title: 'Movimentação', view: function (root, p) { Views.movementDetail(root, p.id); } },
+    { segments: ['movements'], title: 'Movimentações', view: function (root) { Views.movements(root); } },
+    { segments: ['employees', ':id'], title: 'Colaborador', view: function (root, p) { Views.employeeDetail(root, p.id); } },
+    { segments: ['employees'], title: 'Colaboradores', view: function (root) { Views.employees(root); } },
+    { segments: ['budget'], title: 'Orçamento', view: function (root) { Views.budget(root); } },
+    { segments: ['approvals'], title: 'Aprovações', view: function (root) { Views.approvals(root); } },
+    { segments: ['history'], title: 'Histórico', view: function (root) { Views.history(root); } },
+    { segments: ['salary-studies'], title: 'Estudos Salariais', view: function (root) { Views.salaryStudies(root); } },
+    { segments: ['admin', 'organization'], title: 'Estrutura Organizacional', view: function (root) { Views.adminOrg(root); } },
+    { segments: ['admin', 'users'], title: 'Usuários', view: function (root) { Views.adminUsers(root); } },
+    { segments: ['admin', 'charge-parameters'], title: 'Encargos & Benefícios', view: function (root) { Views.adminCharges(root); } },
+  ];
+
+  function parseHash() {
+    var hash = window.location.hash || '';
+    var path = hash.replace(/^#/, '');
+    if (!path || path === '/') path = '/dashboard';
+    return path;
+  }
+
+  function matchRoute(path) {
+    var parts = path.split('/').filter(Boolean);
+    for (var i = 0; i < ROUTES.length; i++) {
+      var route = ROUTES[i];
+      if (route.segments.length !== parts.length) continue;
+      var params = {};
+      var ok = true;
+      for (var j = 0; j < route.segments.length; j++) {
+        var seg = route.segments[j];
+        if (seg.charAt(0) === ':') {
+          params[seg.slice(1)] = decodeURIComponent(parts[j]);
+        } else if (seg !== parts[j]) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) return { route: route, params: params };
+    }
+    return null;
+  }
+
+  /** Navega programaticamente (usado pelas views após criar/salvar registros). */
+  function goTo(hash) {
+    var clean = hash.replace(/^#/, '');
+    if (parseHash() === clean) {
+      renderRoute();
+    } else {
+      window.location.hash = clean;
+    }
+  }
+
+  function updateActiveNav(path) {
+    var links = document.querySelectorAll('#sidebar-nav .nav-link');
+    links.forEach(function (link) {
+      var href = (link.getAttribute('data-route') || '').replace(/^#/, '');
+      var active = path === href || path.indexOf(href + '/') === 0;
+      link.classList.toggle('active', active);
+    });
+  }
+
+  function renderRoute() {
+    var root = document.getElementById('view-root');
+    if (!root) return; // shell ainda não montado (tela de acesso não configurado, etc.)
+    var path = parseHash();
+    updateActiveNav(path);
+    var match = matchRoute(path);
+    var titleEl = document.getElementById('topbar-title');
+    if (!match) {
+      if (titleEl) titleEl.textContent = 'Página não encontrada';
+      root.innerHTML = '<div class="empty-state"><div class="icon">🔍</div><p>Página não encontrada.</p>'
+        + '<p class="text-xs" style="margin-top:6px;"><a href="#" data-route="#/dashboard">Voltar ao dashboard</a></p></div>';
+      return;
+    }
+    if (titleEl) titleEl.textContent = match.route.title;
+    root.innerHTML = '<div class="loading-row"><div class="spinner"></div><span>Carregando...</span></div>';
+    try {
+      match.route.view(root, match.params);
+    } catch (err) {
+      root.innerHTML = errorStateHtml(apiErrorMessage(err));
+    }
+  }
+
+  function errorStateHtml(message) {
+    return '<div class="banner banner-danger">' + escapeHtml(message) + '</div>';
+  }
+
+  // -----------------------------------------------------------------------
+  // Shell (sidebar + topbar)
+  // -----------------------------------------------------------------------
+  function initials(name) {
+    if (!name) return '?';
+    var parts = String(name).trim().split(/\s+/);
+    var first = parts[0] ? parts[0].charAt(0) : '';
+    var last = parts.length > 1 ? parts[parts.length - 1].charAt(0) : '';
+    return (first + last).toUpperCase();
+  }
+
+  function navHtml(user) {
+    return NAV_GROUPS.map(function (group) {
+      var items = group.items.filter(function (item) {
+        return !item.roles || item.roles.indexOf(user.role) !== -1;
+      });
+      if (items.length === 0) return '';
+      return (
+        '<div class="nav-group"><div class="nav-group-title">' +
+        escapeHtml(group.title) +
+        '</div>' +
+        items
+          .map(function (item) {
+            return (
+              '<a href="#" class="nav-link" data-route="' +
+              item.href +
+              '"><span class="dot"></span><span class="label">' +
+              escapeHtml(item.label) +
+              '</span></a>'
+            );
+          })
+          .join('') +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function renderShell() {
+    var app = document.getElementById('app');
+    var user = App.user;
+    app.innerHTML =
+      '<div class="shell">' +
+      '<aside class="sidebar">' +
+      '<div class="sidebar-brand"><div class="sidebar-brand-mark">SG</div>' +
+      '<div class="sidebar-brand-text">SGMS<small>Movimentações Salariais</small></div></div>' +
+      '<nav class="sidebar-nav" id="sidebar-nav">' +
+      navHtml(user) +
+      '</nav>' +
+      '</aside>' +
+      '<div class="main-col">' +
+      '<header class="topbar"><div class="topbar-title" id="topbar-title"></div>' +
+      '<div class="topbar-user"><div class="avatar-sm">' +
+      escapeHtml(initials(user.name)) +
+      '</div><div class="topbar-user-meta"><div class="topbar-user-name">' +
+      escapeHtml(user.name) +
+      '</div><div class="topbar-user-role">' +
+      escapeHtml(labelFor('role', user.role)) +
+      '</div></div></div></header>' +
+      '<main class="view-root" id="view-root"></main>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function renderNoAccessScreen() {
+    var app = document.getElementById('app');
+    app.innerHTML =
+      '<div class="full-screen-msg"><div class="card">' +
+      '<h2 style="margin-bottom:10px;">Acesso não configurado</h2>' +
+      '<p class="text-sm" style="margin-bottom:12px;color:var(--slate-600);">' +
+      'Sua conta Google ainda não está cadastrada no Sistema de Gestão de Movimentações Salariais.</p>' +
+      '<p class="text-sm" style="margin-bottom:12px;color:var(--slate-600);">' +
+      'Peça a um administrador para adicionar o seu e-mail na aba <strong>Usuarios</strong> da planilha do ' +
+      'sistema, definindo seu perfil (ADMIN, RH_REMUNERACAO, DIRETOR, FINANCEIRO ou GESTOR) e, se aplicável, ' +
+      'a diretoria à qual você fica restrito.</p>' +
+      '<p class="text-xs text-faint">Primeira configuração do sistema? Execute a função ' +
+      '<code>setupSpreadsheet()</code> uma única vez pelo editor do Apps Script (menu Executar) — ela cria as ' +
+      'abas necessárias e cadastra automaticamente o primeiro usuário ADMIN a partir da sua própria conta.</p>' +
+      '<div style="margin-top:18px;"><button class="btn btn-outline" id="retry-access-btn">Tentar novamente</button></div>' +
+      '</div></div>';
+    var btn = document.getElementById('retry-access-btn');
+    if (btn) btn.addEventListener('click', function () { window.location.reload(); });
+  }
+
+  function renderFatalError(err) {
+    var app = document.getElementById('app');
+    app.innerHTML =
+      '<div class="full-screen-msg"><div class="card">' +
+      '<h2 style="margin-bottom:10px;">Não foi possível carregar o sistema</h2>' +
+      '<p class="text-sm" style="color:var(--slate-600);">' +
+      escapeHtml(apiErrorMessage(err)) +
+      '</p>' +
+      '<div style="margin-top:18px;"><button class="btn btn-outline" id="retry-fatal-btn">Tentar novamente</button></div>' +
+      '</div></div>';
+    var btn = document.getElementById('retry-fatal-btn');
+    if (btn) btn.addEventListener('click', function () { window.location.reload(); });
+  }
+
+  // -----------------------------------------------------------------------
+  // Bootstrap
+  // -----------------------------------------------------------------------
+  function boot() {
+    callApi('api_getCurrentUser')
+      .then(function (user) {
+        App.user = user;
+        if (!user) {
+          renderNoAccessScreen();
+          return;
+        }
+        renderShell();
+        renderRoute();
+        window.addEventListener('hashchange', renderRoute);
+      })
+      .catch(function (err) {
+        renderFatalError(err);
+      });
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+
+  // Delegação global de cliques: navegação interna (data-route) e fechamento de modal.
+  document.addEventListener('click', function (e) {
+    var routeEl = e.target.closest('[data-route]');
+    if (routeEl) {
+      e.preventDefault();
+      var target = routeEl.getAttribute('data-route');
+      if (target) goTo(target);
+      return;
+    }
+    var closeEl = e.target.closest('[data-action="modal-close"]');
+    if (closeEl) {
+      Modal.close();
+    }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') Modal.close();
+  });
+
+  // -----------------------------------------------------------------------
+  // Formatação (pt-BR)
+  // -----------------------------------------------------------------------
+  var fmt = {
+    currency: function (v) {
+      var n = Number(v);
+      if (v === null || v === undefined || isNaN(n)) n = 0;
+      return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    },
+    percent: function (v, decimals) {
+      if (v === null || v === undefined || v === '' || isNaN(Number(v))) return '—';
+      return Number(v).toFixed(decimals === undefined ? 1 : decimals).replace('.', ',') + '%';
+    },
+    number: function (v) {
+      if (v === null || v === undefined || isNaN(Number(v))) return '0';
+      return Number(v).toLocaleString('pt-BR');
+    },
+    date: function (iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+    },
+    dateTime: function (iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return String(iso);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    },
+    monthLabel: function (yyyyMm) {
+      if (!yyyyMm) return '';
+      var parts = String(yyyyMm).split('-');
+      var months = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+      var m = parseInt(parts[1], 10) - 1;
+      return (months[m] || parts[1]) + '/' + String(parts[0]).slice(2);
+    },
+  };
+
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // -----------------------------------------------------------------------
+  // Toasts
+  // -----------------------------------------------------------------------
+  var Toast = {
+    container: null,
+    ensure: function () {
+      if (!this.container) {
+        this.container = document.createElement('div');
+        this.container.className = 'toast-stack';
+        document.body.appendChild(this.container);
+      }
+      return this.container;
+    },
+    show: function (message, type) {
+      var c = this.ensure();
+      var el = document.createElement('div');
+      el.className = 'toast toast-' + (type || 'info');
+      el.textContent = message;
+      c.appendChild(el);
+      setTimeout(function () {
+        el.remove();
+      }, 4200);
+    },
+  };
+  function toast(message, type) {
+    Toast.show(message, type);
+  }
+  function toastError(err) {
+    Toast.show(apiErrorMessage(err), 'error');
+  }
+
+  // -----------------------------------------------------------------------
+  // Modal
+  // -----------------------------------------------------------------------
+  var Modal = {
+    _el: null,
+    open: function (innerHtml) {
+      this.close();
+      var backdrop = document.createElement('div');
+      backdrop.className = 'modal-backdrop';
+      backdrop.innerHTML = '<div class="modal">' + innerHtml + '</div>';
+      document.body.appendChild(backdrop);
+      backdrop.addEventListener('mousedown', function (e) {
+        if (e.target === backdrop) Modal.close();
+      });
+      this._el = backdrop;
+      return backdrop.querySelector('.modal');
+    },
+    close: function () {
+      if (this._el) {
+        this._el.remove();
+        this._el = null;
+      }
+    },
+  };
+
+  /** Modal simples de confirmação (sim/não). */
+  function confirmAction(message, onConfirm, opts) {
+    opts = opts || {};
+    var html =
+      '<div class="modal-header"><h3>' +
+      escapeHtml(opts.title || 'Confirmar ação') +
+      '</h3><button class="modal-close" data-action="modal-close">&times;</button></div>' +
+      '<p class="text-sm" style="margin-bottom:16px;color:var(--slate-700);">' +
+      escapeHtml(message) +
+      '</p>' +
+      '<div class="form-actions">' +
+      '<button class="btn btn-outline" data-action="modal-close">Cancelar</button>' +
+      '<button class="btn ' +
+      (opts.danger ? 'btn-danger' : '') +
+      '" id="confirm-action-btn">' +
+      escapeHtml(opts.confirmLabel || 'Confirmar') +
+      '</button></div>';
+    var modalEl = Modal.open(html);
+    modalEl.querySelector('#confirm-action-btn').addEventListener('click', function () {
+      Modal.close();
+      onConfirm();
+    });
+  }
+
+  /** Modal com campo de comentário (usado em aprovações — obrigatório na reprovação). */
+  function promptComment(opts, onSubmit) {
+    opts = opts || {};
+    var html =
+      '<div class="modal-header"><h3>' +
+      escapeHtml(opts.title || 'Comentário') +
+      '</h3><button class="modal-close" data-action="modal-close">&times;</button></div>' +
+      (opts.message ? '<p class="text-sm" style="margin-bottom:12px;color:var(--slate-600);">' + escapeHtml(opts.message) + '</p>' : '') +
+      '<div class="field"><label>Comentário' +
+      (opts.required ? ' <span class="req">*</span>' : ' (opcional)') +
+      '</label><textarea id="modal-comment-input" rows="3" placeholder="Escreva um comentário..."></textarea>' +
+      '<p class="field-error" id="modal-comment-error" style="display:none;"></p></div>' +
+      '<div class="form-actions">' +
+      '<button class="btn btn-outline" data-action="modal-close">Cancelar</button>' +
+      '<button class="btn ' +
+      (opts.danger ? 'btn-danger' : 'btn-success') +
+      '" id="modal-comment-confirm">' +
+      escapeHtml(opts.confirmLabel || 'Confirmar') +
+      '</button></div>';
+    var modalEl = Modal.open(html);
+    modalEl.querySelector('#modal-comment-confirm').addEventListener('click', function () {
+      var val = modalEl.querySelector('#modal-comment-input').value.trim();
+      if (opts.required && !val) {
+        var errEl = modalEl.querySelector('#modal-comment-error');
+        errEl.textContent = 'Comentário é obrigatório.';
+        errEl.style.display = 'block';
+        return;
+      }
+      Modal.close();
+      onSubmit(val);
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Helpers de DOM / render
+  // -----------------------------------------------------------------------
+  function cardOpen(title, opts) {
+    opts = opts || {};
+    var header = '';
+    if (title) {
+      header =
+        '<div class="card-header"><div><h3>' +
+        escapeHtml(title) +
+        '</h3>' +
+        (opts.subtitle ? '<p class="card-subtitle">' + escapeHtml(opts.subtitle) + '</p>' : '') +
+        '</div>' +
+        (opts.actions || '') +
+        '</div>';
+    }
+    return '<div class="card' + (opts.flush ? ' card-flush' : '') + '"' + (opts.id ? ' id="' + opts.id + '"' : '') + '>' + header;
+  }
+  function cardClose() {
+    return '</div>';
+  }
+
+  /** Índice id -> name a partir de uma lista (útil para enriquecer respostas que só trazem ids, ex. orçamento). */
+  function idNameMap(list) {
+    var out = {};
+    (list || []).forEach(function (item) {
+      out[item.id] = item.name;
+    });
+    return out;
+  }
+
+  function optionsHtml(list, opts) {
+    opts = opts || {};
+    var valueKey = opts.valueKey || 'id';
+    var labelKey = opts.labelKey || 'name';
+    var selected = opts.selected !== undefined && opts.selected !== null ? String(opts.selected) : '';
+    var html = opts.placeholder !== undefined ? '<option value="">' + escapeHtml(opts.placeholder) + '</option>' : '';
+    html += (list || [])
+      .map(function (item) {
+        var v = item[valueKey];
+        var label = typeof labelKey === 'function' ? labelKey(item) : item[labelKey];
+        var sel = String(v) === selected ? ' selected' : '';
+        return '<option value="' + escapeHtml(v) + '"' + sel + '>' + escapeHtml(label) + '</option>';
+      })
+      .join('');
+    return html;
+  }
+
+  function progressBar(percent, opts) {
+    opts = opts || {};
+    var num = Number(percent) || 0;
+    var p = Math.max(0, Math.min(100, num));
+    var cls = num > 100 ? 'danger' : num >= (opts.warnAt !== undefined ? opts.warnAt : 90) ? '' : 'good';
+    return '<div class="progress-track"><div class="progress-fill ' + cls + '" style="width:' + p + '%"></div></div>';
+  }
+
+  /** Mini gráfico de barras em CSS puro (sem libs) — usado nos dashboards. */
+  function renderBarChart(items, opts) {
+    opts = opts || {};
+    if (!items || items.length === 0) {
+      return '<p class="text-sm text-muted">Sem dados para exibir.</p>';
+    }
+    var max = Math.max.apply(
+      null,
+      items.map(function (i) {
+        return Math.abs(Number(i.value) || 0);
+      }).concat([1])
+    );
+    return (
+      '<div class="bar-chart">' +
+      items
+        .map(function (i) {
+          var val = Number(i.value) || 0;
+          var h = Math.max(2, Math.round((Math.abs(val) / max) * 100));
+          var neg = val < 0;
+          var displayVal = opts.formatter ? opts.formatter(val) : String(val);
+          return (
+            '<div class="bar-chart-col" title="' +
+            escapeHtml(i.label) +
+            ': ' +
+            escapeHtml(displayVal) +
+            '"><div class="bar-chart-bar' +
+            (neg ? ' negative' : '') +
+            '" style="height:' +
+            h +
+            '%"></div><div class="bar-chart-label">' +
+            escapeHtml(i.label) +
+            '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function loadingHtml(label) {
+    return '<div class="loading-row"><div class="spinner"></div><span>' + escapeHtml(label || 'Carregando...') + '</span></div>';
+  }
+
+  function emptyStateHtml(message, icon) {
+    return '<div class="empty-state"><div class="icon">' + (icon || '📭') + '</div><p>' + escapeHtml(message) + '</p></div>';
+  }
+
+  // -----------------------------------------------------------------------
+  // Upload de arquivo -> base64 (padrão descrito no contrato)
+  // -----------------------------------------------------------------------
+  function readFileAsBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var result = reader.result || '';
+        var comma = result.indexOf(',');
+        resolve(comma === -1 ? result : result.slice(comma + 1));
+      };
+      reader.onerror = function () {
+        reject(reader.error || new Error('Falha ao ler o arquivo selecionado.'));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderImportResultHtml(result) {
+    if (!result) return '';
+    var errorsHtml = '';
+    if (result.errors && result.errors.length > 0) {
+      errorsHtml =
+        '<div class="table-wrap" style="margin-top:12px;"><table><thead><tr><th>Linha</th><th>Campo</th><th>Mensagem</th></tr></thead><tbody>' +
+        result.errors
+          .map(function (e) {
+            return (
+              '<tr><td>' +
+              escapeHtml(e.rowNumber) +
+              '</td><td>' +
+              escapeHtml(e.field) +
+              '</td><td>' +
+              escapeHtml(e.message) +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>';
+    }
+    var bannerClass = result.errors && result.errors.length > 0 ? (result.successRows > 0 ? 'banner-warn' : 'banner-danger') : 'banner-success';
+    return (
+      '<div class="banner ' +
+      bannerClass +
+      '">Processadas ' +
+      escapeHtml(result.totalRows) +
+      ' linha(s): ' +
+      escapeHtml(result.successRows) +
+      ' importada(s) com sucesso, ' +
+      escapeHtml((result.errors || []).length) +
+      ' com erro.</div>' +
+      errorsHtml
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Seletor de colaborador com busca (nome/matrícula) — sem libs externas
+  // -----------------------------------------------------------------------
+  function mountEmployeePicker(container, employees, opts) {
+    opts = opts || {};
+    var initialLabel = opts.initialEmployee ? opts.initialEmployee.name + ' (' + opts.initialEmployee.registration + ')' : '';
+    container.classList.add('employee-picker');
+    container.innerHTML =
+      '<input type="text" class="ep-input" placeholder="' +
+      escapeHtml(opts.placeholder || 'Buscar colaborador por nome ou matrícula...') +
+      '" autocomplete="off" value="' +
+      escapeHtml(initialLabel) +
+      '"><div class="ep-list" hidden></div>';
+    var input = container.querySelector('.ep-input');
+    var list = container.querySelector('.ep-list');
+    var selected = opts.initialEmployee || null;
+
+    function renderList(term) {
+      var t = (term || '').toLowerCase();
+      var matches = employees
+        .filter(function (e) {
+          return !t || (e.name + ' ' + e.registration).toLowerCase().indexOf(t) !== -1;
+        })
+        .slice(0, 50);
+      if (matches.length === 0) {
+        list.innerHTML = '<div class="ep-item text-muted">Nenhum colaborador encontrado.</div>';
+      } else {
+        list.innerHTML = matches
+          .map(function (e) {
+            return (
+              '<div class="ep-item" data-id="' +
+              escapeHtml(e.id) +
+              '">' +
+              escapeHtml(e.name) +
+              '<div class="ep-item-sub">Mat. ' +
+              escapeHtml(e.registration) +
+              (e.positionName ? ' · ' + escapeHtml(e.positionName) : '') +
+              '</div></div>'
+            );
+          })
+          .join('');
+      }
+      list.hidden = false;
+    }
+
+    input.addEventListener('focus', function () {
+      renderList(input.value === initialLabel ? '' : input.value);
+    });
+    input.addEventListener('input', function () {
+      selected = null;
+      if (opts.onChange) opts.onChange(null);
+      renderList(input.value);
+    });
+    list.addEventListener('mousedown', function (e) {
+      var item = e.target.closest('.ep-item[data-id]');
+      if (!item) return;
+      var id = item.getAttribute('data-id');
+      var emp = null;
+      for (var i = 0; i < employees.length; i++) {
+        if (employees[i].id === id) {
+          emp = employees[i];
+          break;
+        }
+      }
+      if (emp) {
+        selected = emp;
+        input.value = emp.name + ' (' + emp.registration + ')';
+        list.hidden = true;
+        if (opts.onChange) opts.onChange(emp);
+      }
+    });
+    document.addEventListener('click', function (e) {
+      if (!container.contains(e.target)) list.hidden = true;
+    });
+
+    return {
+      getSelected: function () {
+        return selected;
+      },
+    };
+  }
+</script>

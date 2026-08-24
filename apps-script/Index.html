@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top" />
+    <meta charset="UTF-8" />
+    <?!= include('Styles'); ?>
+  </head>
+  <body>
+    <div id="app">
+      <div class="full-screen-msg">
+        <div class="loading-row"><div class="spinner"></div><span>Carregando Sistema de Gestão de Movimentações Salariais...</span></div>
+      </div>
+    </div>
+
+    <?!= include('Client_Core'); ?>
+    <?!= include('Client_Views_Dashboard'); ?>
+    <?!= include('Client_Views_Budget'); ?>
+    <?!= include('Client_Views_Employees'); ?>
+    <?!= include('Client_Views_Movements'); ?>
+    <?!= include('Client_Views_Approvals'); ?>
+    <?!= include('Client_Views_History'); ?>
+    <?!= include('Client_Views_SalaryStudies'); ?>
+    <?!= include('Client_Views_Admin'); ?>
+  </body>
+</html>

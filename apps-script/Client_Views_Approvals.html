@@ -1,0 +1,102 @@
+<script>
+  /* =====================================================================
+     Módulo 5 — Aprovações
+     api_getPendingApprovals / api_approveStep / api_rejectStep
+     ===================================================================== */
+
+  Views.approvals = function (root) {
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Aprovações</h1><p>Etapas pendentes de decisão para o seu perfil.</p></div></div>' +
+      loadingHtml();
+
+    Promise.all([callApi('api_getPendingApprovals'), getOrgLookups(), callApi('api_listEmployees', {})])
+      .then(function (results) {
+        render(results[0], results[1], results[2]);
+      })
+      .catch(function (err) {
+        root.innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function render(steps, org, employees) {
+      var directorates = idNameMap(org.directorates);
+      var employeesById = {};
+      (employees || []).forEach(function (e) {
+        employeesById[e.id] = e;
+      });
+
+      root.innerHTML =
+        '<div class="page-header"><div><h1>Aprovações</h1><p>Etapas pendentes de decisão para o seu perfil.</p></div></div>' +
+        (!steps || steps.length === 0 ? emptyStateHtml('Nenhuma aprovação pendente no momento.', '✅') : listHtml(steps));
+
+      if (steps && steps.length > 0) {
+        root.querySelectorAll('[data-approve]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var stepId = btn.getAttribute('data-approve');
+            promptComment(
+              { title: 'Aprovar etapa', message: 'Você pode adicionar um comentário (opcional).', required: false, confirmLabel: 'Aprovar' },
+              function (comment) {
+                callApi('api_approveStep', stepId, comment)
+                  .then(function () {
+                    toast('Etapa aprovada com sucesso.', 'success');
+                    Views.approvals(root);
+                  })
+                  .catch(toastError);
+              }
+            );
+          });
+        });
+        root.querySelectorAll('[data-reject]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var stepId = btn.getAttribute('data-reject');
+            promptComment(
+              { title: 'Reprovar etapa', message: 'Informe o motivo da reprovação.', required: true, danger: true, confirmLabel: 'Reprovar' },
+              function (comment) {
+                callApi('api_rejectStep', stepId, comment)
+                  .then(function () {
+                    toast('Etapa reprovada.', 'success');
+                    Views.approvals(root);
+                  })
+                  .catch(toastError);
+              }
+            );
+          });
+        });
+      }
+
+      function listHtml(steps) {
+        return (
+          '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Colaborador / Diretoria</th><th>Diretoria</th>' +
+          '<th>Data Efetiva</th><th>Etapa</th><th>Solicitado em</th><th>Ações</th></tr></thead><tbody>' +
+          steps
+            .map(function (step) {
+              var m = step.movement || {};
+              var subject = m.employeeId && employeesById[m.employeeId] ? employeesById[m.employeeId].name : directorates[m.directorateId] || '—';
+              return (
+                '<tr><td>' +
+                escapeHtml(labelFor('movementType', m.type)) +
+                '</td><td><a href="#" data-route="#/movements/' +
+                m.id +
+                '">' +
+                escapeHtml(subject) +
+                '</a></td><td>' +
+                escapeHtml(directorates[m.directorateId] || '—') +
+                '</td><td>' +
+                fmt.date(m.effectiveDate) +
+                '</td><td>' +
+                badge('approverRole', step.approverRole) +
+                '</td><td>' +
+                fmt.dateTime(m.createdAt) +
+                '</td><td><div class="row"><button class="btn btn-success btn-sm" data-approve="' +
+                step.id +
+                '">Aprovar</button><button class="btn btn-danger btn-sm" data-reject="' +
+                step.id +
+                '">Reprovar</button></div></td></tr>'
+              );
+            })
+            .join('') +
+          '</tbody></table></div>'
+        );
+      }
+    }
+  };
+</script>

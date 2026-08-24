@@ -1,0 +1,581 @@
+<script>
+  /* =====================================================================
+     Módulo 3 — Movimentações  +  Módulo 4 — Simulador de impacto
+     api_listMovements / api_getMovement / api_createMovement /
+     api_updateMovement / api_cancelMovement / api_simulateMovement /
+     api_submitMovement / api_getApprovalTimeline
+     ===================================================================== */
+
+  function movementTypeOptions() {
+    return Object.keys(LABELS.movementType).map(function (k) {
+      return { id: k, name: LABELS.movementType[k] };
+    });
+  }
+
+  function metricTile(label, value, highlight) {
+    return (
+      '<div class="kpi-tile' +
+      (highlight ? ' highlight' : '') +
+      '"><div class="kpi-label">' +
+      escapeHtml(label) +
+      '</div><div class="kpi-value">' +
+      value +
+      '</div></div>'
+    );
+  }
+
+  function simulationPanelHtml(sim) {
+    if (!sim) {
+      return '<p class="text-sm text-muted">Nenhuma simulação executada ainda. Clique em "Executar simulação".</p>';
+    }
+    var bannerClass = sim.exceedsBudget ? 'banner-danger' : 'banner-success';
+    return (
+      '<div class="banner ' +
+      bannerClass +
+      '" style="margin-bottom:16px;">' +
+      escapeHtml(sim.alertMessage || '') +
+      '</div>' +
+      '<div class="grid grid-3">' +
+      metricTile('Meses Restantes no Ano', fmt.number(sim.monthsRemaining)) +
+      metricTile('Impacto Salarial Mensal', fmt.currency(sim.monthlySalaryImpact)) +
+      metricTile('Impacto Salarial Anual', fmt.currency(sim.annualSalaryImpact)) +
+      metricTile('Total de Encargos (mensal)', fmt.currency(sim.chargesTotal)) +
+      metricTile('Total de Benefícios (mensal)', fmt.currency(sim.benefitsTotal)) +
+      metricTile('% Aumento Salarial', sim.salaryIncreasePercent != null ? fmt.percent(sim.salaryIncreasePercent) : '—') +
+      '</div>' +
+      '<div class="grid grid-2" style="margin-top:12px;">' +
+      metricTile('Impacto Total Mensal', fmt.currency(sim.totalMonthlyImpact), true) +
+      metricTile('Impacto Total Anual', fmt.currency(sim.totalAnnualImpact), true) +
+      '</div>' +
+      '<div style="margin-top:18px;"><p class="uppercase-label" style="margin-bottom:8px;">Comparativo Orçamentário da Diretoria</p>' +
+      '<div class="table-wrap"><table><thead><tr><th>Orçado</th><th>Atual</th><th>Após Aprovação</th><th>Diferença</th><th>% Consumido</th></tr></thead><tbody>' +
+      '<tr><td>' +
+      fmt.currency(sim.budgetedDirectoratePayroll) +
+      '</td><td>' +
+      fmt.currency(sim.currentDirectoratePayroll) +
+      '</td><td>' +
+      fmt.currency(sim.payrollAfterApproval) +
+      '</td><td style="font-weight:600;color:' +
+      (sim.difference < 0 ? 'var(--red-600)' : 'var(--green-600)') +
+      ';">' +
+      fmt.currency(sim.difference) +
+      '</td><td style="font-weight:600;' +
+      (sim.percentConsumed > 100 ? 'color:var(--red-600);' : '') +
+      '">' +
+      fmt.percent(sim.percentConsumed) +
+      '</td></tr></tbody></table></div></div>'
+    );
+  }
+
+  function approvalTimelineHtml(steps) {
+    if (!steps || steps.length === 0) {
+      return '<p class="text-sm text-muted">Nenhuma etapa de aprovação registrada ainda.</p>';
+    }
+    var ordered = steps.slice().sort(function (a, b) {
+      return Number(a.stepOrder) - Number(b.stepOrder);
+    });
+    return (
+      '<ol class="timeline">' +
+      ordered
+        .map(function (step, idx) {
+          var dotClass = step.status === 'APROVADO' ? 'done' : step.status === 'REPROVADO' ? 'rejected' : '';
+          return (
+            '<li class="timeline-item"><div class="timeline-marker-col"><div class="timeline-dot ' +
+            dotClass +
+            '">' +
+            (idx + 1) +
+            '</div>' +
+            (idx < ordered.length - 1 ? '<div class="timeline-line"></div>' : '') +
+            '</div><div class="timeline-body"><div class="row" style="gap:8px;"><strong>' +
+            escapeHtml(labelFor('approverRole', step.approverRole)) +
+            '</strong>' +
+            badge('approvalStatus', step.status) +
+            '</div>' +
+            (step.approverEmail ? '<p class="text-xs text-muted">Aprovador: ' + escapeHtml(step.approverEmail) + '</p>' : '') +
+            (step.comment ? '<p class="text-sm" style="margin-top:4px;color:var(--slate-700);">“' + escapeHtml(step.comment) + '”</p>' : '') +
+            (step.decidedAt ? '<p class="text-xs text-faint">' + fmt.dateTime(step.decidedAt) + '</p>' : '') +
+            '</div></li>'
+          );
+        })
+        .join('') +
+      '</ol>'
+    );
+  }
+
+  // -----------------------------------------------------------------------
+  // Lista de movimentações
+  // -----------------------------------------------------------------------
+  Views.movements = function (root) {
+    var user = App.user;
+    var state = {
+      status: '',
+      type: '',
+      directorateId: isScopedRole(user) ? user.directorateId || '' : '',
+    };
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Movimentações</h1><p>Solicitações de promoção, mérito, transferência e aumento de quadro.</p></div>' +
+      '<button class="btn" data-route="#/movements/new">+ Nova Movimentação</button></div>' +
+      '<div class="filter-bar" id="mov-filters"></div>' +
+      '<div id="mov-table-wrap">' +
+      loadingHtml() +
+      '</div>';
+
+    getOrgLookups()
+      .then(function (org) {
+        renderFilters(org);
+        loadList();
+      })
+      .catch(function (err) {
+        document.getElementById('mov-table-wrap').innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function renderFilters(org) {
+      var el = document.getElementById('mov-filters');
+      var directorateFilterHtml = '';
+      if (!isScopedRole(user)) {
+        directorateFilterHtml =
+          '<div class="col"><label>Diretoria</label><select id="mov-f-directorate"><option value="">Todas</option>' +
+          optionsHtml(org.directorates, { selected: state.directorateId }) +
+          '</select></div>';
+      }
+      el.innerHTML =
+        '<div class="col"><label>Status</label><select id="mov-f-status"><option value="">Todos</option>' +
+        optionsHtml(
+          Object.keys(LABELS.movementStatus).map(function (k) {
+            return { id: k, name: LABELS.movementStatus[k] };
+          }),
+          { selected: state.status }
+        ) +
+        '</select></div>' +
+        '<div class="col"><label>Tipo</label><select id="mov-f-type"><option value="">Todos</option>' +
+        optionsHtml(movementTypeOptions(), { selected: state.type }) +
+        '</select></div>' +
+        directorateFilterHtml;
+
+      document.getElementById('mov-f-status').addEventListener('change', function (e) { state.status = e.target.value; loadList(); });
+      document.getElementById('mov-f-type').addEventListener('change', function (e) { state.type = e.target.value; loadList(); });
+      var dirEl = document.getElementById('mov-f-directorate');
+      if (dirEl) dirEl.addEventListener('change', function (e) { state.directorateId = e.target.value; loadList(); });
+    }
+
+    function loadList() {
+      var wrap = document.getElementById('mov-table-wrap');
+      wrap.innerHTML = loadingHtml();
+      callApi('api_listMovements', {
+        status: state.status || undefined,
+        type: state.type || undefined,
+        directorateId: state.directorateId || undefined,
+      })
+        .then(function (list) {
+          if (!list || list.length === 0) {
+            wrap.innerHTML = emptyStateHtml('Nenhuma movimentação encontrada com os filtros atuais.');
+            return;
+          }
+          wrap.innerHTML =
+            '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Colaborador / Diretoria</th><th>Salário Atual → Novo</th>' +
+            '<th>Data Efetiva</th><th>Status</th><th>Criado em</th></tr></thead><tbody>' +
+            list
+              .map(function (m) {
+                var subject = m.employeeName || m.directorateName || '—';
+                var salaryChange =
+                  m.newSalary != null && m.currentSalary != null
+                    ? fmt.currency(m.currentSalary) + ' → ' + fmt.currency(m.newSalary)
+                    : m.plannedSalary != null
+                    ? '— → ' + fmt.currency(m.plannedSalary) + ' (x' + fmt.number(m.quantity) + ')'
+                    : '—';
+                return (
+                  '<tr class="clickable" data-route="#/movements/' +
+                  m.id +
+                  '"><td>' +
+                  escapeHtml(labelFor('movementType', m.type)) +
+                  '</td><td>' +
+                  escapeHtml(subject) +
+                  '</td><td>' +
+                  salaryChange +
+                  '</td><td>' +
+                  fmt.date(m.effectiveDate) +
+                  '</td><td>' +
+                  badge('movementStatus', m.status) +
+                  '</td><td>' +
+                  fmt.dateTime(m.createdAt) +
+                  '</td></tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table></div>';
+        })
+        .catch(function (err) {
+          wrap.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Nova movimentação
+  // -----------------------------------------------------------------------
+  Views.movementNew = function (root) {
+    var org, employees;
+    var type = 'PROMOCAO';
+    var employeePicker = null;
+
+    root.innerHTML = loadingHtml();
+
+    Promise.all([getOrgLookups(), callApi('api_listEmployees', { status: 'ATIVO' })])
+      .then(function (results) {
+        org = results[0];
+        employees = results[1] || [];
+        render();
+      })
+      .catch(function (err) {
+        root.innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function typeFieldsHtml(t) {
+      if (t === 'PROMOCAO') {
+        return (
+          '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="mn-employee-picker"></div>' +
+          '<p class="field-error" id="mn-err-employee" style="display:none;"></p></div>' +
+          '<div class="form-grid">' +
+          '<div class="field"><label>Novo Cargo <span class="req">*</span></label><select id="mn-newPositionId">' +
+          optionsHtml(org.positions, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="mn-err-newPositionId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="mn-newSalary">' +
+          '<p class="field-hint" id="mn-hint-newSalary"></p><p class="field-error" id="mn-err-newSalary" style="display:none;"></p></div>' +
+          '</div>'
+        );
+      }
+      if (t === 'MERITO') {
+        return (
+          '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="mn-employee-picker"></div>' +
+          '<p class="field-error" id="mn-err-employee" style="display:none;"></p></div>' +
+          '<div class="field"><label>Percentual de Aumento (%) <span class="req">*</span></label><input type="number" step="0.01" id="mn-percentage">' +
+          '<p class="field-hint">O novo salário será calculado automaticamente pelo servidor.</p>' +
+          '<p class="field-error" id="mn-err-percentage" style="display:none;"></p></div>'
+        );
+      }
+      if (t === 'AUMENTO_QUADRO') {
+        return (
+          '<div class="form-grid">' +
+          '<div class="field"><label>Cargo <span class="req">*</span></label><select id="mn-positionId">' +
+          optionsHtml(org.positions, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="mn-err-positionId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Diretoria <span class="req">*</span></label><select id="mn-directorateId">' +
+          optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="mn-err-directorateId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Quantidade de Vagas <span class="req">*</span></label><input type="number" min="1" step="1" id="mn-quantity" value="1">' +
+          '<p class="field-error" id="mn-err-quantity" style="display:none;"></p></div>' +
+          '<div class="field"><label>Salário Planejado <span class="req">*</span></label><input type="number" step="0.01" id="mn-plannedSalary">' +
+          '<p class="field-error" id="mn-err-plannedSalary" style="display:none;"></p></div>' +
+          '</div>'
+        );
+      }
+      if (t === 'TRANSFERENCIA') {
+        return (
+          '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="mn-employee-picker"></div>' +
+          '<p class="field-error" id="mn-err-employee" style="display:none;"></p></div>' +
+          '<div class="form-grid">' +
+          '<div class="field"><label>Diretoria de Origem <span class="req">*</span></label><select id="mn-originDirectorateId">' +
+          optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="mn-err-originDirectorateId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Diretoria de Destino <span class="req">*</span></label><select id="mn-destinationDirectorateId">' +
+          optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="mn-err-destinationDirectorateId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Novo Cargo (opcional)</label><select id="mn-newPositionId2">' +
+          optionsHtml(org.positions, { placeholder: 'Manter cargo atual' }) +
+          '</select></div>' +
+          '<div class="field"><label>Novo Salário (opcional)</label><input type="number" step="0.01" id="mn-newSalary2"></div>' +
+          '</div>'
+        );
+      }
+      return '';
+    }
+
+    function render() {
+      root.innerHTML =
+        '<div class="page-header"><div><a href="#" data-route="#/movements" class="text-xs text-faint">← Voltar para Movimentações</a>' +
+        '<h1 style="margin-top:4px;">Nova Movimentação</h1><p>Preencha os dados de acordo com o tipo de movimentação.</p></div></div>' +
+        cardOpen() +
+        '<div class="field"><label>Tipo de Movimentação <span class="req">*</span></label><select id="mn-type">' +
+        optionsHtml(movementTypeOptions(), { selected: type }) +
+        '</select></div>' +
+        '<div id="mn-type-fields"></div>' +
+        '<div class="field" style="margin-top:14px;"><label>Data Efetiva <span class="req">*</span></label>' +
+        '<input type="date" id="mn-effectiveDate" style="max-width:220px;">' +
+        '<p class="field-error" id="mn-err-effectiveDate" style="display:none;"></p></div>' +
+        '<div class="field"><label>Justificativa <span class="req">*</span></label><textarea id="mn-justification" rows="3"></textarea>' +
+        '<p class="field-error" id="mn-err-justification" style="display:none;"></p></div>' +
+        '<div class="form-actions"><button class="btn btn-outline" data-route="#/movements">Cancelar</button>' +
+        '<button class="btn" id="mn-submit-btn">Criar Movimentação</button></div>' +
+        cardClose();
+
+      document.getElementById('mn-type').addEventListener('change', function (e) {
+        type = e.target.value;
+        renderTypeFields();
+      });
+      document.getElementById('mn-submit-btn').addEventListener('click', handleSubmit);
+      renderTypeFields();
+    }
+
+    function renderTypeFields() {
+      var el = document.getElementById('mn-type-fields');
+      el.innerHTML = typeFieldsHtml(type);
+      var pickerEl = document.getElementById('mn-employee-picker');
+      employeePicker = null;
+      if (pickerEl) {
+        employeePicker = mountEmployeePicker(pickerEl, employees, {
+          onChange: function (emp) {
+            var hint = document.getElementById('mn-hint-newSalary');
+            if (hint && emp) hint.textContent = 'Salário atual: ' + fmt.currency(emp.currentSalary);
+            else if (hint) hint.textContent = '';
+          },
+        });
+      }
+    }
+
+    function clearErrors() {
+      root.querySelectorAll('.field-error').forEach(function (e) {
+        e.style.display = 'none';
+        e.textContent = '';
+      });
+    }
+    function setError(id, message) {
+      var el = document.getElementById('mn-err-' + id);
+      if (el) {
+        el.textContent = message;
+        el.style.display = 'block';
+      }
+    }
+    function v(id) {
+      var el = document.getElementById('mn-' + id);
+      return el ? el.value : '';
+    }
+
+    function validateAndBuildPayload() {
+      clearErrors();
+      var errors = {};
+      var effectiveDate = v('effectiveDate');
+      var justification = v('justification').trim();
+      if (!effectiveDate) errors.effectiveDate = 'Informe a data efetiva.';
+      if (!justification) errors.justification = 'Informe a justificativa.';
+
+      var payload = { type: type, effectiveDate: effectiveDate, justification: justification };
+
+      if (type === 'PROMOCAO') {
+        var emp = employeePicker && employeePicker.getSelected();
+        var newPositionId = v('newPositionId');
+        var newSalary = v('newSalary');
+        if (!emp) errors.employee = 'Selecione o colaborador.';
+        if (!newPositionId) errors.newPositionId = 'Selecione o novo cargo.';
+        if (!newSalary) errors.newSalary = 'Informe o novo salário.';
+        if (emp && newSalary && Number(newSalary) < Number(emp.currentSalary)) {
+          errors.newSalary = 'O novo salário não pode ser menor que o salário atual (' + fmt.currency(emp.currentSalary) + ').';
+        }
+        if (emp) {
+          payload.employeeId = emp.id;
+          payload.newPositionId = newPositionId;
+          payload.newSalary = Number(newSalary);
+        }
+      } else if (type === 'MERITO') {
+        var emp2 = employeePicker && employeePicker.getSelected();
+        var percentage = v('percentage');
+        if (!emp2) errors.employee = 'Selecione o colaborador.';
+        if (!percentage) errors.percentage = 'Informe o percentual de aumento.';
+        else if (Number(percentage) <= 0) errors.percentage = 'O percentual deve ser maior que zero.';
+        if (emp2) {
+          payload.employeeId = emp2.id;
+          payload.percentage = Number(percentage);
+        }
+      } else if (type === 'AUMENTO_QUADRO') {
+        var positionId = v('positionId');
+        var directorateId = v('directorateId');
+        var quantity = v('quantity');
+        var plannedSalary = v('plannedSalary');
+        if (!positionId) errors.positionId = 'Selecione o cargo.';
+        if (!directorateId) errors.directorateId = 'Selecione a diretoria.';
+        if (!quantity || Number(quantity) < 1) errors.quantity = 'Informe uma quantidade válida.';
+        if (plannedSalary === '' || Number(plannedSalary) < 0) errors.plannedSalary = 'Informe um salário planejado válido.';
+        payload.positionId = positionId;
+        payload.directorateId = directorateId;
+        payload.quantity = Number(quantity);
+        payload.plannedSalary = Number(plannedSalary);
+      } else if (type === 'TRANSFERENCIA') {
+        var emp3 = employeePicker && employeePicker.getSelected();
+        var originDirectorateId = v('originDirectorateId');
+        var destinationDirectorateId = v('destinationDirectorateId');
+        if (!emp3) errors.employee = 'Selecione o colaborador.';
+        if (!originDirectorateId) errors.originDirectorateId = 'Selecione a diretoria de origem.';
+        if (!destinationDirectorateId) errors.destinationDirectorateId = 'Selecione a diretoria de destino.';
+        if (originDirectorateId && destinationDirectorateId && originDirectorateId === destinationDirectorateId) {
+          errors.destinationDirectorateId = 'A diretoria de destino deve ser diferente da origem.';
+        }
+        if (emp3) {
+          payload.employeeId = emp3.id;
+          payload.originDirectorateId = originDirectorateId;
+          payload.destinationDirectorateId = destinationDirectorateId;
+          var newPositionId2 = v('newPositionId2');
+          var newSalary2 = v('newSalary2');
+          if (newPositionId2) payload.newPositionId = newPositionId2;
+          if (newSalary2) payload.newSalary = Number(newSalary2);
+        }
+      }
+
+      var hasErrors = Object.keys(errors).length > 0;
+      if (hasErrors) {
+        Object.keys(errors).forEach(function (key) {
+          setError(key, errors[key]);
+        });
+        return null;
+      }
+      return payload;
+    }
+
+    function handleSubmit() {
+      var payload = validateAndBuildPayload();
+      if (!payload) return;
+      var btn = document.getElementById('mn-submit-btn');
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      callApi('api_createMovement', payload)
+        .then(function (created) {
+          toast('Movimentação criada com sucesso.', 'success');
+          goTo('#/movements/' + created.id);
+        })
+        .catch(function (err) {
+          toastError(err);
+        })
+        .finally(function () {
+          btn.disabled = false;
+          btn.classList.remove('is-loading');
+        });
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Detalhe de movimentação
+  // -----------------------------------------------------------------------
+  Views.movementDetail = function (root, id) {
+    var org;
+    root.innerHTML = loadingHtml();
+
+    Promise.all([callApi('api_getMovement', id), getOrgLookups()])
+      .then(function (results) {
+        org = results[1];
+        render(results[0]);
+      })
+      .catch(function (err) {
+        root.innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function directorateName(dirId) {
+      if (!dirId || !org) return null;
+      var found = (org.directorates || []).filter(function (d) { return d.id === dirId; })[0];
+      return found ? found.name : null;
+    }
+
+    function fieldHtml(label, value) {
+      if (value === null || value === undefined || value === '') return '';
+      return '<div><dt class="uppercase-label">' + escapeHtml(label) + '</dt><dd style="margin:2px 0 0;color:var(--slate-800);">' + escapeHtml(value) + '</dd></div>';
+    }
+
+    function render(movement) {
+      root.innerHTML =
+        '<div class="page-header"><div><a href="#" data-route="#/movements" class="text-xs text-faint">← Voltar para Movimentações</a>' +
+        '<div class="row" style="margin-top:4px;gap:10px;"><h1>' +
+        escapeHtml(labelFor('movementType', movement.type)) +
+        '</h1>' +
+        badge('movementStatus', movement.status) +
+        '</div><p>' +
+        escapeHtml(movement.employeeName || movement.directorateName || 'Aumento de quadro / vaga') +
+        '</p></div>' +
+        '<div class="row">' +
+        (movement.status === 'RASCUNHO'
+          ? '<button class="btn btn-outline" id="mov-cancel-btn">Cancelar Rascunho</button><button class="btn" id="mov-submit-btn">Submeter para Aprovação</button>'
+          : '') +
+        '</div></div>' +
+        cardOpen('Dados da Movimentação') +
+        '<dl class="grid grid-3" style="row-gap:14px;">' +
+        fieldHtml('Colaborador', movement.employeeName) +
+        fieldHtml('Cargo Atual', movement.currentPositionName) +
+        fieldHtml('Novo Cargo', movement.newPositionName) +
+        fieldHtml('Salário Atual', movement.currentSalary != null ? fmt.currency(movement.currentSalary) : null) +
+        fieldHtml('Novo Salário', movement.newSalary != null ? fmt.currency(movement.newSalary) : null) +
+        fieldHtml('Percentual de Mérito', movement.meritPercentage != null ? fmt.percent(movement.meritPercentage) : null) +
+        fieldHtml('Quantidade de Vagas', movement.quantity != null ? fmt.number(movement.quantity) : null) +
+        fieldHtml('Salário Planejado', movement.plannedSalary != null ? fmt.currency(movement.plannedSalary) : null) +
+        fieldHtml('Diretoria', movement.directorateName) +
+        fieldHtml('Diretoria de Origem', directorateName(movement.originDirectorateId)) +
+        fieldHtml('Diretoria de Destino', directorateName(movement.destinationDirectorateId)) +
+        fieldHtml('Data Efetiva', fmt.date(movement.effectiveDate)) +
+        fieldHtml('Solicitado por', movement.requestedByEmail) +
+        fieldHtml('Criado em', fmt.dateTime(movement.createdAt)) +
+        '</dl>' +
+        '<div class="divider"></div>' +
+        '<p class="uppercase-label">Justificativa</p><p class="text-sm" style="margin-top:4px;color:var(--slate-700);">' +
+        escapeHtml(movement.justification) +
+        '</p>' +
+        cardClose() +
+        '<div style="height:16px;"></div>' +
+        cardOpen('Simulador de Impacto', {
+          subtitle: 'Impacto financeiro projetado para esta movimentação.',
+          actions: '<button class="btn btn-outline btn-sm" id="mov-simulate-btn">' + (movement.simulation ? 'Recalcular' : 'Executar Simulação') + '</button>',
+        }) +
+        '<div id="mov-sim-body">' +
+        simulationPanelHtml(movement.simulation) +
+        '</div>' +
+        cardClose() +
+        '<div style="height:16px;"></div>' +
+        cardOpen('Linha do Tempo de Aprovação') +
+        approvalTimelineHtml(movement.approvalSteps) +
+        cardClose();
+
+      var simulateBtn = document.getElementById('mov-simulate-btn');
+      simulateBtn.addEventListener('click', function () {
+        simulateBtn.disabled = true;
+        simulateBtn.classList.add('is-loading');
+        callApi('api_simulateMovement', movement.id)
+          .then(function (sim) {
+            document.getElementById('mov-sim-body').innerHTML = simulationPanelHtml(sim);
+            simulateBtn.textContent = 'Recalcular';
+          })
+          .catch(toastError)
+          .finally(function () {
+            simulateBtn.disabled = false;
+            simulateBtn.classList.remove('is-loading');
+          });
+      });
+
+      var submitBtn = document.getElementById('mov-submit-btn');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', function () {
+          submitBtn.disabled = true;
+          submitBtn.classList.add('is-loading');
+          callApi('api_submitMovement', movement.id)
+            .then(function () {
+              toast('Movimentação submetida para aprovação.', 'success');
+              Views.movementDetail(root, movement.id);
+            })
+            .catch(function (err) {
+              toastError(err);
+              submitBtn.disabled = false;
+              submitBtn.classList.remove('is-loading');
+            });
+        });
+      }
+
+      var cancelBtn = document.getElementById('mov-cancel-btn');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', function () {
+          confirmAction('Tem certeza que deseja cancelar este rascunho de movimentação?', function () {
+            callApi('api_cancelMovement', movement.id)
+              .then(function () {
+                toast('Movimentação cancelada.', 'success');
+                Views.movementDetail(root, movement.id);
+              })
+              .catch(toastError);
+          }, { danger: true, confirmLabel: 'Cancelar Movimentação' });
+        });
+      }
+    }
+  };
+</script>

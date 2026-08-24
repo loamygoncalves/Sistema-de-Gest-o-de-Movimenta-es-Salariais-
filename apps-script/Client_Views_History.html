@@ -1,0 +1,176 @@
+<script>
+  /* =====================================================================
+     Módulo 6 — Histórico de movimentações aprovadas
+     api_listHistory / api_getHistoryIndicators / api_exportHistory
+     ===================================================================== */
+
+  Views.history = function (root) {
+    var user = App.user;
+    var state = {
+      directorateId: isScopedRole(user) ? user.directorateId || '' : '',
+      positionId: '',
+      type: '',
+      costCenterId: '',
+      startDate: '',
+      endDate: '',
+    };
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Histórico</h1><p>Movimentações já aprovadas, com indicadores consolidados e exportação.</p></div></div>' +
+      '<div class="filter-bar" id="hist-filters"></div>' +
+      '<div id="hist-body">' +
+      loadingHtml() +
+      '</div>';
+
+    getOrgLookups()
+      .then(function (org) {
+        renderFilters(org);
+        loadData();
+      })
+      .catch(function (err) {
+        document.getElementById('hist-body').innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function currentFilters() {
+      return {
+        directorateId: state.directorateId || undefined,
+        positionId: state.positionId || undefined,
+        type: state.type || undefined,
+        costCenterId: state.costCenterId || undefined,
+        startDate: state.startDate || undefined,
+        endDate: state.endDate || undefined,
+      };
+    }
+
+    function renderFilters(org) {
+      var el = document.getElementById('hist-filters');
+      var directorateFilterHtml = '';
+      if (!isScopedRole(user)) {
+        directorateFilterHtml =
+          '<div class="col"><label>Diretoria</label><select id="hist-f-directorate"><option value="">Todas</option>' +
+          optionsHtml(org.directorates, { selected: state.directorateId }) +
+          '</select></div>';
+      }
+      el.innerHTML =
+        directorateFilterHtml +
+        '<div class="col"><label>Cargo</label><select id="hist-f-position"><option value="">Todos</option>' +
+        optionsHtml(org.positions, { selected: state.positionId }) +
+        '</select></div>' +
+        '<div class="col"><label>Tipo</label><select id="hist-f-type"><option value="">Todos</option>' +
+        optionsHtml(movementTypeOptions(), { selected: state.type }) +
+        '</select></div>' +
+        '<div class="col"><label>Centro de Custo</label><select id="hist-f-cc"><option value="">Todos</option>' +
+        optionsHtml(org.costCenters, { selected: state.costCenterId }) +
+        '</select></div>' +
+        '<div class="col"><label>De</label><input type="date" id="hist-f-start" value="' + state.startDate + '"></div>' +
+        '<div class="col"><label>Até</label><input type="date" id="hist-f-end" value="' + state.endDate + '"></div>' +
+        '<div class="col" style="justify-content:flex-end;"><button class="btn btn-outline btn-sm" id="hist-refresh">Aplicar Filtros</button></div>';
+
+      var dirEl = document.getElementById('hist-f-directorate');
+      if (dirEl) dirEl.addEventListener('change', function (e) { state.directorateId = e.target.value; });
+      document.getElementById('hist-f-position').addEventListener('change', function (e) { state.positionId = e.target.value; });
+      document.getElementById('hist-f-type').addEventListener('change', function (e) { state.type = e.target.value; });
+      document.getElementById('hist-f-cc').addEventListener('change', function (e) { state.costCenterId = e.target.value; });
+      document.getElementById('hist-f-start').addEventListener('change', function (e) { state.startDate = e.target.value; });
+      document.getElementById('hist-f-end').addEventListener('change', function (e) { state.endDate = e.target.value; });
+      document.getElementById('hist-refresh').addEventListener('click', loadData);
+    }
+
+    function loadData() {
+      var body = document.getElementById('hist-body');
+      body.innerHTML = loadingHtml();
+      var filters = currentFilters();
+      Promise.all([callApi('api_listHistory', filters), callApi('api_getHistoryIndicators', filters)])
+        .then(function (results) {
+          renderBody(results[0], results[1], filters);
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function renderBody(records, indicators, filters) {
+      var body = document.getElementById('hist-body');
+      body.innerHTML =
+        '<div class="stack">' +
+        '<div class="grid grid-4">' +
+        '<div class="kpi-tile"><div class="kpi-label">Promoções</div><div class="kpi-value">' + fmt.number(indicators.promotionsCount) + '</div></div>' +
+        '<div class="kpi-tile"><div class="kpi-label">Méritos</div><div class="kpi-value">' + fmt.number(indicators.meritsCount) + '</div></div>' +
+        '<div class="kpi-tile"><div class="kpi-label">Transferências</div><div class="kpi-value">' + fmt.number(indicators.transfersCount) + '</div></div>' +
+        '<div class="kpi-tile"><div class="kpi-label">Aumento de Quadro</div><div class="kpi-value">' + fmt.number(indicators.headcountIncreaseCount) + '</div></div>' +
+        '</div>' +
+        '<div class="grid grid-2">' +
+        '<div class="kpi-tile highlight"><div class="kpi-label">Crescimento Salarial Médio</div><div class="kpi-value">' + fmt.percent(indicators.salaryGrowthPercent) + '</div></div>' +
+        '<div class="kpi-tile highlight"><div class="kpi-label">Impacto Acumulado (anual)</div><div class="kpi-value">' + fmt.currency(indicators.accumulatedImpact) + '</div></div>' +
+        '</div>' +
+        cardOpen('Evolução de Headcount (Aumento de Quadro)') +
+        renderBarChart(
+          (indicators.headcountEvolution || []).map(function (h) {
+            return { label: fmt.monthLabel(h.month), value: h.hc };
+          })
+        ) +
+        cardClose() +
+        cardOpen('Registros', {
+          actions:
+            '<div class="row"><button class="btn btn-outline btn-sm" id="hist-export-xlsx">Exportar XLSX</button>' +
+            '<button class="btn btn-outline btn-sm" id="hist-export-pdf">Exportar PDF</button></div>',
+        }) +
+        (records && records.length > 0
+          ? '<div class="table-wrap"><table><thead><tr><th>Data Efetiva</th><th>Tipo</th><th>Colaborador</th><th>Diretoria</th><th>Cargo</th>' +
+            '<th class="cell-num">Salário Anterior</th><th class="cell-num">Novo Salário</th><th class="cell-num">Impacto Mensal</th>' +
+            '<th class="cell-num">Impacto Anual</th><th>Aprovado em</th></tr></thead><tbody>' +
+            records
+              .map(function (r) {
+                return (
+                  '<tr><td>' +
+                  fmt.date(r.effectiveDate) +
+                  '</td><td>' +
+                  escapeHtml(labelFor('movementType', r.type)) +
+                  '</td><td>' +
+                  escapeHtml(r.employeeName || '—') +
+                  '</td><td>' +
+                  escapeHtml(r.directorateName || '—') +
+                  '</td><td>' +
+                  escapeHtml(r.positionName || '—') +
+                  '</td><td class="cell-num">' +
+                  (r.previousSalary !== null && r.previousSalary !== '' ? fmt.currency(r.previousSalary) : '—') +
+                  '</td><td class="cell-num">' +
+                  (r.newSalary !== null && r.newSalary !== '' ? fmt.currency(r.newSalary) : '—') +
+                  '</td><td class="cell-num">' +
+                  fmt.currency(r.monthlyImpact) +
+                  '</td><td class="cell-num">' +
+                  fmt.currency(r.annualImpact) +
+                  '</td><td>' +
+                  fmt.dateTime(r.approvedAt) +
+                  '</td></tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table></div>'
+          : emptyStateHtml('Nenhum registro de histórico para os filtros atuais.')) +
+        cardClose() +
+        '</div>';
+
+      var exportXlsxBtn = document.getElementById('hist-export-xlsx');
+      var exportPdfBtn = document.getElementById('hist-export-pdf');
+      function doExport(openKey, btn) {
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        callApi('api_exportHistory', filters)
+          .then(function (result) {
+            // Precisa ser aberto como navegação normal (nova aba) — exige a sessão logada do navegador,
+            // por isso nunca é buscado via fetch/XHR.
+            window.open(result[openKey], '_blank');
+            toast('Planilha de exportação gerada. Abrindo em nova aba...', 'success');
+          })
+          .catch(toastError)
+          .finally(function () {
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
+          });
+      }
+      exportXlsxBtn.addEventListener('click', function () { doExport('xlsxExportUrl', exportXlsxBtn); });
+      exportPdfBtn.addEventListener('click', function () { doExport('pdfExportUrl', exportPdfBtn); });
+    }
+  };
+</script>

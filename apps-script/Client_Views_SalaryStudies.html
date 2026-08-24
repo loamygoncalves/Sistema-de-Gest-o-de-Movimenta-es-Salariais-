@@ -1,0 +1,307 @@
+<script>
+  /* =====================================================================
+     Módulo 7 — Estudos salariais / posicionamento de mercado
+     api_listSalaryStudies / api_getSalaryStudyEntries /
+     api_importSalaryStudy / api_getSalaryPositioning
+     ===================================================================== */
+
+  Views.salaryStudies = function (root) {
+    var user = App.user;
+    var canImport = canManage(user);
+    var state = {
+      tab: 'studies',
+      directorateId: isScopedRole(user) ? user.directorateId || '' : '',
+      positionId: '',
+      expandedStudyId: null,
+    };
+
+    var tabs = [{ key: 'studies', label: 'Estudos Salariais' }, { key: 'positioning', label: 'Posicionamento de Mercado' }];
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Estudos Salariais</h1><p>Pesquisas de mercado e posicionamento salarial dos colaboradores.</p></div></div>' +
+      '<div class="tabs" id="ss-tabs"></div>' +
+      '<div id="ss-body">' +
+      loadingHtml() +
+      '</div>';
+
+    getOrgLookups()
+      .then(function () {
+        renderTabs();
+        renderTabBody();
+      })
+      .catch(function (err) {
+        document.getElementById('ss-body').innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function renderTabs() {
+      var el = document.getElementById('ss-tabs');
+      el.innerHTML = tabs
+        .map(function (t) {
+          return '<button class="tab-btn' + (state.tab === t.key ? ' active' : '') + '" data-tab="' + t.key + '">' + escapeHtml(t.label) + '</button>';
+        })
+        .join('');
+      el.querySelectorAll('.tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          state.tab = btn.getAttribute('data-tab');
+          renderTabs();
+          renderTabBody();
+        });
+      });
+    }
+
+    function renderTabBody() {
+      if (state.tab === 'studies') renderStudiesTab();
+      else renderPositioningTab();
+    }
+
+    // -------------------------------------------------------------------
+    // Estudos salariais
+    // -------------------------------------------------------------------
+    function renderStudiesTab() {
+      var body = document.getElementById('ss-body');
+      body.innerHTML =
+        (canImport
+          ? cardOpen('Importar novo estudo salarial', {
+              subtitle: 'Colunas esperadas na planilha: cargo, empresa, salario_minimo, salario_medio, salario_maximo, percentil_25, percentil_50, percentil_75, percentil_90.',
+            }) +
+            '<div class="form-grid">' +
+            '<div class="field"><label>Nome do Estudo <span class="req">*</span></label><input type="text" id="ss-import-name" placeholder="Ex: Pesquisa Salarial Mercer 2026"></div>' +
+            '<div class="field"><label>Fonte</label><input type="text" id="ss-import-source" placeholder="Ex: Mercer, Robert Half..."></div>' +
+            '<div class="field"><label>Ano de Referência <span class="req">*</span></label><input type="number" id="ss-import-year" value="' +
+            new Date().getFullYear() +
+            '"></div>' +
+            '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="ss-import-file" accept=".csv,.xlsx"></div>' +
+            '</div>' +
+            '<div class="form-actions"><button class="btn" id="ss-import-btn">Importar Estudo</button></div>' +
+            '<div id="ss-import-result" style="margin-top:16px;"></div>' +
+            cardClose() +
+            '<div style="height:16px;"></div>'
+          : '') +
+        cardOpen('Estudos Importados') +
+        '<div id="ss-studies-list">' +
+        loadingHtml() +
+        '</div>' +
+        cardClose();
+
+      var importBtn = document.getElementById('ss-import-btn');
+      if (importBtn) {
+        importBtn.addEventListener('click', function () {
+          var btn = this;
+          var name = document.getElementById('ss-import-name').value.trim();
+          var source = document.getElementById('ss-import-source').value.trim();
+          var referenceYear = Number(document.getElementById('ss-import-year').value);
+          var file = document.getElementById('ss-import-file').files[0];
+          if (!name) {
+            toast('Informe o nome do estudo.', 'error');
+            return;
+          }
+          if (!file) {
+            toast('Selecione um arquivo para importar.', 'error');
+            return;
+          }
+          btn.disabled = true;
+          btn.classList.add('is-loading');
+          readFileAsBase64(file)
+            .then(function (base64) {
+              return callApi('api_importSalaryStudy', base64, file.type || 'text/csv', file.name, { name: name, source: source, referenceYear: referenceYear });
+            })
+            .then(function (result) {
+              document.getElementById('ss-import-result').innerHTML = renderImportResultHtml(result);
+              toast('Estudo importado: ' + result.successRows + ' de ' + result.totalRows + ' linha(s).', result.errors.length > 0 ? 'info' : 'success');
+              loadStudiesList();
+            })
+            .catch(toastError)
+            .finally(function () {
+              btn.disabled = false;
+              btn.classList.remove('is-loading');
+            });
+        });
+      }
+
+      loadStudiesList();
+    }
+
+    function loadStudiesList() {
+      var wrap = document.getElementById('ss-studies-list');
+      if (!wrap) return;
+      wrap.innerHTML = loadingHtml();
+      callApi('api_listSalaryStudies')
+        .then(function (studies) {
+          if (!studies || studies.length === 0) {
+            wrap.innerHTML = emptyStateHtml('Nenhum estudo salarial importado ainda.');
+            return;
+          }
+          wrap.innerHTML = studies
+            .map(function (s) {
+              return (
+                '<div class="card" style="margin-bottom:10px;">' +
+                '<div class="row" style="justify-content:space-between;">' +
+                '<div><h4>' +
+                escapeHtml(s.name) +
+                '</h4><p class="text-xs text-muted">' +
+                (s.source ? escapeHtml(s.source) + ' · ' : '') +
+                'Ano de referência ' +
+                escapeHtml(s.referenceYear) +
+                ' · importado por ' +
+                escapeHtml(s.importedByEmail) +
+                ' em ' +
+                fmt.dateTime(s.createdAt) +
+                '</p></div>' +
+                '<button class="btn btn-outline btn-sm" data-toggle-study="' +
+                s.id +
+                '">' +
+                (state.expandedStudyId === s.id ? 'Ocultar' : 'Ver Itens') +
+                '</button></div>' +
+                '<div id="ss-study-entries-' + s.id + '" style="margin-top:10px;">' +
+                (state.expandedStudyId === s.id ? loadingHtml() : '') +
+                '</div></div>'
+              );
+            })
+            .join('');
+
+          wrap.querySelectorAll('[data-toggle-study]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var studyId = btn.getAttribute('data-toggle-study');
+              if (state.expandedStudyId === studyId) {
+                state.expandedStudyId = null;
+                loadStudiesList();
+                return;
+              }
+              state.expandedStudyId = studyId;
+              loadStudiesList();
+              loadStudyEntries(studyId);
+            });
+          });
+
+          if (state.expandedStudyId) loadStudyEntries(state.expandedStudyId);
+        })
+        .catch(function (err) {
+          wrap.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function loadStudyEntries(studyId) {
+      var container = document.getElementById('ss-study-entries-' + studyId);
+      if (!container) return;
+      callApi('api_getSalaryStudyEntries', studyId)
+        .then(function (entries) {
+          var positions = idNameMap(App.orgLookups.positions);
+          if (!entries || entries.length === 0) {
+            container.innerHTML = emptyStateHtml('Nenhum item cadastrado para este estudo.');
+            return;
+          }
+          container.innerHTML =
+            '<div class="table-wrap"><table><thead><tr><th>Cargo</th><th>Empresa</th><th class="cell-num">Mínimo</th>' +
+            '<th class="cell-num">Médio</th><th class="cell-num">Máximo</th><th class="cell-num">P25</th><th class="cell-num">P50</th>' +
+            '<th class="cell-num">P75</th><th class="cell-num">P90</th></tr></thead><tbody>' +
+            entries
+              .map(function (e) {
+                return (
+                  '<tr><td>' +
+                  escapeHtml(positions[e.positionId] || '—') +
+                  '</td><td>' +
+                  escapeHtml(e.companyName || '—') +
+                  '</td><td class="cell-num">' +
+                  (e.minSalary ? fmt.currency(e.minSalary) : '—') +
+                  '</td><td class="cell-num">' +
+                  (e.avgSalary ? fmt.currency(e.avgSalary) : '—') +
+                  '</td><td class="cell-num">' +
+                  (e.maxSalary ? fmt.currency(e.maxSalary) : '—') +
+                  '</td><td class="cell-num">' +
+                  (e.p25 ? fmt.currency(e.p25) : '—') +
+                  '</td><td class="cell-num">' +
+                  (e.p50 ? fmt.currency(e.p50) : '—') +
+                  '</td><td class="cell-num">' +
+                  (e.p75 ? fmt.currency(e.p75) : '—') +
+                  '</td><td class="cell-num">' +
+                  (e.p90 ? fmt.currency(e.p90) : '—') +
+                  '</td></tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table></div>';
+        })
+        .catch(function (err) {
+          container.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    // -------------------------------------------------------------------
+    // Posicionamento de mercado
+    // -------------------------------------------------------------------
+    function renderPositioningTab() {
+      var body = document.getElementById('ss-body');
+      var org = App.orgLookups;
+      var directorateFilterHtml = '';
+      if (!isScopedRole(user)) {
+        directorateFilterHtml =
+          '<div class="col"><label>Diretoria</label><select id="ss-pos-directorate"><option value="">Todas</option>' +
+          optionsHtml(org.directorates, { selected: state.directorateId }) +
+          '</select></div>';
+      }
+      body.innerHTML =
+        '<div class="filter-bar">' +
+        directorateFilterHtml +
+        '<div class="col"><label>Cargo</label><select id="ss-pos-position"><option value="">Todos</option>' +
+        optionsHtml(org.positions, { selected: state.positionId }) +
+        '</select></div>' +
+        '</div><div id="ss-pos-body">' +
+        loadingHtml() +
+        '</div>';
+
+      var dirEl = document.getElementById('ss-pos-directorate');
+      if (dirEl) dirEl.addEventListener('change', function (e) { state.directorateId = e.target.value; loadPositioning(); });
+      document.getElementById('ss-pos-position').addEventListener('change', function (e) { state.positionId = e.target.value; loadPositioning(); });
+
+      loadPositioning();
+    }
+
+    function loadPositioning() {
+      var wrap = document.getElementById('ss-pos-body');
+      if (!wrap) return;
+      wrap.innerHTML = loadingHtml();
+      callApi('api_getSalaryPositioning', { directorateId: state.directorateId || undefined, positionId: state.positionId || undefined })
+        .then(function (items) {
+          if (!items || items.length === 0) {
+            wrap.innerHTML = emptyStateHtml('Nenhum colaborador encontrado para os filtros atuais.');
+            return;
+          }
+          wrap.innerHTML =
+            '<div class="table-wrap"><table><thead><tr><th>Colaborador</th><th>Matrícula</th><th>Cargo</th><th>Diretoria</th>' +
+            '<th class="cell-num">Salário Atual</th><th class="cell-num">P25</th><th class="cell-num">P50</th><th class="cell-num">P75</th>' +
+            '<th class="cell-num">P90</th><th>Classificação</th></tr></thead><tbody>' +
+            items
+              .map(function (item) {
+                return (
+                  '<tr><td>' +
+                  escapeHtml(item.employee.name) +
+                  '</td><td>' +
+                  escapeHtml(item.employee.registration) +
+                  '</td><td>' +
+                  escapeHtml(item.employee.positionName || '—') +
+                  '</td><td>' +
+                  escapeHtml(item.employee.directorateName || '—') +
+                  '</td><td class="cell-num">' +
+                  fmt.currency(item.currentSalary) +
+                  '</td><td class="cell-num">' +
+                  (item.marketP25 != null ? fmt.currency(item.marketP25) : '—') +
+                  '</td><td class="cell-num">' +
+                  (item.marketP50 != null ? fmt.currency(item.marketP50) : '—') +
+                  '</td><td class="cell-num">' +
+                  (item.marketP75 != null ? fmt.currency(item.marketP75) : '—') +
+                  '</td><td class="cell-num">' +
+                  (item.marketP90 != null ? fmt.currency(item.marketP90) : '—') +
+                  '</td><td>' +
+                  (item.classification ? badge('marketPosition', item.classification) : '<span class="pill pill-slate">Sem dados</span>') +
+                  '</td></tr>'
+                );
+              })
+              .join('') +
+            '</tbody></table></div>';
+        })
+        .catch(function (err) {
+          wrap.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+  };
+</script>
