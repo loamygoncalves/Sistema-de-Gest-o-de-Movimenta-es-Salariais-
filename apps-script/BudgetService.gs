@@ -2,15 +2,24 @@
  * Orçamento anual de pessoal — espelha backend/src/modules/budget.
  */
 
-var SITUATION_ALIASES_ = {
-  SEM_MOVIMENTACAO: PlannedSituation.SEM_MOVIMENTACAO,
-  'SEM MOVIMENTACAO': PlannedSituation.SEM_MOVIMENTACAO,
-  PROMOCAO: PlannedSituation.PROMOCAO,
-  MERITO: PlannedSituation.MERITO,
-  TRANSFERENCIA: PlannedSituation.TRANSFERENCIA,
-  NOVA_VAGA: PlannedSituation.NOVA_VAGA,
-  'NOVA VAGA': PlannedSituation.NOVA_VAGA,
-};
+/**
+ * Lazy on purpose — ver o comentário equivalente em Api.gs: código de nível
+ * superior roda na ordem alfabética dos arquivos (BudgetService.gs vem antes
+ * de Enums.gs), então montar este mapa fora de uma função quebraria a
+ * primeira execução do projeto com "Cannot read properties of undefined".
+ */
+function situationAliases_(raw) {
+  var map = {
+    SEM_MOVIMENTACAO: PlannedSituation.SEM_MOVIMENTACAO,
+    'SEM MOVIMENTACAO': PlannedSituation.SEM_MOVIMENTACAO,
+    PROMOCAO: PlannedSituation.PROMOCAO,
+    MERITO: PlannedSituation.MERITO,
+    TRANSFERENCIA: PlannedSituation.TRANSFERENCIA,
+    NOVA_VAGA: PlannedSituation.NOVA_VAGA,
+    'NOVA VAGA': PlannedSituation.NOVA_VAGA,
+  };
+  return map[raw];
+}
 
 var BudgetService = {
   listEntries: function (year, scopedDirectorateId) {
@@ -67,7 +76,7 @@ var BudgetService = {
       var plannedMonth = toNumber_(data.mes_previsto);
       var monthlyBudgetedCost = toNumber_(data.custo_mensal_orcado) || 0;
       var annualBudgetedCost = toNumber_(data.custo_anual_orcado) || 0;
-      var plannedSituation = SITUATION_ALIASES_[situationRaw];
+      var plannedSituation = situationAliases_(situationRaw);
 
       function fail(field, message) {
         errors.push({ rowNumber: record.rowNumber, field: field, message: message });

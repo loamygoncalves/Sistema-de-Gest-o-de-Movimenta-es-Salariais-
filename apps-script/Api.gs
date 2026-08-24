@@ -11,7 +11,19 @@
  * Client_Core.html).
  */
 
-var MANAGE_ROLES_ = [UserRole.ADMIN, UserRole.RH_REMUNERACAO];
+/**
+ * Lazy on purpose: Apps Script concatena todos os .gs em um único escopo e
+ * executa o código de nível superior de cada arquivo, na ordem em que os
+ * arquivos aparecem no projeto, antes de qualquer função ser chamada. Como
+ * essa ordem segue o nome do arquivo (Api.gs vem antes de Enums.gs), uma
+ * atribuição direta aqui (`var MANAGE_ROLES_ = [UserRole.ADMIN, ...]`)
+ * lançaria "Cannot read properties of undefined" na primeira execução do
+ * projeto, pois UserRole ainda não existiria. Uma função adia a leitura de
+ * UserRole para o momento da chamada, quando todos os arquivos já carregaram.
+ */
+function manageRoles_() {
+  return [UserRole.ADMIN, UserRole.RH_REMUNERACAO];
+}
 
 function stripRow_(obj) {
   if (!obj || typeof obj !== 'object') return obj;
@@ -46,43 +58,43 @@ function api_getOrgLookups() {
 
 function api_createDirectorate(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.createDirectorate(input));
 }
 
 function api_updateDirectorate(id, input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.updateDirectorate(id, input));
 }
 
 function api_createManagement(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.createManagement(input));
 }
 
 function api_createCoordination(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.createCoordination(input));
 }
 
 function api_createPosition(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.createPosition(input));
 }
 
 function api_updatePosition(id, input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.updatePosition(id, input));
 }
 
 function api_createCostCenter(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(OrgService.createCostCenter(input));
 }
 
@@ -129,7 +141,7 @@ function api_getEmployee(id) {
 
 function api_createEmployee(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   var created = stripRow_(EmployeesService.create(input));
   recordAudit_(user.email, 'CREATE', 'employees', created.id, input);
   return created;
@@ -137,19 +149,19 @@ function api_createEmployee(input) {
 
 function api_updateEmployee(id, input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(EmployeesService.update(id, input));
 }
 
 function api_deactivateEmployee(id) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(EmployeesService.deactivate(id));
 }
 
 function api_importEmployees(base64Data, mimeType, filename) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return EmployeesService.importFromFile(base64Data, mimeType, filename, user.email);
 }
 
@@ -177,7 +189,7 @@ function api_getBudgetDashboard(year, directorateId) {
 
 function api_importBudget(base64Data, mimeType, filename, year) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return BudgetService.importFromFile(base64Data, mimeType, filename, year, user.email);
 }
 
@@ -192,13 +204,13 @@ function api_listChargeParameters() {
 
 function api_createChargeParameter(input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(ChargeParametersService.create(input));
 }
 
 function api_updateChargeParameter(id, input) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   return stripRow_(ChargeParametersService.update(id, input));
 }
 
@@ -317,7 +329,7 @@ function api_getSalaryStudyEntries(studyId) {
 
 function api_importSalaryStudy(base64Data, mimeType, filename, meta) {
   var user = requireUser_();
-  requireRole_(user, MANAGE_ROLES_);
+  requireRole_(user, manageRoles_());
   var result = SalaryStudiesService.importFromFile(base64Data, mimeType, filename, meta, user.email);
   result.study = stripRow_(result.study);
   return result;

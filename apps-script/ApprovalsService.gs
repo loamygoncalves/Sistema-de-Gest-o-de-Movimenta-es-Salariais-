@@ -3,10 +3,19 @@
  * Espelha backend/src/modules/approvals/approvals.service.ts.
  */
 
-var ROLE_TO_APPROVER_ROLE_ = {};
-ROLE_TO_APPROVER_ROLE_[UserRole.DIRETOR] = ApproverRole.DIRETOR;
-ROLE_TO_APPROVER_ROLE_[UserRole.RH_REMUNERACAO] = ApproverRole.RH_REMUNERACAO;
-ROLE_TO_APPROVER_ROLE_[UserRole.FINANCEIRO] = ApproverRole.FINANCEIRO;
+/**
+ * Lazy on purpose — ver o comentário equivalente em Api.gs: código de nível
+ * superior roda na ordem alfabética dos arquivos (ApprovalsService.gs vem
+ * antes de Enums.gs), então montar este mapa fora de uma função quebraria a
+ * primeira execução do projeto com "Cannot read properties of undefined".
+ */
+function roleToApproverRole_(role) {
+  var map = {};
+  map[UserRole.DIRETOR] = ApproverRole.DIRETOR;
+  map[UserRole.RH_REMUNERACAO] = ApproverRole.RH_REMUNERACAO;
+  map[UserRole.FINANCEIRO] = ApproverRole.FINANCEIRO;
+  return map[role];
+}
 
 var ApprovalsService = {
   createStepsForMovement: function (movementRequestId) {
@@ -37,7 +46,7 @@ var ApprovalsService = {
 
   /** Etapas pendentes que o usuário atual pode decidir agora. */
   findPending: function (user) {
-    var approverRole = ROLE_TO_APPROVER_ROLE_[user.role];
+    var approverRole = roleToApproverRole_(user.role);
     if (!approverRole) return [];
 
     var movementsById = indexById_(Tables.movementRequests.all());
@@ -72,7 +81,7 @@ var ApprovalsService = {
     if (movement.status !== STATUS_FOR_APPROVER_ROLE[step.approverRole]) {
       throw new Error('Esta etapa não está ativa no fluxo atual');
     }
-    var userApproverRole = ROLE_TO_APPROVER_ROLE_[user.role];
+    var userApproverRole = roleToApproverRole_(user.role);
     if (user.role !== UserRole.ADMIN && userApproverRole !== step.approverRole) {
       throw new Error('Perfil sem permissão para decidir esta etapa');
     }
