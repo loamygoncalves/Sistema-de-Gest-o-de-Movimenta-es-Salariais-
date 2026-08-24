@@ -27,7 +27,7 @@ export function FileDropzone({ onFileSelected, accept = ".xlsx,.xls,.csv", hint,
     <div
       className={clsx(
         "flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors",
-        dragActive ? "border-brand-500 bg-brand-50" : "border-slate-300 bg-slate-50"
+        dragActive ? "border-brand-teal bg-brand-teal/10" : "border-brand-border bg-brand-bg"
       )}
       onDragOver={(e) => {
         e.preventDefault();
@@ -52,13 +52,13 @@ export function FileDropzone({ onFileSelected, accept = ".xlsx,.xls,.csv", hint,
         />
       </svg>
       {file ? (
-        <p className="text-sm font-medium text-slate-700">{file.name}</p>
+        <p className="text-sm font-medium text-brand-text">{file.name}</p>
       ) : (
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-brand-text">
           Arraste um arquivo aqui ou{" "}
           <button
             type="button"
-            className="font-medium text-brand-600 hover:underline"
+            className="font-medium text-brand-teal-dark hover:underline"
             onClick={() => inputRef.current?.click()}
           >
             selecione no computador

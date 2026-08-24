@@ -90,13 +90,13 @@ export default function MovementDetailPage() {
   }
 
   if (loading) return <PageLoading />;
-  if (!movement) return <p className="text-sm text-slate-500">Movimentação não encontrada.</p>;
+  if (!movement) return <p className="text-sm text-brand-text">Movimentação não encontrada.</p>;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <button onClick={() => router.back()} className="mb-1 text-xs text-slate-400 hover:text-slate-600">
+          <button onClick={() => router.back()} className="mb-1 text-xs text-slate-400 hover:text-brand-text">
             ← Voltar
           </button>
           <div className="flex items-center gap-3">
@@ -105,7 +105,7 @@ export default function MovementDetailPage() {
             </h1>
             <MovementStatusBadge status={movement.status} />
           </div>
-          <p className="text-sm text-slate-500">{movement.employeeName ?? "Aumento de quadro / vaga"}</p>
+          <p className="text-sm text-brand-text">{movement.employeeName ?? "Aumento de quadro / vaga"}</p>
         </div>
         {movement.status === "RASCUNHO" && (
           <Button onClick={handleSubmit} loading={submitting}>
@@ -131,9 +131,9 @@ export default function MovementDetailPage() {
           <Field label="Solicitado por" value={movement.requestedByName} />
           <Field label="Criado em" value={formatDateTime(movement.createdAt)} />
         </dl>
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-brand-border pt-4">
           <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-400">Justificativa</p>
-          <p className="text-sm text-slate-700">{movement.justification}</p>
+          <p className="text-sm text-brand-text">{movement.justification}</p>
         </div>
       </Card>
 
@@ -147,7 +147,7 @@ export default function MovementDetailPage() {
         }
       >
         {simulation ? <SimulationPanel simulation={simulation} /> : (
-          <p className="text-sm text-slate-500">Nenhuma simulação executada ainda. Clique em &quot;Executar simulação&quot;.</p>
+          <p className="text-sm text-brand-text">Nenhuma simulação executada ainda. Clique em &quot;Executar simulação&quot;.</p>
         )}
       </Card>
 
@@ -219,19 +219,19 @@ function SimulationPanel({ simulation }: { simulation: MovementSimulation }) {
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Comparativo Orçamentário
         </p>
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div className="overflow-x-auto rounded-lg border border-brand-border">
           <table className="w-full min-w-max text-sm">
-            <thead className="bg-slate-50">
+            <thead className="bg-brand-bg">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-slate-500">Orçado</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-slate-500">Atual</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-slate-500">Após Aprovação</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-slate-500">Diferença</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-slate-500">% Consumido</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Orçado</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Atual</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Após Aprovação</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Diferença</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">% Consumido</th>
               </tr>
             </thead>
             <tbody>
-              <tr className="border-t border-slate-100">
+              <tr className="border-t border-brand-border">
                 <td className="px-4 py-2.5">{formatCurrency(budget.budgeted)}</td>
                 <td className="px-4 py-2.5">{formatCurrency(budget.current)}</td>
                 <td className="px-4 py-2.5">{formatCurrency(budget.afterApproval)}</td>
@@ -252,21 +252,21 @@ function SimulationPanel({ simulation }: { simulation: MovementSimulation }) {
 
 function MetricTile({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-lg border px-4 py-3 ${highlight ? "border-brand-200 bg-brand-50" : "border-slate-200 bg-slate-50"}`}>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 text-lg font-semibold ${highlight ? "text-brand-700" : "text-slate-800"}`}>{value}</p>
+    <div className={`rounded-lg border px-4 py-3 ${highlight ? "border-brand-teal/30 bg-brand-teal/10" : "border-brand-border bg-brand-bg"}`}>
+      <p className="text-xs font-medium uppercase tracking-wide text-brand-text">{label}</p>
+      <p className={`mt-1 text-lg font-semibold ${highlight ? "text-brand-teal-dark" : "text-slate-800"}`}>{value}</p>
     </div>
   );
 }
 
 function BreakdownList({ title, items }: { title: string; items: { name: string; value: number }[] }) {
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="rounded-lg border border-brand-border p-4">
       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{title}</p>
       <ul className="flex flex-col gap-1.5">
         {items.map((item) => (
           <li key={item.name} className="flex items-center justify-between text-sm">
-            <span className="text-slate-600">{item.name}</span>
+            <span className="text-brand-text">{item.name}</span>
             <span className="font-medium text-slate-800">{formatCurrency(item.value)}</span>
           </li>
         ))}
@@ -277,7 +277,7 @@ function BreakdownList({ title, items }: { title: string; items: { name: string;
 
 function ApprovalTimeline({ steps, loading }: { steps: ApprovalStep[]; loading: boolean }) {
   if (loading) return <p className="text-sm text-slate-400">Carregando...</p>;
-  if (steps.length === 0) return <p className="text-sm text-slate-500">Nenhuma etapa de aprovação registrada ainda.</p>;
+  if (steps.length === 0) return <p className="text-sm text-brand-text">Nenhuma etapa de aprovação registrada ainda.</p>;
 
   const ordered = [...steps].sort((a, b) => a.order - b.order);
 
@@ -292,12 +292,12 @@ function ApprovalTimeline({ steps, loading }: { steps: ApprovalStep[]; loading: 
                   ? "bg-emerald-100 text-emerald-700"
                   : step.status === "REPROVADO"
                   ? "bg-red-100 text-red-700"
-                  : "bg-slate-100 text-slate-500"
+                  : "bg-brand-bg text-brand-text"
               }`}
             >
               {idx + 1}
             </span>
-            {idx < ordered.length - 1 && <span className="mt-1 h-full w-px flex-1 bg-slate-200" />}
+            {idx < ordered.length - 1 && <span className="mt-1 h-full w-px flex-1 bg-brand-border" />}
           </div>
           <div className="flex-1 pb-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -306,8 +306,8 @@ function ApprovalTimeline({ steps, loading }: { steps: ApprovalStep[]; loading: 
               </span>
               <ApprovalStatusBadge status={step.status} />
             </div>
-            {step.approverName && <p className="text-xs text-slate-500">Aprovador: {step.approverName}</p>}
-            {step.comment && <p className="mt-1 text-sm text-slate-600">&quot;{step.comment}&quot;</p>}
+            {step.approverName && <p className="text-xs text-brand-text">Aprovador: {step.approverName}</p>}
+            {step.comment && <p className="mt-1 text-sm text-brand-text">&quot;{step.comment}&quot;</p>}
             {step.decidedAt && <p className="text-xs text-slate-400">{formatDateTime(step.decidedAt)}</p>}
           </div>
         </li>

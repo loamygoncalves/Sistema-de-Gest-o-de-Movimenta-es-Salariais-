@@ -20,11 +20,11 @@ const TONE_CLASSES: Record<NonNullable<KpiCardProps["tone"]>, string> = {
 
 export function KpiCard({ label, value, hint, trend, trendLabel, tone = "default", className }: KpiCardProps) {
   return (
-    <div className={clsx("rounded-xl border border-slate-200 bg-white p-4 shadow-card", className)}>
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+    <div className={clsx("rounded-xl border border-brand-border bg-white p-4 shadow-card", className)}>
+      <p className="text-xs font-medium uppercase tracking-wide text-brand-text">{label}</p>
       <p className={clsx("mt-2 text-2xl font-semibold", TONE_CLASSES[tone])}>{value}</p>
       {(hint || trendLabel) && (
-        <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-500">
+        <div className="mt-1 flex items-center gap-1.5 text-xs text-brand-text">
           {trend && (
             <span
               className={clsx(

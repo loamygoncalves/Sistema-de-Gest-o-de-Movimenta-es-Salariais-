@@ -8,7 +8,7 @@ body {
 }
 
 body {
-  @apply bg-slate-50 text-slate-900;
+  @apply bg-brand-bg text-brand-text font-sans;
 }
 
 ::-webkit-scrollbar {
@@ -17,7 +17,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-slate-300 rounded-full;
+  @apply bg-brand-text/25 rounded-full;
 }
 
 ::-webkit-scrollbar-track {

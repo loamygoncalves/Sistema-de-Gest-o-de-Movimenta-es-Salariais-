@@ -14,7 +14,7 @@ export function Pagination({ page, limit, total, onPageChange }: PaginationProps
   const end = Math.min(total, page * limit);
 
   return (
-    <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-sm text-slate-500">
+    <div className="flex items-center justify-between border-t border-brand-border px-4 py-3 text-sm text-brand-text">
       <span>
         {total === 0
           ? "Nenhum resultado"

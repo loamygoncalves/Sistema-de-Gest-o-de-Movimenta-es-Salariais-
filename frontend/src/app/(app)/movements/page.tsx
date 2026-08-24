@@ -78,7 +78,7 @@ export default function MovementsPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Movimentações</h1>
-          <p className="text-sm text-slate-500">Solicitações de promoção, mérito, transferência e aumento de quadro.</p>
+          <p className="text-sm text-brand-text">Solicitações de promoção, mérito, transferência e aumento de quadro.</p>
         </div>
         <Link href="/movements/new">
           <Button>Nova movimentação</Button>

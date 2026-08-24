@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/types";
 
@@ -9,15 +10,21 @@ export function Topbar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
-      <div className="md:hidden text-sm font-semibold text-slate-800">SGMS</div>
+    <header className="flex h-16 items-center justify-between border-b border-brand-border bg-white px-6">
+      <Image
+        src="/beep-logo-color.png"
+        alt="Beep Saúde"
+        width={1920}
+        height={1080}
+        className="h-7 w-auto md:hidden"
+      />
       <div className="hidden md:block" />
       <div className="relative">
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-slate-50"
+          className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-brand-bg"
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-700">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-teal/15 text-sm font-semibold text-brand-teal-dark">
             {user?.name?.charAt(0)?.toUpperCase() ?? "?"}
           </div>
           <div className="text-left">
@@ -31,10 +38,10 @@ export function Topbar() {
           </svg>
         </button>
         {menuOpen && (
-          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+          <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-brand-border bg-white py-1 shadow-lg">
             <button
               onClick={logout}
-              className="block w-full px-4 py-2 text-left text-sm text-slate-600 hover:bg-slate-50"
+              className="block w-full px-4 py-2 text-left text-sm text-brand-text hover:bg-brand-bg"
             >
               Sair
             </button>

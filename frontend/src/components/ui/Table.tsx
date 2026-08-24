@@ -27,15 +27,15 @@ export function Table<T>({
   onRowClick,
 }: TableProps<T>) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200">
+    <div className="overflow-x-auto rounded-lg border border-brand-border">
       <table className="w-full min-w-max border-collapse text-sm">
-        <thead className="sticky-header bg-slate-50">
+        <thead className="sticky-header bg-brand-bg">
           <tr>
             {columns.map((col) => (
               <th
                 key={col.key}
                 className={clsx(
-                  "whitespace-nowrap border-b border-slate-200 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-slate-500",
+                  "whitespace-nowrap border-b border-brand-border px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-brand-text",
                   col.align === "right" && "text-right",
                   col.align === "center" && "text-center",
                   col.align !== "right" && col.align !== "center" && "text-left"
@@ -46,7 +46,7 @@ export function Table<T>({
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 bg-white">
+        <tbody className="divide-y divide-brand-border bg-white">
           {loading && (
             <tr>
               <td colSpan={columns.length} className="px-4 py-8 text-center text-slate-400">
@@ -66,13 +66,13 @@ export function Table<T>({
               <tr
                 key={rowKey(row, index)}
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
-                className={clsx(onRowClick && "cursor-pointer hover:bg-slate-50")}
+                className={clsx(onRowClick && "cursor-pointer hover:bg-brand-bg")}
               >
                 {columns.map((col) => (
                   <td
                     key={col.key}
                     className={clsx(
-                      "whitespace-nowrap px-4 py-2.5 text-slate-700",
+                      "whitespace-nowrap px-4 py-2.5 text-brand-text",
                       col.align === "right" && "text-right",
                       col.align === "center" && "text-center",
                       col.className

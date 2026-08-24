@@ -69,17 +69,17 @@ export default function EmployeeDetailPage() {
   }
 
   if (loading) return <PageLoading />;
-  if (!employee) return <p className="text-sm text-slate-500">Colaborador não encontrado.</p>;
+  if (!employee) return <p className="text-sm text-brand-text">Colaborador não encontrado.</p>;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <div>
-          <button onClick={() => router.back()} className="mb-1 text-xs text-slate-400 hover:text-slate-600">
+          <button onClick={() => router.back()} className="mb-1 text-xs text-slate-400 hover:text-brand-text">
             ← Voltar
           </button>
           <h1 className="text-xl font-semibold text-slate-900">{employee.name}</h1>
-          <p className="text-sm text-slate-500">Matrícula {employee.registration ?? "—"}</p>
+          <p className="text-sm text-brand-text">Matrícula {employee.registration ?? "—"}</p>
         </div>
       </div>
 

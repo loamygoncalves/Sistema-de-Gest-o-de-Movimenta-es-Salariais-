@@ -73,7 +73,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Dashboard Executivo</h1>
-          <p className="text-sm text-slate-500">Visão consolidada de headcount, folha, movimentações e orçamento.</p>
+          <p className="text-sm text-brand-text">Visão consolidada de headcount, folha, movimentações e orçamento.</p>
         </div>
         <div className="flex gap-3">
           <YearSelect value={year} onChange={setYear} />
@@ -145,7 +145,7 @@ export default function DashboardPage() {
                       width={90}
                     />
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Line type="monotone" dataKey="impact" stroke="#4f46e5" strokeWidth={2} dot={false} name="Impacto" />
+                    <Line type="monotone" dataKey="impact" stroke="#00AFAA" strokeWidth={2} dot={false} name="Impacto" />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -159,7 +159,7 @@ export default function DashboardPage() {
                     <XAxis type="number" tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `${v}%`} />
                     <YAxis type="category" dataKey="directorate" tick={{ fontSize: 12 }} stroke="#94a3b8" width={120} />
                     <Tooltip formatter={(v: number) => formatPercent(v)} />
-                    <Bar dataKey="consumedPercent" fill="#6366f1" radius={[0, 4, 4, 0]} name="% Consumido" />
+                    <Bar dataKey="consumedPercent" fill="#00AFAA" radius={[0, 4, 4, 0]} name="% Consumido" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

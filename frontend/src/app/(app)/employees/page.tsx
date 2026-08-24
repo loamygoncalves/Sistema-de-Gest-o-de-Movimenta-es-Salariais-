@@ -42,18 +42,18 @@ export default function EmployeesPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Colaboradores</h1>
-        <p className="text-sm text-slate-500">Base atual de colaboradores e comparativo com o orçamento.</p>
+        <p className="text-sm text-brand-text">Base atual de colaboradores e comparativo com o orçamento.</p>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-200">
+      <div className="flex gap-1 border-b border-brand-border">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`px-4 py-2 text-sm font-medium ${
               tab === t.key
-                ? "border-b-2 border-brand-600 text-brand-700"
-                : "text-slate-500 hover:text-slate-700"
+                ? "border-b-2 border-brand-teal text-brand-teal-dark"
+                : "text-brand-text hover:text-brand-teal-dark"
             }`}
           >
             {t.label}

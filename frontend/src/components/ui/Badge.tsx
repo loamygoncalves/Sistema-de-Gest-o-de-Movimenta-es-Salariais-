@@ -1,15 +1,16 @@
 import React from "react";
 import clsx from "@/lib/clsx";
 
-type BadgeColor = "slate" | "green" | "red" | "amber" | "blue" | "indigo";
+type BadgeColor = "slate" | "green" | "red" | "amber" | "blue" | "teal";
 
 const COLOR_CLASSES: Record<BadgeColor, string> = {
-  slate: "bg-slate-100 text-slate-700",
+  slate: "bg-brand-bg text-brand-text",
   green: "bg-emerald-100 text-emerald-700",
   red: "bg-red-100 text-red-700",
-  amber: "bg-amber-100 text-amber-700",
+  // Alerta/pendente: laranja Beep (nunca como fundo grande, só tons suaves em badges)
+  amber: "bg-brand-orange/15 text-amber-800",
   blue: "bg-blue-100 text-blue-700",
-  indigo: "bg-brand-100 text-brand-700",
+  teal: "bg-brand-teal/15 text-brand-teal-dark",
 };
 
 interface BadgeProps {

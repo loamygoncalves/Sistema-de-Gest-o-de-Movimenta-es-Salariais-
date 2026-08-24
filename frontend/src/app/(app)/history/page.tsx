@@ -111,7 +111,7 @@ export default function HistoryPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Histórico de Movimentações</h1>
-          <p className="text-sm text-slate-500">Movimentações aprovadas e seus impactos financeiros.</p>
+          <p className="text-sm text-brand-text">Movimentações aprovadas e seus impactos financeiros.</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => handleExport("xlsx")} loading={exporting === "xlsx"}>
@@ -139,7 +139,7 @@ export default function HistoryPage() {
                   <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
                   <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" />
                   <Tooltip />
-                  <Bar dataKey="hc" fill="#6366f1" radius={[4, 4, 0, 0]} name="Headcount" />
+                  <Bar dataKey="hc" fill="#00AFAA" radius={[4, 4, 0, 0]} name="Headcount" />
                 </BarChart>
               </ResponsiveContainer>
             </div>

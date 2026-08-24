@@ -85,7 +85,7 @@ function UsersAdminContent() {
   const columns: Column<User>[] = [
     { key: "name", header: "Nome", render: (r) => r.name },
     { key: "email", header: "E-mail", render: (r) => r.email },
-    { key: "role", header: "Perfil", render: (r) => <Badge color="indigo">{ROLE_LABELS[r.role]}</Badge> },
+    { key: "role", header: "Perfil", render: (r) => <Badge color="teal">{ROLE_LABELS[r.role]}</Badge> },
     { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
     {
       key: "status",
@@ -114,7 +114,7 @@ function UsersAdminContent() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Usuários</h1>
-          <p className="text-sm text-slate-500">Gestão de acessos e perfis do sistema.</p>
+          <p className="text-sm text-brand-text">Gestão de acessos e perfis do sistema.</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>Novo usuário</Button>
       </div>

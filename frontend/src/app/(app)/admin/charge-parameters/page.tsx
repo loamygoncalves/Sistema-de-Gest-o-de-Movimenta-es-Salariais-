@@ -120,7 +120,7 @@ function ChargeParametersContent() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Encargos & Benefícios</h1>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-brand-text">
             Parâmetros percentuais/fixos usados pelo simulador de impacto do módulo de movimentações.
           </p>
         </div>

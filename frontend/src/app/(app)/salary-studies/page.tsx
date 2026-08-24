@@ -52,7 +52,7 @@ export default function SalaryStudiesPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Estudos Salariais</h1>
-        <p className="text-sm text-slate-500">Pesquisas de mercado e posicionamento salarial dos colaboradores.</p>
+        <p className="text-sm text-brand-text">Pesquisas de mercado e posicionamento salarial dos colaboradores.</p>
       </div>
 
       {canImport && <ImportStudyCard onImported={loadStudies} />}

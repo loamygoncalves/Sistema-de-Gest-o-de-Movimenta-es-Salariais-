@@ -155,7 +155,7 @@ export default function NewMovementPage() {
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Nova Movimentação</h1>
-        <p className="text-sm text-slate-500">Preencha os dados de acordo com o tipo de movimentação.</p>
+        <p className="text-sm text-brand-text">Preencha os dados de acordo com o tipo de movimentação.</p>
       </div>
 
       <Card>

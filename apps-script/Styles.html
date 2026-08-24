@@ -1,46 +1,54 @@
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700&display=swap">
 <style>
   /* =====================================================================
      SGMS — Design system (Apps Script HtmlService)
-     Paleta espelha frontend/src/app/globals.css + tailwind.config.ts
-     (indigo "brand" + slate neutro), sem dependências externas.
+     Paleta Beep Saúde (teal + laranja + cinza neutro) — ver
+     assets/brand/BRAND.md para a especificação oficial. Sem dependências
+     externas além da Google Font Raleway carregada acima.
      ===================================================================== */
   :root {
-    --brand-50: #eef2ff;
-    --brand-100: #e0e7ff;
-    --brand-200: #c7d2fe;
-    --brand-300: #a5b4fc;
-    --brand-400: #818cf8;
-    --brand-500: #6366f1;
-    --brand-600: #4f46e5;
-    --brand-700: #4338ca;
-    --brand-800: #3730a3;
-    --brand-900: #312e81;
+    /* --brand-*: teal Beep (#00AFAA), com --brand-400 = variante clara
+       (#04D4CE) e --brand-700 = variante escura/hover (#008E87). */
+    --brand-50: #e3f8f7;
+    --brand-100: #c6f0ee;
+    --brand-200: #93e3df;
+    --brand-300: #5dd8d3;
+    --brand-400: #04d4ce;
+    --brand-500: #00afaa;
+    --brand-600: #00afaa;
+    --brand-700: #008e87;
+    --brand-800: #007068;
+    --brand-900: #00524c;
 
-    --slate-50: #f8fafc;
-    --slate-100: #f1f5f9;
-    --slate-200: #e2e8f0;
-    --slate-300: #cbd5e1;
-    --slate-400: #94a3b8;
-    --slate-500: #64748b;
-    --slate-600: #475569;
-    --slate-700: #334155;
-    --slate-800: #1e293b;
-    --slate-900: #0f172a;
+    --slate-50: #f4f4f4;
+    --slate-100: #ecedee;
+    --slate-200: #e5e5e5;
+    --slate-300: #cdd1d3;
+    --slate-400: #a6adb1;
+    --slate-500: #808a90;
+    --slate-600: #66727a;
+    --slate-700: #5c6a73;
+    --slate-800: #56636d;
+    --slate-900: #4f5e69;
 
-    --green-50: #ecfdf5;
-    --green-100: #d1fae5;
-    --green-600: #059669;
-    --green-700: #047857;
+    /* Sucesso/Aprovado: verde distinto do teal de marca (ação primária). */
+    --green-50: #eafbf3;
+    --green-100: #cff3e1;
+    --green-600: #1f9d6c;
+    --green-700: #167a54;
 
+    /* Erro/Reprovado: vermelho neutro de sistema (a marca não define um
+       vermelho próprio para erro). */
     --red-50: #fef2f2;
     --red-100: #fee2e2;
     --red-600: #dc2626;
     --red-700: #b91c1c;
 
-    --amber-50: #fffbeb;
-    --amber-100: #fef3c7;
-    --amber-600: #d97706;
-    --amber-700: #b45309;
+    /* Alerta/Pendente: laranja Beep (#FBA600) — único laranja da marca. */
+    --amber-50: #fff6e6;
+    --amber-100: #ffe9be;
+    --amber-600: #fba600;
+    --amber-700: #8f5b00;
 
     --blue-50: #eff6ff;
     --blue-100: #dbeafe;
@@ -54,7 +62,7 @@
     --radius-lg: 14px;
     --sidebar-w: 248px;
     --topbar-h: 60px;
-    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-sans: 'Raleway', -apple-system, 'Segoe UI', sans-serif;
   }
 
   * {
@@ -164,26 +172,20 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 18px 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 16px 20px;
+    background: #fff;
+    border-bottom: 1px solid var(--slate-200);
   }
-  .sidebar-brand-mark {
-    width: 32px;
+  .sidebar-brand-logo {
     height: 32px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, var(--brand-400), var(--brand-600));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-weight: 700;
-    font-size: 14px;
+    width: auto;
+    display: block;
     flex-shrink: 0;
   }
   .sidebar-brand-text {
     font-weight: 600;
-    font-size: 13px;
-    color: #fff;
+    font-size: 11px;
+    color: var(--slate-500);
     line-height: 1.25;
   }
   .sidebar-brand-text small {
@@ -314,6 +316,13 @@
     .nav-link span.label {
       display: none;
     }
+    .sidebar-brand {
+      justify-content: center;
+      padding: 14px 8px;
+    }
+    .sidebar-brand-logo {
+      height: 22px;
+    }
     .main-col {
       margin-left: 76px;
     }
@@ -433,7 +442,7 @@
   }
   .kpi-tile.warn {
     background: var(--amber-50);
-    border-color: #fde68a;
+    border-color: #ffd699;
   }
   .kpi-tile.danger {
     background: var(--red-50);
@@ -741,7 +750,7 @@
     background: var(--blue-100);
     color: var(--blue-700);
   }
-  .pill-indigo {
+  .pill-teal {
     background: var(--brand-100);
     color: var(--brand-700);
   }
@@ -770,7 +779,7 @@
   }
   .banner-warn {
     background: var(--amber-50);
-    border-color: #fde68a;
+    border-color: #ffd699;
     color: var(--amber-700);
   }
   .banner-info {
@@ -828,7 +837,7 @@
   .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(15, 23, 42, 0.45);
+    background: rgba(38, 46, 51, 0.45);
     display: flex;
     align-items: center;
     justify-content: center;

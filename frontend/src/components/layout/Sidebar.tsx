@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "@/lib/clsx";
@@ -12,15 +13,17 @@ export function Sidebar() {
   const { user, hasRole } = useAuth();
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white md:flex">
-      <div className="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-          SG
-        </div>
-        <div>
-          <p className="text-sm font-semibold leading-tight text-slate-800">SGMS</p>
-          <p className="text-[11px] leading-tight text-slate-400">Movimentações Salariais</p>
-        </div>
+    <aside className="hidden w-64 shrink-0 flex-col border-r border-brand-border bg-white md:flex">
+      <div className="flex h-16 flex-col justify-center gap-1 border-b border-brand-border px-5">
+        <Image
+          src="/beep-logo-color.png"
+          alt="Beep Saúde"
+          width={1920}
+          height={1080}
+          priority
+          className="h-7 w-auto"
+        />
+        <p className="text-[11px] font-medium leading-tight text-brand-text">Movimentações Salariais</p>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {NAV_GROUPS.map((group) => {
@@ -41,10 +44,10 @@ export function Sidebar() {
                       key={item.href}
                       href={item.href}
                       className={clsx(
-                        "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        "rounded-lg border-l-2 px-3 py-2 text-sm font-medium transition-colors",
                         active
-                          ? "bg-brand-50 text-brand-700"
-                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          ? "border-brand-teal-light bg-brand-teal/10 text-brand-teal-dark"
+                          : "border-transparent text-brand-text hover:bg-brand-bg hover:text-brand-teal-dark"
                       )}
                     >
                       {item.label}

@@ -7,7 +7,7 @@ import clsx from "@/lib/clsx";
 const VARIANT_CLASSES = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-800",
   error: "border-red-200 bg-red-50 text-red-800",
-  info: "border-slate-200 bg-white text-slate-800",
+  info: "border-brand-border bg-white text-slate-800",
 };
 
 export function ToastViewport() {

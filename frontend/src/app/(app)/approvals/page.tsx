@@ -99,7 +99,7 @@ export default function ApprovalsPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Minhas Pendências</h1>
-        <p className="text-sm text-slate-500">Movimentações aguardando sua aprovação.</p>
+        <p className="text-sm text-brand-text">Movimentações aguardando sua aprovação.</p>
       </div>
 
       <Card>

@@ -45,7 +45,7 @@ export function EmployeePicker({ label = "Colaborador", required, error, value, 
       <FieldWrapper label={label} required={required} error={error}>
         <input
           className={clsx(
-            "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500",
+            "w-full rounded-lg border border-brand-border bg-white px-3 py-2 text-sm focus:border-brand-teal focus:outline-none focus:ring-1 focus:ring-brand-teal",
             error && "border-red-400"
           )}
           placeholder="Busque por nome ou matrícula..."
@@ -60,7 +60,7 @@ export function EmployeePicker({ label = "Colaborador", required, error, value, 
         />
       </FieldWrapper>
       {open && (
-        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-brand-border bg-white shadow-lg">
           {loading && <div className="px-3 py-2 text-xs text-slate-400">Buscando...</div>}
           {!loading && results.length === 0 && (
             <div className="px-3 py-2 text-xs text-slate-400">Nenhum colaborador encontrado.</div>
@@ -70,7 +70,7 @@ export function EmployeePicker({ label = "Colaborador", required, error, value, 
               <button
                 key={emp.id}
                 type="button"
-                className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-slate-50"
+                className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-brand-bg"
                 onMouseDown={() => {
                   onChange(emp);
                   setQuery(emp.name);
