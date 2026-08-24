@@ -1,7 +1,7 @@
 /**
  * Rotina de instalação — execute UMA VEZ (menu Executar > setupSpreadsheet,
  * no editor do Apps Script, ou via `clasp run setupSpreadsheet`) para:
- *   1. criar a planilha "SGMS - Banco de Dados" com todas as abas/cabeçalhos;
+ *   1. criar a planilha "BEEP Remunera - Banco de Dados" com todas as abas/cabeçalhos;
  *   2. guardar o ID dela em Script Properties (é isso que Db.gs usa depois);
  *   3. semear diretorias, cargos, centros de custo e encargos de exemplo;
  *   4. cadastrar quem executou o setup como usuário ADMIN.
@@ -15,7 +15,7 @@ function setupSpreadsheet() {
   if (existingId) {
     ss = SpreadsheetApp.openById(existingId);
   } else {
-    ss = SpreadsheetApp.create('SGMS - Banco de Dados');
+    ss = SpreadsheetApp.create('BEEP Remunera - Banco de Dados');
     PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_PROPERTY, ss.getId());
   }
 

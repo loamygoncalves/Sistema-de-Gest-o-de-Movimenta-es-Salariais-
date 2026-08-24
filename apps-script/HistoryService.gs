@@ -93,7 +93,7 @@ var HistoryService = {
   /** Cria uma planilha Google com os registros filtrados e devolve os links de acesso/exportação. */
   exportToSheet: function (filters, scopedDirectorateId) {
     var records = this.list(filters, scopedDirectorateId);
-    var ss = SpreadsheetApp.create('SGMS - Histórico de Movimentações - ' + Utilities.formatDate(new Date(), 'GMT-3', 'yyyy-MM-dd HHmm'));
+    var ss = SpreadsheetApp.create('BEEP Remunera - Histórico de Movimentações - ' + Utilities.formatDate(new Date(), 'GMT-3', 'yyyy-MM-dd HHmm'));
     var sheet = ss.getSheets()[0];
     var headers = [
       'Data Efetiva', 'Tipo', 'Colaborador', 'Diretoria', 'Cargo',

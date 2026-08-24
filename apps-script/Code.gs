@@ -4,7 +4,7 @@
 function doGet() {
   return HtmlService.createTemplateFromFile('Index')
     .evaluate()
-    .setTitle('Sistema de Gestão de Movimentações Salariais')
+    .setTitle('BEEP Remunera')
     .setFaviconUrl('https://www.gstatic.com/images/icons/material/system/2x/badge_googg_128dp.png')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
