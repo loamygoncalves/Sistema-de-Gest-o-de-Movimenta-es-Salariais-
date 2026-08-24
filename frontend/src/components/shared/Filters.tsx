@@ -2,7 +2,7 @@
 
 import React from "react";
 import { Select } from "@/components/ui/Input";
-import { Directorate } from "@/types";
+import { Directorate, FULL_MONTH_LABELS } from "@/types";
 
 export function yearOptions(range = 5): { value: string; label: string }[] {
   const current = new Date().getFullYear();
@@ -24,6 +24,25 @@ export function YearSelect({ value, onChange, label = "Ano" }: YearSelectProps) 
     <Select
       label={label}
       options={yearOptions()}
+      value={String(value)}
+      onChange={(e) => onChange(Number(e.target.value))}
+    />
+  );
+}
+
+const MONTH_OPTIONS = Object.entries(FULL_MONTH_LABELS).map(([value, label]) => ({ value, label }));
+
+interface MonthSelectProps {
+  value: number;
+  onChange: (month: number) => void;
+  label?: string;
+}
+
+export function MonthSelect({ value, onChange, label = "Mês" }: MonthSelectProps) {
+  return (
+    <Select
+      label={label}
+      options={MONTH_OPTIONS}
       value={String(value)}
       onChange={(e) => onChange(Number(e.target.value))}
     />

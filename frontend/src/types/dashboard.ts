@@ -1,4 +1,6 @@
 export interface HeadcountDashboard {
+  year: number;
+  month: number;
   hcBudgeted: number;
   hcCurrent: number;
   hcApproved: number;
@@ -6,6 +8,8 @@ export interface HeadcountDashboard {
 }
 
 export interface PayrollDashboard {
+  year: number;
+  month: number;
   payrollCurrent: number;
   payrollBudgeted: number;
   difference: number;

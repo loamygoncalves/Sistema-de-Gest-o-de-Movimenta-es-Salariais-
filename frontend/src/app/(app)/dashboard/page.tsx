@@ -15,13 +15,14 @@ import {
 import { Card } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageLoading } from "@/components/ui/Spinner";
-import { DirectorateSelect, YearSelect } from "@/components/shared/Filters";
+import { DirectorateSelect, MonthSelect, YearSelect } from "@/components/shared/Filters";
 import { useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import {
   FinancialDashboard,
+  FULL_MONTH_LABELS,
   HeadcountDashboard,
   MovementsDashboard,
   PayrollDashboard,
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const { directorates } = useDirectorates();
   const { showToast } = useToast();
   const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [directorateId, setDirectorateId] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -42,12 +44,12 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    const params = { year, directorateId: directorateId || undefined };
+    const params = { year, month, directorateId: directorateId || undefined };
 
     Promise.all([
       api.get<HeadcountDashboard>("/dashboard/headcount", params),
       api.get<PayrollDashboard>("/dashboard/payroll", params),
-      api.get<MovementsDashboard>("/dashboard/movements", params),
+      api.get<MovementsDashboard>("/dashboard/movements", { year, directorateId: directorateId || undefined }),
       api.get<FinancialDashboard>("/dashboard/financial", params),
     ])
       .then(([hc, pay, mov, fin]) => {
@@ -66,7 +68,9 @@ export default function DashboardPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, directorateId]);
+  }, [year, month, directorateId]);
+
+  const referenceLabel = `${FULL_MONTH_LABELS[headcount?.month ?? month]}/${headcount?.year ?? year}`;
 
   return (
     <div className="flex flex-col gap-6">
@@ -77,6 +81,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-3">
           <YearSelect value={year} onChange={setYear} />
+          <MonthSelect value={month} onChange={setMonth} />
           <DirectorateSelect value={directorateId} onChange={setDirectorateId} directorates={directorates} />
         </div>
       </div>
@@ -86,9 +91,12 @@ export default function DashboardPage() {
       ) : (
         <>
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Headcount</h2>
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Headcount</h2>
+              <span className="text-xs text-brand-text">Mês de referência: {referenceLabel}</span>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <KpiCard label="HC Orçado" value={formatNumber(headcount?.hcBudgeted)} />
+              <KpiCard label="HC Orçado" value={formatNumber(headcount?.hcBudgeted)} hint={referenceLabel} />
               <KpiCard label="HC Atual" value={formatNumber(headcount?.hcCurrent)} />
               <KpiCard label="HC Aprovado" value={formatNumber(headcount?.hcApproved)} />
               <KpiCard label="Vagas em Aberto" value={formatNumber(headcount?.hcOpen)} />
@@ -96,10 +104,13 @@ export default function DashboardPage() {
           </section>
 
           <section>
-            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Folha de Pagamento</h2>
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Folha de Pagamento</h2>
+              <span className="text-xs text-brand-text">Mês de referência: {referenceLabel}</span>
+            </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <KpiCard label="Folha Atual" value={formatCurrency(payroll?.payrollCurrent)} />
-              <KpiCard label="Folha Orçada" value={formatCurrency(payroll?.payrollBudgeted)} />
+              <KpiCard label="Folha Orçada" value={formatCurrency(payroll?.payrollBudgeted)} hint={referenceLabel} />
               <KpiCard
                 label="Diferença"
                 value={formatCurrency(payroll?.difference)}

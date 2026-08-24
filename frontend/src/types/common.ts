@@ -16,7 +16,7 @@ export interface ApiErrorBody {
 }
 
 export interface ImportBatchError {
-  row: number;
+  rowNumber: number;
   field: string;
   message: string;
 }

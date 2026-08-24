@@ -8,14 +8,23 @@ import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Table, Column } from "@/components/ui/Table";
 import { Pagination } from "@/components/ui/Pagination";
 import { PageLoading } from "@/components/ui/Spinner";
+import { BudgetMovementTypeBadge } from "@/components/ui/StatusBadge";
 import { ImportResultCard } from "@/components/shared/ImportResultCard";
-import { DirectorateSelect, YearSelect } from "@/components/shared/Filters";
+import { DirectorateSelect, MonthSelect, YearSelect } from "@/components/shared/Filters";
 import { useAuth } from "@/lib/auth";
 import { useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
-import { formatCurrency, formatNumber, formatPercent, getErrorMessage } from "@/lib/format";
+import { formatCurrency, formatNumber, getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
-import { BudgetDashboard, BudgetEntry, ImportBatch, Paginated, PLANNED_SITUATION_LABELS } from "@/types";
+import {
+  BudgetDashboard,
+  BudgetEntry,
+  FULL_MONTH_LABELS,
+  ImportBatch,
+  MONTH_KEYS,
+  MONTH_LABELS,
+  Paginated,
+} from "@/types";
 
 export default function BudgetPage() {
   const { hasRole } = useAuth();
@@ -23,6 +32,7 @@ export default function BudgetPage() {
   const { showToast } = useToast();
 
   const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [directorateId, setDirectorateId] = useState("");
 
   const [dashboard, setDashboard] = useState<BudgetDashboard | null>(null);
@@ -45,7 +55,7 @@ export default function BudgetPage() {
     let active = true;
     setLoadingDashboard(true);
     api
-      .get<BudgetDashboard>("/budget/dashboard", { year, directorateId: directorateId || undefined })
+      .get<BudgetDashboard>("/budget/dashboard", { year, month, directorateId: directorateId || undefined })
       .then((res) => active && setDashboard(res))
       .catch((err) => showToast(getErrorMessage(err), "error"))
       .finally(() => active && setLoadingDashboard(false));
@@ -53,7 +63,7 @@ export default function BudgetPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, directorateId]);
+  }, [year, month, directorateId]);
 
   useEffect(() => {
     let active = true;
@@ -100,32 +110,41 @@ export default function BudgetPage() {
   }
 
   const columns: Column<BudgetEntry>[] = [
-    { key: "name", header: "Colaborador / Vaga", render: (r) => r.name ?? "—" },
     { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
+    { key: "costCenter", header: "Centro de Custo", render: (r) => r.costCenterName ?? "—" },
     { key: "position", header: "Cargo", render: (r) => r.positionName ?? "—" },
     {
-      key: "situation",
-      header: "Situação Planejada",
-      render: (r) => PLANNED_SITUATION_LABELS[r.plannedSituation] ?? r.plannedSituation,
+      key: "movementType",
+      header: "Tipo de Movimentação",
+      render: (r) => <BudgetMovementTypeBadge type={r.movementType} />,
     },
-    { key: "plannedSalary", header: "Salário Orçado", render: (r) => formatCurrency(r.plannedSalary), align: "right" },
-    {
-      key: "annualCost",
-      header: "Custo Anual Orçado",
-      render: (r) => formatCurrency(r.annualBudgetedCost),
-      align: "right",
-    },
+    ...MONTH_KEYS.map<Column<BudgetEntry>>((monthKey) => ({
+      key: monthKey,
+      header: MONTH_LABELS[monthKey],
+      align: "right" as const,
+      render: (r) => {
+        const value = r[monthKey];
+        return value === null || value === undefined ? (
+          <span className="text-slate-300">–</span>
+        ) : (
+          formatCurrency(value)
+        );
+      },
+    })),
   ];
+
+  const referenceLabel = dashboard ? `${FULL_MONTH_LABELS[dashboard.month]}/${dashboard.year}` : "—";
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Orçamento</h1>
-          <p className="text-sm text-brand-text">Controle de headcount e folha orçada por diretoria.</p>
+          <p className="text-sm text-brand-text">Controle de headcount e folha orçada por diretoria, centro de custo e cargo.</p>
         </div>
         <div className="flex gap-3">
           <YearSelect value={year} onChange={setYear} />
+          <MonthSelect value={month} onChange={setMonth} />
           <DirectorateSelect value={directorateId} onChange={setDirectorateId} directorates={directorates} />
         </div>
       </div>
@@ -133,37 +152,38 @@ export default function BudgetPage() {
       {loadingDashboard ? (
         <PageLoading />
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <KpiCard label="HC Orçado" value={formatNumber(dashboard?.hcBudgeted)} />
-          <KpiCard label="HC Atual" value={formatNumber(dashboard?.hcCurrent)} />
-          <KpiCard
-            label="Diferença HC"
-            value={formatNumber(dashboard?.hcDifference)}
-            tone={(dashboard?.hcDifference ?? 0) < 0 ? "danger" : "default"}
-          />
-          <KpiCard label="Folha Orçada" value={formatCurrency(dashboard?.payrollBudgeted)} />
-          <KpiCard label="Folha Atual" value={formatCurrency(dashboard?.payrollCurrent)} />
-          <KpiCard
-            label="Desvio Financeiro"
-            value={formatCurrency(dashboard?.financialDeviation)}
-            tone={(dashboard?.financialDeviation ?? 0) > 0 ? "danger" : "success"}
-          />
-          <KpiCard
-            className="col-span-full sm:col-span-2"
-            label="% Orçamento Consumido"
-            value={formatPercent(dashboard?.budgetConsumedPercent)}
-            tone={(dashboard?.budgetConsumedPercent ?? 0) > 100 ? "danger" : "default"}
-          />
+        <div className="flex flex-col gap-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <KpiCard label="HC Orçado (mês)" value={formatNumber(dashboard?.hcBudgeted)} hint={`Mês de referência: ${referenceLabel}`} />
+            <KpiCard label="Folha Orçada (mês)" value={formatCurrency(dashboard?.payrollBudgeted)} hint={`Mês de referência: ${referenceLabel}`} />
+            <KpiCard label="Orçamento Anual Total" value={formatCurrency(dashboard?.annualBudgeted)} hint={`Soma das 12 colunas mensais — ano ${dashboard?.year ?? year}`} />
+          </div>
         </div>
       )}
 
       {canImport && (
-        <Card title="Importar orçamento" subtitle="Envie a planilha (.xlsx) com o orçamento anual por diretoria/cargo.">
+        <Card
+          title="Importar orçamento"
+          subtitle="Envie a planilha (.xlsx) com o orçamento por diretoria, centro de custo, cargo e tipo de movimentação."
+        >
           <div className="flex flex-col gap-4">
+            <p className="text-xs text-brand-text">
+              Colunas esperadas: <strong>DIRETORIA</strong>, <strong>CENTRO DE CUSTO</strong>, <strong>CARGO</strong>,{" "}
+              <strong>TIPO DE MOVIMENTAÇÃO</strong> (Sem Movimentação, Promoção, Mérito, Substituição, Aumento de
+              Quadro ou Desligamento), seguidas das 12 colunas de mês (Jan a Dez) com o custo orçado de cada mês —
+              deixe a célula em branco no(s) mês(es) sem custo orçado. Linhas idênticas são permitidas e representam
+              vagas/assentos distintos daquela combinação. Reimportar substitui integralmente o orçado do ano para as
+              diretorias presentes no arquivo.
+            </p>
             <div className="max-w-xs">
               <YearSelect value={importYear} onChange={setImportYear} label="Ano de referência da importação" />
             </div>
-            <FileDropzone file={file} onFileSelected={setFile} accept=".xlsx,.xls" />
+            <FileDropzone
+              file={file}
+              onFileSelected={setFile}
+              accept=".xlsx,.xls"
+              hint="Planilha (.xlsx) com diretoria, centro de custo, cargo, tipo de movimentação e 12 colunas de mês"
+            />
             <div>
               <Button onClick={handleImport} loading={importing} disabled={!file}>
                 Importar planilha
@@ -175,7 +195,10 @@ export default function BudgetPage() {
 
       {batch && <ImportResultCard batch={batch} />}
 
-      <Card title="Lançamentos orçamentários">
+      <Card
+        title="Lançamentos orçamentários"
+        subtitle="Cada linha é uma vaga/assento orçado; combinações repetidas representam vagas distintas do mesmo tipo."
+      >
         <Table columns={columns} data={entries} rowKey={(r) => r.id} loading={loadingEntries} />
         <Pagination page={page} limit={limit} total={total} onPageChange={setPage} />
       </Card>

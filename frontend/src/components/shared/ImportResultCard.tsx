@@ -10,7 +10,7 @@ interface ImportResultCardProps {
 
 export function ImportResultCard({ batch }: ImportResultCardProps) {
   const columns: Column<ImportBatchError>[] = [
-    { key: "row", header: "Linha", render: (r) => r.row },
+    { key: "rowNumber", header: "Linha", render: (r) => r.rowNumber },
     { key: "field", header: "Campo", render: (r) => r.field },
     { key: "message", header: "Mensagem", render: (r) => r.message },
   ];
@@ -23,7 +23,7 @@ export function ImportResultCard({ batch }: ImportResultCardProps) {
         <Badge color="red">Erros: {batch.errorRows}</Badge>
       </div>
       {batch.errors.length > 0 ? (
-        <Table columns={columns} data={batch.errors} rowKey={(r) => `${r.row}-${r.field}`} />
+        <Table columns={columns} data={batch.errors} rowKey={(r) => `${r.rowNumber}-${r.field}`} />
       ) : (
         <p className="text-sm text-emerald-600">Todas as linhas foram importadas com sucesso.</p>
       )}
