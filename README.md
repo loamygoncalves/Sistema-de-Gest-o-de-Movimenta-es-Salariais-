@@ -9,12 +9,21 @@ movimentações e estudos salariais de mercado.
 ## Arquitetura
 
 ```
-├── backend/    API REST em NestJS + TypeORM + PostgreSQL
-├── frontend/   Next.js 14 (App Router) + React + TypeScript + Tailwind
-├── database/   schema.sql (DDL de referência) e DER.md (diagrama)
-├── docs/       Contrato de API (docs/API_CONTRACT.md)
+├── backend/      API REST em NestJS + TypeORM + PostgreSQL
+├── frontend/     Next.js 14 (App Router) + React + TypeScript + Tailwind
+├── apps-script/  Reimplementação alternativa rodando em Google Apps Script
+│                 (Google Sheets como banco + Web App HtmlService) — ver
+│                 apps-script/README.md
+├── database/     schema.sql (DDL de referência) e DER.md (diagrama)
+├── docs/         Contratos de API (REST e Apps Script)
 └── docker-compose.yml
 ```
+
+> Existem **duas implementações independentes** deste sistema neste
+> repositório: a principal (`backend/` + `frontend/`, NestJS + PostgreSQL +
+> Next.js) e uma versão simplificada em `apps-script/` para quem quer rodar
+> dentro do Google Workspace sem hospedar servidor/banco próprios (Google
+> Sheets como banco de dados). Elas não compartilham dados — escolha uma.
 
 - **Backend**: Node.js + NestJS, PostgreSQL via TypeORM, autenticação
   JWT com RBAC (5 perfis: ADMIN, RH_REMUNERACAO, DIRETOR, FINANCEIRO,
