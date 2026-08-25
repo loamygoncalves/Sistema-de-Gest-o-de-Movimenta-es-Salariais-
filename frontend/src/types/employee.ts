@@ -69,4 +69,8 @@ export interface EmployeeComparisonResponse {
   budgetOverrun: number;
   movementsByType: BudgetMovementsBreakdown;
   items: EmployeeComparisonItem[];
+  // false quando o mês pedido ainda não teve um fechamento de folha
+  // importado (ver POST /employees/import) — hcCurrent/budgetSavings/
+  // budgetOverrun ficam 0 nesse caso, nunca "herdam" os números de outro mês.
+  monthClosed: boolean;
 }

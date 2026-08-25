@@ -128,8 +128,16 @@
 
     function renderBody(headcount, payroll, movements, financial) {
       var body = document.getElementById('dash-body');
+      var monthClosedWarning = !headcount.monthClosed
+        ? '<div class="banner banner-warn">O fechamento da folha de ' +
+          (DASHBOARD_MONTH_LABELS_[headcount.month - 1] || headcount.month) +
+          '/' +
+          headcount.year +
+          ' ainda não foi importado — Headcount Atual, Folha Atual e Diferença estão zerados para este mês (não mostram o salário de outro mês).</div>'
+        : '';
       body.innerHTML =
         '<div class="stack">' +
+        monthClosedWarning +
         '<div class="grid grid-4">' +
         kpiTile('Headcount Orçado (mês)', fmt.number(headcount.hcBudgeted)) +
         kpiTile('Headcount Atual', fmt.number(headcount.hcCurrent)) +

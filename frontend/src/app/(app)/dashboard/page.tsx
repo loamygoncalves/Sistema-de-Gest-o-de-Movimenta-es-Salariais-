@@ -90,6 +90,13 @@ export default function DashboardPage() {
         <PageLoading />
       ) : (
         <>
+          {headcount && !headcount.monthClosed && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              O fechamento da folha de {referenceLabel} ainda não foi importado — HC Atual, Folha Atual e Diferença
+              estão zerados para este mês (não mostram o salário de outro mês).
+            </div>
+          )}
+
           <section>
             <div className="mb-2 flex items-baseline justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Headcount</h2>

@@ -167,10 +167,15 @@ erDiagram
   colaborador no mês em que a base foi fechada. `employees.current_salary` é
   um valor único e vivo — sem esse snapshot, um relatório de um mês passado
   mostraria o salário mais recente (re-importado depois) em vez do que a
-  folha realmente era naquele mês. Onde existir snapshot para (year, month),
-  `DashboardService`/`EmployeesService#compareWithBudget` usam o valor
-  congelado; sem snapshot para o mês pedido (mês corrente ainda em aberto,
-  ou histórico anterior a este recurso), caem para `current_salary` ao vivo.
+  folha realmente era naquele mês. `DashboardService`/
+  `EmployeesService#compareWithBudget` usam **exclusivamente** o snapshot do
+  mês exato pedido — nunca `current_salary` ao vivo. Sem snapshot para o mês
+  pedido (mês corrente ainda em aberto, ou histórico anterior a este
+  recurso), os indicadores desse mês vêm zerados (`monthClosed: false` na
+  resposta da API); usar `current_salary` faria um mês sem fechamento
+  "herdar" os números do último mês fechado, como se as folhas tivessem
+  sido somadas entre meses — o acumulado do ano é responsabilidade de outra
+  métrica (ex.: `movement_history`/impacto acumulado), não desta.
   Reimportar o mesmo (year, month) substitui o snapshot anterior de cada
   colaborador (chave única `year+month+employee_id`), nunca duplica.
 - **`movement_requests` é polimórfica por `type`**: os campos específicos de

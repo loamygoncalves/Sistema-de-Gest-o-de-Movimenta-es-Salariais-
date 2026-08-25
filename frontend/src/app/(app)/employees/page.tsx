@@ -252,6 +252,13 @@ function EmployeeComparisonTab() {
         <DirectorateSelect value={directorateId} onChange={setDirectorateId} directorates={directorates} />
       </div>
 
+      {data && !data.monthClosed && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          O fechamento da folha de {referenceLabel} ainda não foi importado — HC Atual, Economia e Estouro
+          Orçamentário estão zerados para este mês (não mostram o salário de outro mês).
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard label="HC Orçado" value={formatNumber(data?.hcBudgeted)} hint={`Mês de referência: ${referenceLabel}`} />
         <KpiCard label="HC Atual" value={formatNumber(data?.hcCurrent)} />

@@ -232,9 +232,11 @@ CREATE INDEX idx_employees_status ON employees(status);
 -- mes_de_referencia da planilha, formato MM/AAAA).
 -- employees.current_salary é um valor único e vivo — sem isso, um relatório
 -- de um mês passado mostraria o salário mais recente para todos os meses.
--- Onde existir snapshot para (year, month), os relatórios usam esse valor
--- congelado; onde não existir (mês corrente ainda não fechado, ou histórico
--- anterior a este recurso), cai para employees.current_salary ao vivo.
+-- Os relatórios usam EXCLUSIVAMENTE o snapshot do mês exato pedido, nunca
+-- employees.current_salary ao vivo; sem snapshot para o mês pedido, os
+-- indicadores desse mês vêm zerados (monthClosed: false na API) — cair para
+-- current_salary faria um mês sem fechamento "herdar" os números do último
+-- mês fechado, como se as folhas tivessem sido somadas entre meses.
 CREATE TABLE payroll_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   year SMALLINT NOT NULL,

@@ -3,13 +3,14 @@
  */
 
 /**
- * Folha "daquele mês": se existir ao menos um snapshot de fechamento na aba
- * FechamentoFolha para year+month (dentro do escopo), usa os salários
- * congelados de lá — não o salário atual re-lido depois (ver
- * EmployeesService#importFromFile). Sem fechamento para esse mês (mês
- * corrente em aberto, ou histórico anterior a este recurso), cai para
- * employees.currentSalary ao vivo. Devolve linhas
- * {directorateId, directorateName, costCenterId, salary}.
+ * Folha "daquele mês": usa exclusivamente os salários congelados na aba
+ * FechamentoFolha para year+month (dentro do escopo) — nunca o salário atual
+ * ao vivo. Sem fechamento para esse mês, devolve {rows: [], monthClosed:
+ * false} — mostrar o salário atual (que reflete o ÚLTIMO mês fechado, não
+ * necessariamente o mês pedido) faria um mês sem fechamento "herdar" os
+ * números de outro mês, como se as folhas tivessem sido somadas/duplicadas
+ * entre meses. Devolve {rows: [{directorateId, directorateName,
+ * costCenterId, salary}], monthClosed}.
  */
 function resolveMonthlySalaryRows_(year, month, scope, filterActiveOnly) {
   scope = scope || {};
@@ -20,30 +21,20 @@ function resolveMonthlySalaryRows_(year, month, scope, filterActiveOnly) {
     if (!matchesAccessScope_(s, scope)) return false;
     return true;
   });
-  if (snapshots.length > 0) {
-    return snapshots.map(function (s) {
+  if (snapshots.length === 0) {
+    return { rows: [], monthClosed: false };
+  }
+  return {
+    rows: snapshots.map(function (s) {
       return {
         directorateId: s.directorateId,
         directorateName: directorateNames[s.directorateId] ? directorateNames[s.directorateId].name : null,
         costCenterId: s.costCenterId || '',
         salary: Number(s.salary || 0),
       };
-    });
-  }
-
-  var employees = Tables.employees.where(function (e) {
-    if (filterActiveOnly && e.status !== EmployeeStatus.ATIVO) return false;
-    if (!matchesAccessScope_(e, scope)) return false;
-    return true;
-  });
-  return employees.map(function (e) {
-    return {
-      directorateId: e.directorateId,
-      directorateName: directorateNames[e.directorateId] ? directorateNames[e.directorateId].name : null,
-      costCenterId: e.costCenterId || '',
-      salary: Number(e.currentSalary || 0),
-    };
-  });
+    }),
+    monthClosed: true,
+  };
 }
 
 var EmployeesService = {
@@ -254,7 +245,8 @@ var EmployeesService = {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
-    var salaryRows = resolveMonthlySalaryRows_(year, referenceMonth, scope, true);
+    var monthlySalaries = resolveMonthlySalaryRows_(year, referenceMonth, scope, true);
+    var salaryRows = monthlySalaries.rows;
 
     var directorateNames = indexById_(Tables.directorates.all());
     var costCenterNames = indexById_(Tables.costCenters.all());
@@ -341,6 +333,7 @@ var EmployeesService = {
       budgetOverrun: budgetOverrun,
       movementsByType: movementsByType,
       items: items,
+      monthClosed: monthlySalaries.monthClosed,
     };
   },
 };

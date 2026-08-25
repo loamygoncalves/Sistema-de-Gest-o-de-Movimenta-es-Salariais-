@@ -13,7 +13,8 @@ var DashboardService = {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
-    var hcCurrent = resolveMonthlySalaryRows_(year, referenceMonth, scope, false).length;
+    var monthlySalaries = resolveMonthlySalaryRows_(year, referenceMonth, scope, false);
+    var hcCurrent = monthlySalaries.rows.length;
 
     var approvedIncreases = Tables.movementRequests.where(function (m) {
       if (m.type !== MovementType.AUMENTO_QUADRO) return false;
@@ -38,6 +39,7 @@ var DashboardService = {
       hcCurrent: hcCurrent,
       hcApproved: hcApproved,
       hcOpen: hcOpen,
+      monthClosed: monthlySalaries.monthClosed,
     };
   },
 
@@ -49,12 +51,12 @@ var DashboardService = {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
-    var salaryRows = resolveMonthlySalaryRows_(year, referenceMonth, scope, false);
+    var monthlySalaries = resolveMonthlySalaryRows_(year, referenceMonth, scope, false);
 
     var payrollBudgeted = budgetEntries.reduce(function (sum, b) {
       return sum + Number(monthValue_(b, referenceMonth) || 0);
     }, 0);
-    var payrollCurrent = salaryRows.reduce(function (sum, row) {
+    var payrollCurrent = monthlySalaries.rows.reduce(function (sum, row) {
       return sum + row.salary;
     }, 0);
 
@@ -64,6 +66,7 @@ var DashboardService = {
       payrollCurrent: payrollCurrent,
       payrollBudgeted: payrollBudgeted,
       difference: payrollCurrent - payrollBudgeted,
+      monthClosed: monthlySalaries.monthClosed,
     };
   },
 
@@ -101,6 +104,7 @@ var DashboardService = {
       budgetConsumedPercent: round2_(budgetConsumedPercent),
       projection12Months: this._projection12Months(scope),
       directorateRanking: this._directorateRanking(),
+      monthClosed: payroll.monthClosed,
     };
   },
 

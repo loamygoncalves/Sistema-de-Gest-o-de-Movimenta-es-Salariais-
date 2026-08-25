@@ -341,7 +341,16 @@
               );
             })
             .join('');
+          var monthNames_ = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+          var monthClosedWarning = !d.monthClosed
+            ? '<div class="banner banner-warn" style="margin-bottom:16px;">O fechamento da folha de ' +
+              (monthNames_[d.month - 1] || d.month) +
+              '/' +
+              d.year +
+              ' ainda não foi importado — Headcount Atual, Economia e Estouro Orçamentário estão zerados para este mês (não mostram o salário de outro mês).</div>'
+            : '';
           wrap.innerHTML =
+            monthClosedWarning +
             '<div class="grid grid-4">' +
             '<div class="kpi-tile"><div class="kpi-label">Headcount Orçado (mês)</div><div class="kpi-value">' + fmt.number(d.hcBudgeted) + '</div></div>' +
             '<div class="kpi-tile"><div class="kpi-label">Headcount Atual</div><div class="kpi-value">' + fmt.number(d.hcCurrent) + '</div></div>' +

@@ -33,12 +33,13 @@ export class DashboardService {
   ) {}
 
   /**
-   * Folha "daquele mês": se existir ao menos um snapshot de fechamento em
-   * payroll_snapshots para year+month (dentro do escopo), usa os salários
-   * congelados de lá — não o salário atual re-lido depois (ver
-   * EmployeesService#importFromExcel). Sem fechamento para esse mês (mês
-   * corrente em aberto, ou histórico anterior a este recurso), cai para
-   * employees.current_salary ao vivo.
+   * Folha "daquele mês": usa exclusivamente os salários congelados em
+   * payroll_snapshots para year+month (dentro do escopo) — nunca o salário
+   * atual ao vivo (ver EmployeesService#importFromExcel). Sem fechamento
+   * para esse mês, devolve `monthClosed: false` e lista vazia — mostrar o
+   * salário atual (que reflete o ÚLTIMO mês fechado, não necessariamente o
+   * mês pedido) faria um mês sem fechamento "herdar" os números de outro
+   * mês, como se as folhas tivessem sido somadas/duplicadas entre meses.
    */
   private async resolveMonthlySalaries(
     year: number,
@@ -46,21 +47,17 @@ export class DashboardService {
     scope: AccessScope,
     directorateId?: string,
     costCenterId?: string,
-  ): Promise<number[]> {
+  ): Promise<{ salaries: number[]; monthClosed: boolean }> {
     const snapshotQb = this.payrollSnapshotRepo
       .createQueryBuilder('s')
       .where('s.year = :year', { year })
       .andWhere('s.month = :month', { month });
     applyAccessScope(snapshotQb, 's', scope, directorateId, costCenterId);
     const snapshots = await snapshotQb.getMany();
-    if (snapshots.length > 0) {
-      return snapshots.map((s) => Number(s.salary));
+    if (snapshots.length === 0) {
+      return { salaries: [], monthClosed: false };
     }
-
-    const employeeQb = this.employeeRepo.createQueryBuilder('e');
-    applyAccessScope(employeeQb, 'e', scope, directorateId, costCenterId);
-    const employees = await employeeQb.getMany();
-    return employees.map((e) => Number(e.currentSalary || 0));
+    return { salaries: snapshots.map((s) => Number(s.salary)), monthClosed: true };
   }
 
   async getHeadcount(
@@ -79,8 +76,8 @@ export class DashboardService {
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
 
-    const hcCurrent = (await this.resolveMonthlySalaries(year, referenceMonth, scope, directorateId, costCenterId))
-      .length;
+    const monthlySalaries = await this.resolveMonthlySalaries(year, referenceMonth, scope, directorateId, costCenterId);
+    const hcCurrent = monthlySalaries.salaries.length;
 
     const approvedIncreaseQb = this.movementRepo
       .createQueryBuilder('m')
@@ -103,6 +100,7 @@ export class DashboardService {
       hcCurrent,
       hcApproved,
       hcOpen,
+      monthClosed: monthlySalaries.monthClosed,
     };
   }
 
@@ -122,13 +120,13 @@ export class DashboardService {
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
 
-    const salaries = await this.resolveMonthlySalaries(year, referenceMonth, scope, directorateId, costCenterId);
+    const monthlySalaries = await this.resolveMonthlySalaries(year, referenceMonth, scope, directorateId, costCenterId);
 
     const payrollBudgeted = budgetEntries.reduce(
       (sum, b) => sum + Number(monthValue(b as any, referenceMonth) ?? 0),
       0,
     );
-    const payrollCurrent = salaries.reduce((sum, salary) => sum + salary, 0);
+    const payrollCurrent = monthlySalaries.salaries.reduce((sum, salary) => sum + salary, 0);
 
     return {
       year,
@@ -136,6 +134,7 @@ export class DashboardService {
       payrollCurrent,
       payrollBudgeted,
       difference: payrollCurrent - payrollBudgeted,
+      monthClosed: monthlySalaries.monthClosed,
     };
   }
 
@@ -182,6 +181,7 @@ export class DashboardService {
       budgetConsumedPercent: Number(budgetConsumedPercent.toFixed(2)),
       projection12Months,
       directorateRanking,
+      monthClosed: payroll.monthClosed,
     };
   }
 

@@ -60,10 +60,13 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
 - `GET /employees/import/:batchId`
 - `GET /employees/comparison?year=&month=` → compara base x orçada, agregando por centro
   de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de referência
-  (`month` 1-12, padrão mês corrente). O lado "atual" usa o snapshot de fechamento daquele
-  mês quando existir (ver `POST /employees/import` acima); sem fechamento para esse mês,
-  cai para `employees.current_salary` ao vivo. O orçamento não é vinculado a colaborador,
-  então a comparação não casa por matrícula:
+  (`month` 1-12, padrão mês corrente). O lado "atual" usa **exclusivamente** o snapshot de
+  fechamento daquele mês exato (ver `POST /employees/import` acima) — nunca o salário atual
+  ao vivo. Sem fechamento para o mês pedido, `hcCurrent`/`budgetSavings`/`budgetOverrun`
+  vêm zerados e `monthClosed: false`; usar o salário atual (que reflete o último mês
+  fechado, não necessariamente o mês pedido) faria um mês sem fechamento "herdar" os
+  números de outro mês, como se as folhas tivessem sido somadas entre meses. O orçamento
+  não é vinculado a colaborador, então a comparação não casa por matrícula:
   ```json
   {
     "year": 2026, "month": 1,
@@ -71,7 +74,8 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
     "openPositions": 8, "headcountExcess": 3,
     "budgetSavings": 12000, "budgetOverrun": 4000,
     "movementsByType": { "SEM_MOVIMENTACAO": 73, "PROMOCAO": 2, "MERITO": 1, "SUBSTITUICAO": 1, "AUMENTO_DE_QUADRO": 4, "DESLIGAMENTO": 4 },
-    "items": [{ "type": "VAGA_ABERTA", "directorate": "...", "costCenter": "...", "budgetedCount": 2, "currentCount": 1, "budgetedCost": 8400, "currentCost": 4200 }]
+    "items": [{ "type": "VAGA_ABERTA", "directorate": "...", "costCenter": "...", "budgetedCount": 2, "currentCount": 1, "budgetedCost": 8400, "currentCost": 4200 }],
+    "monthClosed": true
   }
   ```
 
@@ -194,15 +198,18 @@ em `approvalSteps`. GESTOR nunca aprova, só solicita.
   onde `classification` ∈ `ABAIXO_DO_MERCADO | DENTRO_DO_MERCADO | ACIMA_DO_MERCADO`
 
 ## Dashboards executivos — módulo 8
-- `GET /dashboard/headcount?year=&month=&directorateId=` → `{ year, month, hcBudgeted, hcCurrent, hcApproved, hcOpen }`
+- `GET /dashboard/headcount?year=&month=&directorateId=` → `{ year, month, hcBudgeted, hcCurrent, hcApproved, hcOpen, monthClosed }`
   (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente)
-- `GET /dashboard/payroll?year=&month=&directorateId=` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
+- `GET /dashboard/payroll?year=&month=&directorateId=` → `{ year, month, payrollCurrent, payrollBudgeted, difference, monthClosed }`
   (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
-  `hcCurrent`/`payrollCurrent` usam o fechamento de folha daquele mês (`payroll_snapshots`)
-  quando existir, senão caem para `employees.current_salary` ao vivo — ver `POST
-  /employees/import` na seção Employees acima.
+  `hcCurrent`/`payrollCurrent` usam **exclusivamente** o fechamento de folha do mês exato
+  pedido (`payroll_snapshots`) — nunca o salário atual ao vivo. Sem fechamento para o mês
+  pedido, ambos vêm zerados e `monthClosed: false` (ver `POST /employees/import` na seção
+  Employees acima); usar o salário atual faria um mês sem fechamento "herdar" os números do
+  último mês fechado, como se as folhas tivessem sido somadas entre meses.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
-- `GET /dashboard/financial?year=&month=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}] }`
+- `GET /dashboard/financial?year=&month=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}], monthClosed }`
+  (`monthClosed` reflete o mesmo mês usado em `budgetConsumedPercent`, herdado de `GET /dashboard/payroll`)
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).

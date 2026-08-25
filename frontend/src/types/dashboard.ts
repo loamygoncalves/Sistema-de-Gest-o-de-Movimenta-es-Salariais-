@@ -5,6 +5,10 @@ export interface HeadcountDashboard {
   hcCurrent: number;
   hcApproved: number;
   hcOpen: number;
+  // false quando o mês pedido ainda não teve um fechamento de folha
+  // importado (ver POST /employees/import) — hcCurrent fica 0 nesse caso,
+  // nunca "herda" o salário/HC do último mês fechado.
+  monthClosed: boolean;
 }
 
 export interface PayrollDashboard {
@@ -13,6 +17,9 @@ export interface PayrollDashboard {
   payrollCurrent: number;
   payrollBudgeted: number;
   difference: number;
+  // false quando o mês pedido ainda não teve um fechamento de folha
+  // importado — payrollCurrent fica 0 nesse caso.
+  monthClosed: boolean;
 }
 
 export interface MovementsDashboard {
@@ -37,4 +44,5 @@ export interface FinancialDashboard {
   budgetConsumedPercent: number;
   projection12Months: ProjectionPoint[];
   directorateRanking: DirectorateRankingItem[];
+  monthClosed: boolean;
 }

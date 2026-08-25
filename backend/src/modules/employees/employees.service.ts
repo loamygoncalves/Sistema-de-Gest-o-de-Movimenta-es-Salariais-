@@ -224,11 +224,13 @@ export class EmployeesService {
   }
 
   /**
-   * Folha "daquele mês": se o mês já foi fechado (existe ao menos um
-   * snapshot em payroll_snapshots para year+month, dentro do escopo), usa os
-   * salários congelados de lá — não o salário atual re-lido depois. Sem
-   * fechamento para esse mês (mês corrente ainda em aberto, ou histórico
-   * anterior a este recurso), cai para employees.current_salary ao vivo.
+   * Folha "daquele mês": usa exclusivamente os salários congelados em
+   * payroll_snapshots para year+month (dentro do escopo) — nunca o salário
+   * atual ao vivo. Sem fechamento para esse mês, devolve `monthClosed: false`
+   * e lista vazia — mostrar o salário atual (que reflete o ÚLTIMO mês
+   * fechado, não necessariamente o mês pedido) faria um mês sem fechamento
+   * "herdar" os números de outro mês, como se as folhas tivessem sido
+   * somadas/duplicadas entre meses.
    */
   private async resolveMonthlySalaryRows(
     year: number,
@@ -236,7 +238,10 @@ export class EmployeesService {
     scope: AccessScope,
     directorateId?: string,
     costCenterId?: string,
-  ): Promise<{ directorateId: string; directorateName?: string; costCenterId?: string; salary: number }[]> {
+  ): Promise<{
+    rows: { directorateId: string; directorateName?: string; costCenterId?: string; salary: number }[];
+    monthClosed: boolean;
+  }> {
     const snapshotQb = this.payrollSnapshotRepo
       .createQueryBuilder('s')
       .leftJoinAndSelect('s.directorate', 'directorate')
@@ -244,27 +249,18 @@ export class EmployeesService {
       .andWhere('s.month = :month', { month });
     applyAccessScope(snapshotQb, 's', scope, directorateId, costCenterId);
     const snapshots = await snapshotQb.getMany();
-    if (snapshots.length > 0) {
-      return snapshots.map((s) => ({
+    if (snapshots.length === 0) {
+      return { rows: [], monthClosed: false };
+    }
+    return {
+      rows: snapshots.map((s) => ({
         directorateId: s.directorateId,
         directorateName: s.directorate?.name,
         costCenterId: s.costCenterId,
         salary: Number(s.salary),
-      }));
-    }
-
-    const employeeQb = this.employeeRepo
-      .createQueryBuilder('e')
-      .leftJoinAndSelect('e.directorate', 'directorate')
-      .where('e.status = :status', { status: EmployeeStatus.ATIVO });
-    applyAccessScope(employeeQb, 'e', scope, directorateId, costCenterId);
-    const employees = await employeeQb.getMany();
-    return employees.map((e) => ({
-      directorateId: e.directorateId,
-      directorateName: e.directorate?.name,
-      costCenterId: e.costCenterId,
-      salary: Number(e.currentSalary || 0),
-    }));
+      })),
+      monthClosed: true,
+    };
   }
 
   /**
@@ -289,7 +285,7 @@ export class EmployeesService {
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
 
-    const salaryRows = await this.resolveMonthlySalaryRows(year, referenceMonth, scope);
+    const { rows: salaryRows, monthClosed } = await this.resolveMonthlySalaryRows(year, referenceMonth, scope);
 
     type Bucket = {
       directorateId: string;
@@ -385,6 +381,7 @@ export class EmployeesService {
       budgetOverrun,
       movementsByType,
       items,
+      monthClosed,
     };
   }
 }
