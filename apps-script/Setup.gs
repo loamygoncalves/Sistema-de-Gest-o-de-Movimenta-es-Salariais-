@@ -369,3 +369,66 @@ function useExistingSpreadsheet(spreadsheetId) {
   PropertiesService.getScriptProperties().setProperty(SPREADSHEET_ID_PROPERTY, spreadsheetId);
   setupSpreadsheet();
 }
+
+/**
+ * Utilitário one-off — execute UMA VEZ manualmente (menu Executar >
+ * cleanupDuplicateEmployees, no editor do Apps Script) para corrigir o
+ * efeito colateral do bug de comparação de matrícula (ver
+ * EmployeesService.gs#importFromFile): reimportar o mesmo mês criava um
+ * colaborador duplicado (novo id, mesma matrícula) sempre que a planilha
+ * guardava a matrícula ora como texto, ora como número. Já corrigido no
+ * código; esta função limpa o que já ficou duplicado na base.
+ *
+ * Para cada matrícula com mais de um colaborador, mantém o registro mais
+ * recente (createdAt) — coerente com "a última importação vence" — remove
+ * os demais e qualquer snapshot de folha (FechamentoFolha) que apontava
+ * para o colaborador removido. Idempotente: rodar de novo sem duplicatas
+ * não faz nada. Loga um resumo em Logger.log ao final.
+ */
+function cleanupDuplicateEmployees() {
+  var employees = Tables.employees.all();
+  var groups = {};
+  employees.forEach(function (e) {
+    var key = String(e.registration).trim();
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
+
+  var removedEmployees = [];
+  Object.keys(groups).forEach(function (key) {
+    var group = groups[key];
+    if (group.length < 2) return;
+    group.sort(function (a, b) {
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+    // group[0] é o mais recente — mantém; remove os demais.
+    for (var i = 1; i < group.length; i++) {
+      removedEmployees.push(group[i]);
+    }
+  });
+
+  var removedSnapshots = 0;
+  removedEmployees.forEach(function (e) {
+    Tables.payrollSnapshots
+      .where(function (s) {
+        return s.employeeId === e.id;
+      })
+      .forEach(function (s) {
+        Tables.payrollSnapshots.remove(s.id);
+        removedSnapshots++;
+      });
+    Tables.employees.remove(e.id);
+  });
+
+  var summary =
+    'cleanupDuplicateEmployees: ' +
+    removedEmployees.length +
+    ' colaborador(es) duplicado(s) removido(s), ' +
+    removedSnapshots +
+    ' snapshot(s) de folha órfão(s) removido(s).';
+  Logger.log(summary);
+  removedEmployees.forEach(function (e) {
+    Logger.log('Removido: matrícula ' + e.registration + ' — ' + e.name + ' (id ' + e.id + ')');
+  });
+  return summary;
+}
