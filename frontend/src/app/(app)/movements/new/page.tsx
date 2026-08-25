@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
@@ -22,6 +22,7 @@ const TYPE_OPTIONS = Object.entries(MOVEMENT_TYPE_LABELS).map(([value, label]) =
 
 export default function NewMovementPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const { directorates } = useDirectorates();
   const { positions } = usePositions();
@@ -42,6 +43,30 @@ export default function NewMovementPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+
+  // Pré-preenchimento vindo do Simulador Rápido (ver /simulator) — a pessoa
+  // já simulou o impacto e quer abrir a solicitação real com os mesmos dados.
+  useEffect(() => {
+    const employeeId = searchParams.get("employeeId");
+    const prefType = searchParams.get("type");
+    if (prefType === "PROMOCAO" || prefType === "MERITO") setType(prefType);
+    const prefNewPositionId = searchParams.get("newPositionId");
+    if (prefNewPositionId) setNewPositionId(prefNewPositionId);
+    const prefNewSalary = searchParams.get("newSalary");
+    if (prefNewSalary) setNewSalary(prefNewSalary);
+    const prefPercentage = searchParams.get("percentage");
+    if (prefPercentage) setPercentage(prefPercentage);
+    const prefEffectiveDate = searchParams.get("effectiveDate");
+    if (prefEffectiveDate) setEffectiveDate(prefEffectiveDate);
+
+    if (employeeId) {
+      api
+        .get<Employee>(`/employees/${employeeId}`)
+        .then(setEmployee)
+        .catch(() => undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function validate(): boolean {
     const next: Record<string, string> = {};

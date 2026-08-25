@@ -22,6 +22,16 @@ export function EmployeePicker({ label = "Colaborador", required, error, value, 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Mantém o texto exibido em sincronia quando `value` é setado de fora (ex.:
+  // pré-preenchimento assíncrono vindo do Simulador Rápido) — sem isso, um
+  // `value` setado após a montagem nunca aparece no campo de busca. Só
+  // sincroniza quando `value` vira um colaborador de verdade — quando vira
+  // null (usuário digitando para limpar a seleção), quem já controla `query`
+  // é o próprio onChange do input, então não sobrescreve o que foi digitado.
+  useEffect(() => {
+    if (value) setQuery(value.name);
+  }, [value]);
+
   useEffect(() => {
     if (!open) return;
     const handle = setTimeout(() => {

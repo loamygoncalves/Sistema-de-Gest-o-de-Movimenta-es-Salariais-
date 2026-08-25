@@ -19,13 +19,14 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: "Orçamento & Quadro",
     items: [
-      { label: "Orçamento", href: "/budget", roles: ["ADMIN", "RH_REMUNERACAO", "FINANCEIRO", "DIRETOR"] },
+      { label: "Orçamento", href: "/budget", roles: ["ADMIN", "RH_REMUNERACAO", "FINANCEIRO", "DIRETOR", "GESTOR"] },
       { label: "Colaboradores", href: "/employees" },
     ],
   },
   {
     title: "Movimentações",
     items: [
+      { label: "Simulador Rápido", href: "/simulator" },
       { label: "Movimentações", href: "/movements" },
       { label: "Aprovações", href: "/approvals", roles: ["ADMIN", "DIRETOR", "FINANCEIRO", "RH_REMUNERACAO"] },
       { label: "Histórico", href: "/history" },

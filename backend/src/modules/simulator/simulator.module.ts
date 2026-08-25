@@ -6,11 +6,12 @@ import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { ChargeParametersService } from './charge-parameters.service';
 import { ChargeParametersController } from './charge-parameters.controller';
 import { SimulatorService } from './simulator.service';
+import { SimulatorController } from './simulator.controller';
 
 @Module({
   imports: [TypeOrmModule.forFeature([ChargeParameter, Employee, BudgetEntry])],
   providers: [ChargeParametersService, SimulatorService],
-  controllers: [ChargeParametersController],
+  controllers: [ChargeParametersController, SimulatorController],
   exports: [ChargeParametersService, SimulatorService],
 })
 export class SimulatorModule {}
