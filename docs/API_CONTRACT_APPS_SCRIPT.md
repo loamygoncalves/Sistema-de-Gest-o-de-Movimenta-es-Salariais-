@@ -80,6 +80,17 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
   botão Ativar/Desativar manda só `{ active }`) preserva o escopo já
   cadastrado. Redefinir senha é uma chamada separada, `api_adminSetUserPassword`.
 
+  Como o Web App roda como `USER_ACCESSING` (cada pessoa lê/grava a planilha
+  de dados com a própria permissão do Google Drive), `api_createUser` e
+  `api_updateUser` também tentam conceder automaticamente acesso de Editor
+  à planilha de dados para o e-mail cadastrado (`DriveApp...addEditor`) —
+  sem isso, a pessoa cai em "Você não tem permissão para acessar o documento
+  solicitado" mesmo estando certa na aba Usuarios. Isso só funciona se quem
+  está chamando (o ADMIN logado) também tiver permissão de compartilhar o
+  arquivo; se o Drive recusar, a resposta inclui `driveAccessGranted: false`
+  e `driveAccessError` — a UI avisa e a planilha precisa ser compartilhada
+  manualmente com essa pessoa.
+
 ## Colaboradores — Módulo 2
 - `api_listEmployees({ directorateId?, positionId?, status?, search? })`
 - `api_getEmployee(id)`

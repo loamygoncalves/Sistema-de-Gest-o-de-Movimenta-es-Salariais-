@@ -745,9 +745,11 @@
         var btn = this;
         btn.disabled = true;
         btn.classList.add('is-loading');
+        var savedUser = null;
         var savePromise = existing ? callApi('api_updateUser', existing.id, payload) : callApi('api_createUser', payload);
         savePromise
           .then(function (saved) {
+            savedUser = saved;
             if (!newPassword) return null;
             var targetId = existing ? existing.id : saved.id;
             return callApi('api_adminSetUserPassword', targetId, newPassword);
@@ -755,6 +757,14 @@
           .then(function () {
             Modal.close();
             toast(existing ? 'Usuário atualizado.' : 'Usuário criado.', 'success');
+            if (savedUser && savedUser.driveAccessGranted === false) {
+              toast(
+                'Não consegui liberar automaticamente o acesso à planilha para ' +
+                  savedUser.email +
+                  ' — compartilhe manualmente com permissão de Editor.',
+                'error'
+              );
+            }
             renderBody();
           })
           .catch(function (err) {

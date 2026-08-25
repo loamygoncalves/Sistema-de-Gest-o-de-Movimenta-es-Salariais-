@@ -11,6 +11,26 @@ function costCenterIdsToCsv_(ids) {
   return (ids || []).filter(function (id) { return id; }).join(',');
 }
 
+/**
+ * Estar na aba Usuarios não basta: o Web App roda como "USER_ACCESSING", ou
+ * seja, cada pessoa lê/grava a planilha de dados com a PRÓPRIA permissão do
+ * Google Drive — sem ser pelo menos Editor do arquivo, toda chamada de API
+ * falha com "Você não tem permissão para acessar o documento solicitado",
+ * mesmo com a linha certa na aba Usuarios. Concede Editor automaticamente
+ * ao cadastrar/editar alguém para eliminar essa etapa manual. Quem está
+ * chamando (o ADMIN) precisa, ele mesmo, ter permissão de compartilhar o
+ * arquivo — se o Drive recusar (ex.: compartilhamento restrito, e-mail
+ * inválido), não bloqueia o cadastro: devolve o problema para a tela avisar.
+ */
+function grantSpreadsheetAccess_(email) {
+  try {
+    DriveApp.getFileById(getSpreadsheetId_()).addEditor(email);
+    return { granted: true };
+  } catch (e) {
+    return { granted: false, error: String(e && e.message ? e.message : e) };
+  }
+}
+
 var UsersService = {
   list: function () {
     return Tables.users.all().sort(function (a, b) {
@@ -26,7 +46,7 @@ var UsersService = {
     if (input.role === UserRole.GESTOR && (!input.costCenterIds || input.costCenterIds.length === 0)) {
       throw new Error('Selecione ao menos um centro de custo para o Gestor.');
     }
-    return Tables.users.insert({
+    var created = Tables.users.insert({
       name: input.name,
       email: input.email,
       role: input.role,
@@ -37,6 +57,10 @@ var UsersService = {
       active: true,
       createdAt: nowIso_(),
     });
+    var access = grantSpreadsheetAccess_(input.email);
+    created.driveAccessGranted = access.granted;
+    if (!access.granted) created.driveAccessError = access.error;
+    return created;
   },
 
   /**
@@ -70,6 +94,12 @@ var UsersService = {
     Object.keys(patch).forEach(function (key) {
       if (patch[key] === undefined) delete patch[key];
     });
-    return Tables.users.update(id, patch);
+    var updated = Tables.users.update(id, patch);
+    // Reforça o acesso à planilha a cada edição — cobre usuários cadastrados
+    // antes desta correção que ainda não tinham sido compartilhados.
+    var access = grantSpreadsheetAccess_(updated.email);
+    updated.driveAccessGranted = access.granted;
+    if (!access.granted) updated.driveAccessError = access.error;
+    return updated;
   },
 };

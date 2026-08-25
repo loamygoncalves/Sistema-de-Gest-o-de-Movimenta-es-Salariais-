@@ -74,14 +74,21 @@ tem o seu). Depois do primeiro `clasp push`:
    qualquer pessoa na [seu domínio Workspace]" (já é o padrão em
    `appsscript.json`, mas a UI de implantação pede para confirmar).
 5. Abra a URL do Web App gerada — você já estará logado como ADMIN.
-6. Para adicionar outras pessoas: prefira a tela **Usuários** do próprio
-   sistema (Administração → Usuários), que já cuida do perfil e do escopo
-   corretamente. Editando a planilha diretamente: aba **Usuarios**, uma linha
-   por pessoa com `email`, `role`
-   (`ADMIN`/`RH_REMUNERACAO`/`DIRETOR`/`FINANCEIRO`/`GESTOR`),
-   `directorateId` (obrigatório para `DIRETOR` — pegue o `id` na aba
-   **Diretorias**) ou `costCenterIds` (obrigatório para `GESTOR` — lista de
-   ids da aba **CentrosCusto** separados por vírgula), `active` = `TRUE`.
+6. Para adicionar outras pessoas: use a tela **Usuários** do próprio sistema
+   (Administração → Usuários) — além de cuidar do perfil e do escopo
+   corretamente, ela também concede automaticamente acesso de Editor à
+   planilha de dados para o e-mail cadastrado (necessário porque o Web App
+   roda como `USER_ACCESSING`: cada pessoa lê/grava a planilha com a própria
+   permissão do Drive). Se essa concessão falhar (ex.: compartilhamento da
+   planilha restringe quem pode compartilhar, ou o ADMIN logado não tem
+   permissão de compartilhar), a tela avisa e é preciso compartilhar
+   manualmente (planilha → Compartilhar → adicionar o e-mail como Editor).
+   Editando a planilha diretamente (aba **Usuarios**: `email`, `role`
+   [`ADMIN`/`RH_REMUNERACAO`/`DIRETOR`/`FINANCEIRO`/`GESTOR`],
+   `directorateId` para `DIRETOR` — `id` na aba **Diretorias** — ou
+   `costCenterIds` para `GESTOR` — ids da aba **CentrosCusto** separados por
+   vírgula —, `active` = `TRUE`) essa concessão automática **não** acontece;
+   compartilhe a planilha manualmente nesse caso.
    `passwordSalt`/`passwordHash` ficam vazios até a pessoa cadastrar a
    própria senha no primeiro acesso (tela exibida automaticamente).
 
