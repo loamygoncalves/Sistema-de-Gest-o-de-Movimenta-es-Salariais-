@@ -208,7 +208,7 @@ export class ApprovalsService {
         type: movement.type,
         directorateId: movement.directorateId,
         positionId: movement.newPositionId ?? movement.currentPositionId,
-        costCenterId: movement.employee?.costCenterId,
+        costCenterId: movement.costCenterId ?? movement.employee?.costCenterId,
         previousSalary: movement.currentSalary,
         newSalary: movement.newSalary ?? movement.plannedSalary,
         effectiveDate: movement.effectiveDate,

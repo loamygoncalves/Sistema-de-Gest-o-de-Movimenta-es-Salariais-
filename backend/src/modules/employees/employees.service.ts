@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { EmployeeStatus, ImportType, PlannedSituation } from '../../common/enums';
+import { AccessScope } from '../../common/decorators/current-user.decorator';
+import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelBuffer, toDate, toNumber } from '../../common/utils/excel.util';
 import { monthValue } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
@@ -22,7 +24,7 @@ export class EmployeesService {
     private readonly importBatchService: ImportBatchService,
   ) {}
 
-  async findAll(query: EmployeeQueryDto, scopedDirectorateId?: string) {
+  async findAll(query: EmployeeQueryDto, scope: AccessScope) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const qb = this.employeeRepo
@@ -30,8 +32,7 @@ export class EmployeesService {
       .leftJoinAndSelect('employee.position', 'position')
       .leftJoinAndSelect('employee.directorate', 'directorate');
 
-    const directorateId = scopedDirectorateId ?? query.directorateId;
-    if (directorateId) qb.andWhere('employee.directorateId = :directorateId', { directorateId });
+    applyAccessScope(qb, 'employee', scope, query.directorateId, query.costCenterId);
     if (query.positionId) qb.andWhere('employee.positionId = :positionId', { positionId: query.positionId });
     if (query.status) qb.andWhere('employee.status = :status', { status: query.status });
     if (query.search) {
@@ -182,13 +183,13 @@ export class EmployeesService {
    * orçadas existem naquele mês para o bucket x quantos colaboradores ativos
    * ocupam esse mesmo bucket hoje.
    */
-  async compareWithBudget(year: number, month: number | undefined, scopedDirectorateId?: string) {
+  async compareWithBudget(year: number, month: number | undefined, scope: AccessScope) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
 
     const budgetQb = this.budgetRepo
       .createQueryBuilder('b')
       .where('b.year = :year', { year });
-    if (scopedDirectorateId) budgetQb.andWhere('b.directorateId = :d', { d: scopedDirectorateId });
+    applyAccessScope(budgetQb, 'b', scope);
     const allBudgetEntries = await budgetQb.getMany();
     const budgetEntries = allBudgetEntries.filter(
       (entry) => monthValue(entry as any, referenceMonth) !== null,
@@ -199,7 +200,7 @@ export class EmployeesService {
       .leftJoinAndSelect('e.position', 'position')
       .leftJoinAndSelect('e.directorate', 'directorate')
       .where('e.status = :status', { status: EmployeeStatus.ATIVO });
-    if (scopedDirectorateId) employeeQb.andWhere('e.directorateId = :d', { d: scopedDirectorateId });
+    applyAccessScope(employeeQb, 'e', scope);
     const employees = await employeeQb.getMany();
 
     type Bucket = {

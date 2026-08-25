@@ -15,16 +15,11 @@ export const ROLE_LABELS: Record<Role, string> = {
   GESTOR: "Gestor",
 };
 
-export type MovementType =
-  | "PROMOCAO"
-  | "MERITO"
-  | "TRANSFERENCIA"
-  | "AUMENTO_QUADRO";
+export type MovementType = "PROMOCAO" | "MERITO" | "AUMENTO_QUADRO";
 
 export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   PROMOCAO: "Promoção",
   MERITO: "Mérito",
-  TRANSFERENCIA: "Transferência",
   AUMENTO_QUADRO: "Aumento de Quadro",
 };
 

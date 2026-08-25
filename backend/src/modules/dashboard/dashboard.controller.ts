@@ -4,7 +4,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import {
   AuthenticatedUser,
   CurrentUser,
-  isScopedToOwnDirectorate,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { DashboardService } from './dashboard.service';
 import { DashboardQueryDto } from './dto/dashboard.dto';
@@ -14,16 +14,14 @@ import { DashboardQueryDto } from './dto/dashboard.dto';
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
-  private resolveDirectorateId(query: DashboardQueryDto, user: AuthenticatedUser) {
-    return isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : query.directorateId;
-  }
-
   @Get('headcount')
   getHeadcount(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.dashboardService.getHeadcount(
       query.year,
       query.month,
-      this.resolveDirectorateId(query, user),
+      resolveAccessScope(user),
+      query.directorateId,
+      query.costCenterId,
     );
   }
 
@@ -32,13 +30,20 @@ export class DashboardController {
     return this.dashboardService.getPayroll(
       query.year,
       query.month,
-      this.resolveDirectorateId(query, user),
+      resolveAccessScope(user),
+      query.directorateId,
+      query.costCenterId,
     );
   }
 
   @Get('movements')
   getMovements(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getMovements(query.year, this.resolveDirectorateId(query, user));
+    return this.dashboardService.getMovements(
+      query.year,
+      resolveAccessScope(user),
+      query.directorateId,
+      query.costCenterId,
+    );
   }
 
   @Get('financial')
@@ -46,7 +51,9 @@ export class DashboardController {
     return this.dashboardService.getFinancial(
       query.year,
       query.month,
-      this.resolveDirectorateId(query, user),
+      resolveAccessScope(user),
+      query.directorateId,
+      query.costCenterId,
     );
   }
 }

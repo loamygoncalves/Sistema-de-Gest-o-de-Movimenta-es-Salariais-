@@ -62,7 +62,7 @@ export default function MovementsPage() {
   const columns: Column<MovementRequest>[] = [
     { key: "type", header: "Tipo", render: (r) => MOVEMENT_TYPE_LABELS[r.type] ?? r.type },
     { key: "employee", header: "Colaborador", render: (r) => r.employeeName ?? "—" },
-    { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? r.destinationDirectorateName ?? "—" },
+    { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
     {
       key: "value",
       header: "Novo Salário / Impacto",

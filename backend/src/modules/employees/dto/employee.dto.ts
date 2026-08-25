@@ -116,6 +116,10 @@ export class EmployeeQueryDto extends PaginationQueryDto {
 
   @IsOptional()
   @IsUUID()
+  costCenterId?: string;
+
+  @IsOptional()
+  @IsUUID()
   positionId?: string;
 
   @IsOptional()

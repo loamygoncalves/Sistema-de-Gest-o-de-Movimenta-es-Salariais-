@@ -62,7 +62,6 @@ export enum MovementType {
   PROMOCAO = 'PROMOCAO',
   MERITO = 'MERITO',
   AUMENTO_QUADRO = 'AUMENTO_QUADRO',
-  TRANSFERENCIA = 'TRANSFERENCIA',
 }
 
 export enum MovementStatus {

@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { MovementType } from '../../common/enums';
+import { AccessScope } from '../../common/decorators/current-user.decorator';
+import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { buildExcelBuffer } from '../../common/utils/excel.util';
 import { buildSimpleTablePdf } from '../../common/utils/pdf.util';
 import { MovementHistory } from './entities/movement-history.entity';
@@ -15,27 +17,25 @@ export class HistoryService {
     private readonly historyRepo: Repository<MovementHistory>,
   ) {}
 
-  private buildFilteredQuery(query: HistoryQueryDto, scopedDirectorateId?: string) {
+  private buildFilteredQuery(query: HistoryQueryDto, scope: AccessScope) {
     const qb = this.historyRepo
       .createQueryBuilder('h')
       .leftJoinAndSelect('h.employee', 'employee')
       .leftJoinAndSelect('h.directorate', 'directorate')
       .leftJoinAndSelect('h.position', 'position')
       .leftJoinAndSelect('h.costCenter', 'costCenter');
-    const directorateId = scopedDirectorateId ?? query.directorateId;
-    if (directorateId) qb.andWhere('h.directorateId = :directorateId', { directorateId });
+    applyAccessScope(qb, 'h', scope, query.directorateId, query.costCenterId);
     if (query.positionId) qb.andWhere('h.positionId = :positionId', { positionId: query.positionId });
     if (query.type) qb.andWhere('h.type = :type', { type: query.type });
-    if (query.costCenterId) qb.andWhere('h.costCenterId = :costCenterId', { costCenterId: query.costCenterId });
     if (query.startDate) qb.andWhere('h.effectiveDate >= :startDate', { startDate: query.startDate });
     if (query.endDate) qb.andWhere('h.effectiveDate <= :endDate', { endDate: query.endDate });
     return qb;
   }
 
-  async findAll(query: HistoryQueryDto, scopedDirectorateId?: string) {
+  async findAll(query: HistoryQueryDto, scope: AccessScope) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const qb = this.buildFilteredQuery(query, scopedDirectorateId)
+    const qb = this.buildFilteredQuery(query, scope)
       .orderBy('h.effectiveDate', 'DESC')
       .skip((page - 1) * limit)
       .take(limit);
@@ -44,8 +44,8 @@ export class HistoryService {
     return paginate(items, total, page, limit);
   }
 
-  async getIndicators(query: HistoryQueryDto, scopedDirectorateId?: string) {
-    const records = await this.buildFilteredQuery(query, scopedDirectorateId).getMany();
+  async getIndicators(query: HistoryQueryDto, scope: AccessScope) {
+    const records = await this.buildFilteredQuery(query, scope).getMany();
 
     const promotionsCount = records.filter((r) => r.type === MovementType.PROMOCAO).length;
     const meritsCount = records.filter((r) => r.type === MovementType.MERITO).length;
@@ -73,7 +73,6 @@ export class HistoryService {
     return {
       promotionsCount,
       meritsCount,
-      transfersCount: records.filter((r) => r.type === MovementType.TRANSFERENCIA).length,
       headcountIncreaseCount: records.filter((r) => r.type === MovementType.AUMENTO_QUADRO).length,
       salaryGrowthPercent: Number(salaryGrowthPercent.toFixed(2)),
       accumulatedImpact,
@@ -81,8 +80,8 @@ export class HistoryService {
     };
   }
 
-  async exportXlsx(query: HistoryQueryDto, scopedDirectorateId?: string): Promise<Buffer> {
-    const records = await this.buildFilteredQuery(query, scopedDirectorateId)
+  async exportXlsx(query: HistoryQueryDto, scope: AccessScope): Promise<Buffer> {
+    const records = await this.buildFilteredQuery(query, scope)
       .orderBy('h.effectiveDate', 'DESC')
       .getMany();
 
@@ -115,8 +114,8 @@ export class HistoryService {
     );
   }
 
-  async exportPdf(query: HistoryQueryDto, scopedDirectorateId?: string): Promise<Buffer> {
-    const records = await this.buildFilteredQuery(query, scopedDirectorateId)
+  async exportPdf(query: HistoryQueryDto, scope: AccessScope): Promise<Buffer> {
+    const records = await this.buildFilteredQuery(query, scope)
       .orderBy('h.effectiveDate', 'DESC')
       .getMany();
 

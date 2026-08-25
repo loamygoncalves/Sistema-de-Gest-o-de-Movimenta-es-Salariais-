@@ -14,7 +14,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import {
   AuthenticatedUser,
   CurrentUser,
-  isScopedToOwnDirectorate,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { MovementsService } from './movements.service';
 import { CreateMovementDto, MovementQueryDto, UpdateMovementDto } from './dto/movement.dto';
@@ -26,10 +26,7 @@ export class MovementsController {
 
   @Get()
   findAll(@Query() query: MovementQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.movementsService.findAll(
-      query,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
-    );
+    return this.movementsService.findAll(query, resolveAccessScope(user));
   }
 
   @Get(':id')

@@ -14,7 +14,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import {
   AuthenticatedUser,
   CurrentUser,
-  isScopedToOwnDirectorate,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums';
 import { BudgetService } from './budget.service';
@@ -27,10 +27,7 @@ export class BudgetController {
 
   @Get('entries')
   findEntries(@Query() query: BudgetEntryQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.budgetService.findEntries(
-      query,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
-    );
+    return this.budgetService.findEntries(query, resolveAccessScope(user));
   }
 
   @Get('dashboard')
@@ -38,7 +35,7 @@ export class BudgetController {
     return this.budgetService.getDashboard(
       query.year,
       query.month,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : query.directorateId,
+      resolveAccessScope(user),
       query.costCenterId,
     );
   }

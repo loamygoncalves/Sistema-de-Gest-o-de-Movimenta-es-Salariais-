@@ -11,6 +11,7 @@ import { MovementStatus, MovementType } from '../../../common/enums';
 import { Employee } from '../../employees/entities/employee.entity';
 import { Directorate } from '../../org/entities/directorate.entity';
 import { Position } from '../../org/entities/position.entity';
+import { CostCenter } from '../../org/entities/cost-center.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('movement_requests')
@@ -37,6 +38,13 @@ export class MovementRequest {
 
   @Column({ name: 'directorate_id' })
   directorateId: string;
+
+  @ManyToOne(() => CostCenter, { nullable: true, eager: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'cost_center_id' })
+  costCenter?: CostCenter;
+
+  @Column({ name: 'cost_center_id', nullable: true })
+  costCenterId?: string;
 
   @ManyToOne(() => Position, { nullable: true, eager: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'current_position_id' })
@@ -66,20 +74,6 @@ export class MovementRequest {
 
   @Column('numeric', { precision: 14, scale: 2, nullable: true, name: 'planned_salary' })
   plannedSalary?: number;
-
-  @ManyToOne(() => Directorate, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'origin_directorate_id' })
-  originDirectorate?: Directorate;
-
-  @Column({ name: 'origin_directorate_id', nullable: true })
-  originDirectorateId?: string;
-
-  @ManyToOne(() => Directorate, { nullable: true, onDelete: 'RESTRICT' })
-  @JoinColumn({ name: 'destination_directorate_id' })
-  destinationDirectorate?: Directorate;
-
-  @Column({ name: 'destination_directorate_id', nullable: true })
-  destinationDirectorateId?: string;
 
   @Column({ type: 'date', name: 'effective_date' })
   effectiveDate: string;

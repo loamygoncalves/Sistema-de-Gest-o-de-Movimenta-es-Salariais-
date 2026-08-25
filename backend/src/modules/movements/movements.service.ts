@@ -8,7 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { MovementStatus, MovementType } from '../../common/enums';
-import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { AccessScope, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { Employee } from '../employees/entities/employee.entity';
 import { ApprovalsService } from '../approvals/approvals.service';
 import { SimulatorService } from '../simulator/simulator.service';
@@ -29,21 +30,19 @@ export class MovementsService {
     private readonly approvalsService: ApprovalsService,
   ) {}
 
-  async findAll(query: MovementQueryDto, scopedDirectorateId?: string) {
+  async findAll(query: MovementQueryDto, scope: AccessScope) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const qb = this.movementRepo
       .createQueryBuilder('m')
       .leftJoinAndSelect('m.employee', 'employee')
       .leftJoinAndSelect('m.directorate', 'directorate')
+      .leftJoinAndSelect('m.costCenter', 'costCenter')
       .leftJoinAndSelect('m.currentPosition', 'currentPosition')
       .leftJoinAndSelect('m.newPosition', 'newPosition')
-      .leftJoinAndSelect('m.originDirectorate', 'originDirectorate')
-      .leftJoinAndSelect('m.destinationDirectorate', 'destinationDirectorate')
       .leftJoinAndSelect('m.requestedBy', 'requestedBy');
 
-    const directorateId = scopedDirectorateId ?? query.directorateId;
-    if (directorateId) qb.andWhere('m.directorateId = :directorateId', { directorateId });
+    applyAccessScope(qb, 'm', scope, query.directorateId, query.costCenterId);
     if (query.status) qb.andWhere('m.status = :status', { status: query.status });
     if (query.type) qb.andWhere('m.type = :type', { type: query.type });
 
@@ -99,6 +98,7 @@ export class MovementsService {
         Object.assign(base, {
           employeeId: employee.id,
           directorateId: employee.directorateId,
+          costCenterId: employee.costCenterId,
           currentPositionId: employee.positionId,
           newPositionId: dto.newPositionId,
           currentSalary: employee.currentSalary,
@@ -114,6 +114,7 @@ export class MovementsService {
         Object.assign(base, {
           employeeId: employee.id,
           directorateId: employee.directorateId,
+          costCenterId: employee.costCenterId,
           currentPositionId: employee.positionId,
           currentSalary: employee.currentSalary,
           newSalary: Number((employee.currentSalary * (1 + dto.percentage / 100)).toFixed(2)),
@@ -121,25 +122,9 @@ export class MovementsService {
         });
         break;
       }
-      case MovementType.TRANSFERENCIA: {
-        if (!employee) throw new BadRequestException('Colaborador é obrigatório para transferência');
-        if (!dto.destinationDirectorateId) {
-          throw new BadRequestException('Diretoria de destino é obrigatória');
-        }
-        Object.assign(base, {
-          employeeId: employee.id,
-          directorateId: dto.destinationDirectorateId,
-          originDirectorateId: dto.originDirectorateId ?? employee.directorateId,
-          destinationDirectorateId: dto.destinationDirectorateId,
-          currentPositionId: employee.positionId,
-          newPositionId: dto.newPositionId ?? employee.positionId,
-          currentSalary: employee.currentSalary,
-          newSalary: dto.newSalary ?? employee.currentSalary,
-        });
-        break;
-      }
       case MovementType.AUMENTO_QUADRO: {
         if (!dto.directorateId) throw new BadRequestException('Diretoria é obrigatória');
+        if (!dto.costCenterId) throw new BadRequestException('Centro de custo é obrigatório');
         if (!dto.positionId) throw new BadRequestException('Cargo é obrigatório');
         if (!dto.quantity || dto.quantity < 1) {
           throw new BadRequestException('Quantidade de vagas deve ser maior que zero');
@@ -149,6 +134,7 @@ export class MovementsService {
         }
         Object.assign(base, {
           directorateId: dto.directorateId,
+          costCenterId: dto.costCenterId,
           newPositionId: dto.positionId,
           quantity: dto.quantity,
           plannedSalary: dto.plannedSalary,
@@ -194,7 +180,7 @@ export class MovementsService {
 
   async simulate(id: string): Promise<MovementSimulation> {
     const movement = await this.loadMovementOrFail(id);
-    const result = await this.simulatorService.simulate(movement);
+    const result = await this.simulatorService.simulateMovement(movement);
 
     const simulation = this.simulationRepo.create({
       movementRequestId: id,

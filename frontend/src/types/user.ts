@@ -6,6 +6,8 @@ export interface AuthUser {
   email: string;
   role: Role;
   directorateId: string | null;
+  /** Só populado para GESTOR — os centros de custo que ele gerencia. */
+  costCenterIds: string[] | null;
 }
 
 export interface LoginResponse {
@@ -23,6 +25,7 @@ export interface User {
   role: Role;
   directorateId: string | null;
   directorateName?: string | null;
+  costCenters?: { id: string; code: string; name: string }[];
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -34,6 +37,7 @@ export interface CreateUserPayload {
   password: string;
   role: Role;
   directorateId?: string | null;
+  costCenterIds?: string[];
 }
 
 export interface UpdateUserPayload {
@@ -41,5 +45,6 @@ export interface UpdateUserPayload {
   email?: string;
   role?: Role;
   directorateId?: string | null;
+  costCenterIds?: string[];
   active?: boolean;
 }

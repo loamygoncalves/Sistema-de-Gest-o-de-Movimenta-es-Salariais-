@@ -125,8 +125,7 @@ export default function MovementDetailPage() {
           <Field label="Quantidade" value={movement.quantity?.toString()} />
           <Field label="Salário planejado" value={movement.plannedSalary != null ? formatCurrency(movement.plannedSalary) : undefined} />
           <Field label="Diretoria" value={movement.directorateName} />
-          <Field label="Diretoria de origem" value={movement.originDirectorateName} />
-          <Field label="Diretoria de destino" value={movement.destinationDirectorateName} />
+          <Field label="Centro de custo" value={movement.costCenterName} />
           <Field label="Data efetiva" value={formatDate(movement.effectiveDate)} />
           <Field label="Solicitado por" value={movement.requestedByName} />
           <Field label="Criado em" value={formatDateTime(movement.createdAt)} />

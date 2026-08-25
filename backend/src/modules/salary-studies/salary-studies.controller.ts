@@ -16,7 +16,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import {
   AuthenticatedUser,
   CurrentUser,
-  isScopedToOwnDirectorate,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums';
 import { SalaryStudiesService } from './salary-studies.service';
@@ -34,10 +34,7 @@ export class SalaryStudiesController {
 
   @Get('positioning')
   getPositioning(@Query() query: PositioningQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.salaryStudiesService.getPositioning(
-      query,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
-    );
+    return this.salaryStudiesService.getPositioning(query, resolveAccessScope(user));
   }
 
   @Get(':id/entries')

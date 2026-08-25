@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Input, Select } from "@/components/ui/Input";
 import { Table, Column } from "@/components/ui/Table";
 import { useCrudResource } from "@/hooks/useCrudResource";
-import { useDirectorates } from "@/hooks/useOrgOptions";
+import { useCostCenters, useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
@@ -25,6 +25,40 @@ export default function UsersAdminPage() {
   );
 }
 
+function CostCenterCheckboxList({
+  selectedIds,
+  onChange,
+}: {
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const { costCenters } = useCostCenters();
+
+  function toggle(id: string) {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((i) => i !== id) : [...selectedIds, id]);
+  }
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-brand-text">
+        Centros de custo <span className="text-red-500">*</span>
+      </label>
+      <div className="max-h-48 overflow-y-auto rounded-lg border border-brand-border p-2">
+        {costCenters.length === 0 && <p className="p-2 text-sm text-slate-400">Nenhum centro de custo cadastrado.</p>}
+        {costCenters.map((c) => (
+          <label key={c.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-brand-bg">
+            <input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggle(c.id)} />
+            <span>{c.name}</span>
+          </label>
+        ))}
+      </div>
+      <p className="mt-1 text-xs text-slate-400">
+        O gestor só verá funcionários, orçamento e movimentações dos centros de custo selecionados.
+      </p>
+    </div>
+  );
+}
+
 function UsersAdminContent() {
   const { items: users, loading, create, update } = useCrudResource<User>("/users");
   const { directorates } = useDirectorates();
@@ -35,11 +69,16 @@ function UsersAdminContent() {
   const [creating, setCreating] = useState(false);
 
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [editCostCenterIds, setEditCostCenterIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   async function handleCreate() {
     if (!createForm.name || !createForm.email || !createForm.password || !createForm.role) {
       showToast("Preencha nome, e-mail, senha e perfil.", "error");
+      return;
+    }
+    if (createForm.role === "GESTOR" && !createForm.costCenterIds?.length) {
+      showToast("Selecione ao menos um centro de custo para o gestor.", "error");
       return;
     }
     setCreating(true);
@@ -57,13 +96,18 @@ function UsersAdminContent() {
 
   async function handleSaveEdit() {
     if (!editUser) return;
+    if (editUser.role === "GESTOR" && editCostCenterIds.length === 0) {
+      showToast("Selecione ao menos um centro de custo para o gestor.", "error");
+      return;
+    }
     setSaving(true);
     try {
       await update(editUser.id, {
         role: editUser.role,
         directorateId: editUser.directorateId,
         active: editUser.active,
-      });
+        ...(editUser.role === "GESTOR" ? { costCenterIds: editCostCenterIds } : {}),
+      } as Partial<User>);
       showToast("Usuário atualizado com sucesso.", "success");
       setEditUser(null);
     } catch (err) {
@@ -86,7 +130,14 @@ function UsersAdminContent() {
     { key: "name", header: "Nome", render: (r) => r.name },
     { key: "email", header: "E-mail", render: (r) => r.email },
     { key: "role", header: "Perfil", render: (r) => <Badge color="teal">{ROLE_LABELS[r.role]}</Badge> },
-    { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
+    {
+      key: "scope",
+      header: "Escopo",
+      render: (r) =>
+        r.role === "GESTOR"
+          ? (r.costCenters ?? []).map((c) => c.name).join(", ") || "—"
+          : r.directorateName ?? "—",
+    },
     {
       key: "status",
       header: "Status",
@@ -98,7 +149,14 @@ function UsersAdminContent() {
       align: "right",
       render: (r) => (
         <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => setEditUser(r)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setEditUser(r);
+              setEditCostCenterIds((r.costCenters ?? []).map((c) => c.id));
+            }}
+          >
             Editar
           </Button>
           <Button size="sm" variant={r.active ? "danger" : "secondary"} onClick={() => handleToggleActive(r)}>
@@ -145,7 +203,7 @@ function UsersAdminContent() {
             value={createForm.role ?? "GESTOR"}
             onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value as Role }))}
           />
-          {(createForm.role === "DIRETOR" || createForm.role === "GESTOR") && (
+          {createForm.role === "DIRETOR" && (
             <Select
               label="Diretoria"
               required
@@ -153,6 +211,12 @@ function UsersAdminContent() {
               options={directorates.map((d) => ({ value: d.id, label: d.name }))}
               value={createForm.directorateId ?? ""}
               onChange={(e) => setCreateForm((f) => ({ ...f, directorateId: e.target.value }))}
+            />
+          )}
+          {createForm.role === "GESTOR" && (
+            <CostCenterCheckboxList
+              selectedIds={createForm.costCenterIds ?? []}
+              onChange={(ids) => setCreateForm((f) => ({ ...f, costCenterIds: ids }))}
             />
           )}
         </div>
@@ -179,7 +243,7 @@ function UsersAdminContent() {
               value={editUser.role}
               onChange={(e) => setEditUser((u) => (u ? { ...u, role: e.target.value as Role } : u))}
             />
-            {(editUser.role === "DIRETOR" || editUser.role === "GESTOR") && (
+            {editUser.role === "DIRETOR" && (
               <Select
                 label="Diretoria"
                 placeholder="Selecione"
@@ -187,6 +251,9 @@ function UsersAdminContent() {
                 value={editUser.directorateId ?? ""}
                 onChange={(e) => setEditUser((u) => (u ? { ...u, directorateId: e.target.value } : u))}
               />
+            )}
+            {editUser.role === "GESTOR" && (
+              <CostCenterCheckboxList selectedIds={editCostCenterIds} onChange={setEditCostCenterIds} />
             )}
           </div>
         )}

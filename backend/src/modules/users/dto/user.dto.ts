@@ -1,4 +1,5 @@
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsEnum,
@@ -23,9 +24,16 @@ export class CreateUserDto {
   @IsEnum(UserRole)
   role: UserRole;
 
+  /** Usado quando role = DIRETOR (escopo: diretoria inteira). */
   @IsOptional()
   @IsUUID()
   directorateId?: string;
+
+  /** Usado quando role = GESTOR (escopo: só os centros de custo listados). */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  costCenterIds?: string[];
 }
 
 export class UpdateUserDto {
@@ -40,6 +48,11 @@ export class UpdateUserDto {
   @IsOptional()
   @IsUUID()
   directorateId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  costCenterIds?: string[];
 
   @IsOptional()
   @IsBoolean()

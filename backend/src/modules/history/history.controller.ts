@@ -5,7 +5,7 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import {
   AuthenticatedUser,
   CurrentUser,
-  isScopedToOwnDirectorate,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { HistoryService } from './history.service';
 import { HistoryExportQueryDto, HistoryQueryDto } from './dto/history.dto';
@@ -17,18 +17,12 @@ export class HistoryController {
 
   @Get()
   findAll(@Query() query: HistoryQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.historyService.findAll(
-      query,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
-    );
+    return this.historyService.findAll(query, resolveAccessScope(user));
   }
 
   @Get('indicators')
   getIndicators(@Query() query: HistoryQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.historyService.getIndicators(
-      query,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
-    );
+    return this.historyService.getIndicators(query, resolveAccessScope(user));
   }
 
   @Get('export')
@@ -37,12 +31,10 @@ export class HistoryController {
     @CurrentUser() user: AuthenticatedUser,
     @Res() res: Response,
   ) {
-    const scopedDirectorateId = isScopedToOwnDirectorate(user)
-      ? user.directorateId ?? undefined
-      : undefined;
+    const scope = resolveAccessScope(user);
 
     if (query.format === 'pdf') {
-      const buffer = await this.historyService.exportPdf(query, scopedDirectorateId);
+      const buffer = await this.historyService.exportPdf(query, scope);
       res.set({
         'Content-Type': 'application/pdf',
         'Content-Disposition': 'attachment; filename="historico-movimentacoes.pdf"',
@@ -51,7 +43,7 @@ export class HistoryController {
       return;
     }
 
-    const buffer = await this.historyService.exportXlsx(query, scopedDirectorateId);
+    const buffer = await this.historyService.exportXlsx(query, scope);
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': 'attachment; filename="historico-movimentacoes.xlsx"',

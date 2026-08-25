@@ -3,6 +3,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { ImportType, MONTH_KEYS, MonthKey, PlannedSituation } from '../../common/enums';
+import { AccessScope } from '../../common/decorators/current-user.decorator';
+import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelSheetRaw, toNumber } from '../../common/utils/excel.util';
 import { monthKeyFromNumber, monthValue, sumAllMonths } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
@@ -56,16 +58,14 @@ export class BudgetService {
     private readonly importBatchService: ImportBatchService,
   ) {}
 
-  async findEntries(query: BudgetEntryQueryDto, scopedDirectorateId?: string) {
+  async findEntries(query: BudgetEntryQueryDto, scope: AccessScope) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const qb = this.budgetRepo
       .createQueryBuilder('b')
       .where('b.year = :year', { year: query.year });
 
-    const directorateId = scopedDirectorateId ?? query.directorateId;
-    if (directorateId) qb.andWhere('b.directorateId = :directorateId', { directorateId });
-    if (query.costCenterId) qb.andWhere('b.costCenterId = :costCenterId', { costCenterId: query.costCenterId });
+    applyAccessScope(qb, 'b', scope, query.directorateId, query.costCenterId);
     if (query.positionId) qb.andWhere('b.positionId = :positionId', { positionId: query.positionId });
 
     qb.orderBy('b.createdAt', 'ASC')
@@ -76,10 +76,9 @@ export class BudgetService {
     return paginate(items, total, page, limit);
   }
 
-  private async loadFiltered(year: number, scopedDirectorateId?: string, costCenterId?: string) {
+  private async loadFiltered(year: number, scope: AccessScope, costCenterId?: string) {
     const qb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
-    if (scopedDirectorateId) qb.andWhere('b.directorateId = :d', { d: scopedDirectorateId });
-    if (costCenterId) qb.andWhere('b.costCenterId = :cc', { cc: costCenterId });
+    applyAccessScope(qb, 'b', scope, undefined, costCenterId);
     return qb.getMany();
   }
 
@@ -91,11 +90,11 @@ export class BudgetService {
   async getDashboard(
     year: number,
     month: number | undefined,
-    scopedDirectorateId?: string,
+    scope: AccessScope,
     costCenterId?: string,
   ) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
-    const entries = await this.loadFiltered(year, scopedDirectorateId, costCenterId);
+    const entries = await this.loadFiltered(year, scope, costCenterId);
 
     const activeEntries = entries.filter((entry) => monthValue(entry as any, referenceMonth) !== null);
     const hcBudgeted = activeEntries.length;

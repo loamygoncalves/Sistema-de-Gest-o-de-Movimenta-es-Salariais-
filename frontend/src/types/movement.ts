@@ -24,17 +24,7 @@ export interface AumentoQuadroPayload {
   quantity: number;
   plannedSalary: number;
   directorateId: string;
-  effectiveDate: string;
-  justification: string;
-}
-
-export interface TransferenciaPayload {
-  type: "TRANSFERENCIA";
-  employeeId: string;
-  originDirectorateId: string;
-  destinationDirectorateId: string;
-  newPositionId?: string;
-  newSalary?: number;
+  costCenterId: string;
   effectiveDate: string;
   justification: string;
 }
@@ -42,11 +32,10 @@ export interface TransferenciaPayload {
 export type CreateMovementPayload =
   | PromocaoPayload
   | MeritoPayload
-  | AumentoQuadroPayload
-  | TransferenciaPayload;
+  | AumentoQuadroPayload;
 
 export type UpdateMovementPayload = Partial<
-  PromocaoPayload & MeritoPayload & AumentoQuadroPayload & TransferenciaPayload
+  PromocaoPayload & MeritoPayload & AumentoQuadroPayload
 >;
 
 // Fields common to every movement type, as returned by GET /movements and
@@ -70,10 +59,6 @@ export interface MovementRequest {
   plannedSalary?: number;
   directorateId?: string;
   directorateName?: string;
-  originDirectorateId?: string;
-  originDirectorateName?: string;
-  destinationDirectorateId?: string;
-  destinationDirectorateName?: string;
   costCenterId?: string;
   costCenterName?: string;
   effectiveDate: string;

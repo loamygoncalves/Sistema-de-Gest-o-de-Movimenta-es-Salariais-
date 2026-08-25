@@ -23,12 +23,15 @@ export class AuthService {
       throw new UnauthorizedException('E-mail ou senha inválidos');
     }
 
+    const costCenterIds = user.costCenters?.map((c) => c.id) ?? null;
+
     const payload: JwtPayload = {
       sub: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
       directorateId: user.directorateId ?? null,
+      costCenterIds,
     };
 
     return {
@@ -39,6 +42,7 @@ export class AuthService {
         email: user.email,
         role: user.role,
         directorateId: user.directorateId ?? null,
+        costCenterIds,
       },
     };
   }

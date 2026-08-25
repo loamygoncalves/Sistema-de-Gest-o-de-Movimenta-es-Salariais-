@@ -17,4 +17,8 @@ export class DashboardQueryDto {
   @IsOptional()
   @IsUUID()
   directorateId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  costCenterId?: string;
 }

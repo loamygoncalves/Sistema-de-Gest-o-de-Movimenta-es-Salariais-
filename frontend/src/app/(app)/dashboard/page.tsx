@@ -121,11 +121,10 @@ export default function DashboardPage() {
 
           <section>
             <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Movimentações</h2>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <KpiCard label="Promoções" value={formatNumber(movements?.promotions)} />
               <KpiCard label="Méritos" value={formatNumber(movements?.merits)} />
               <KpiCard label="Aumento de Quadro" value={formatNumber(movements?.headcountIncrease)} />
-              <KpiCard label="Transferências" value={formatNumber(movements?.transfers)} />
             </div>
           </section>
 

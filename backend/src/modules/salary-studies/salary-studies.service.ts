@@ -2,6 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ImportType, MarketPosition } from '../../common/enums';
+import { AccessScope } from '../../common/decorators/current-user.decorator';
+import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelBuffer, toNumber } from '../../common/utils/excel.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
@@ -107,14 +109,13 @@ export class SalaryStudiesService {
    * abaixo do mercado; acima do P75 = acima do mercado; caso contrário,
    * dentro do mercado.
    */
-  async getPositioning(query: PositioningQueryDto, scopedDirectorateId?: string) {
+  async getPositioning(query: PositioningQueryDto, scope: AccessScope) {
     const employeeQb = this.employeeRepo
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.position', 'position')
       .leftJoinAndSelect('e.directorate', 'directorate');
 
-    const directorateId = scopedDirectorateId ?? query.directorateId;
-    if (directorateId) employeeQb.andWhere('e.directorateId = :directorateId', { directorateId });
+    applyAccessScope(employeeQb, 'e', scope, query.directorateId);
     if (query.positionId) employeeQb.andWhere('e.positionId = :positionId', { positionId: query.positionId });
 
     const employees = await employeeQb.getMany();

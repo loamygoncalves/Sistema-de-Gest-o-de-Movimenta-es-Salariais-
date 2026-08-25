@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { EmployeePicker } from "@/components/shared/EmployeePicker";
-import { useDirectorates, usePositions } from "@/hooks/useOrgOptions";
+import { useCostCenters, useDirectorates, usePositions } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
@@ -25,6 +25,7 @@ export default function NewMovementPage() {
   const { showToast } = useToast();
   const { directorates } = useDirectorates();
   const { positions } = usePositions();
+  const { costCenters } = useCostCenters();
 
   const [type, setType] = useState<MovementType>("PROMOCAO");
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -35,8 +36,7 @@ export default function NewMovementPage() {
   const [quantity, setQuantity] = useState<string>("1");
   const [plannedSalary, setPlannedSalary] = useState<string>("");
   const [directorateId, setDirectorateId] = useState("");
-  const [originDirectorateId, setOriginDirectorateId] = useState("");
-  const [destinationDirectorateId, setDestinationDirectorateId] = useState("");
+  const [costCenterId, setCostCenterId] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [justification, setJustification] = useState("");
 
@@ -72,15 +72,7 @@ export default function NewMovementPage() {
       if (!quantity || Number(quantity) < 1) next.quantity = "Informe uma quantidade válida.";
       if (!plannedSalary) next.plannedSalary = "Informe o salário planejado.";
       if (!directorateId) next.directorateId = "Selecione a diretoria.";
-    }
-
-    if (type === "TRANSFERENCIA") {
-      if (!employee) next.employee = "Selecione o colaborador.";
-      if (!originDirectorateId) next.originDirectorateId = "Selecione a diretoria de origem.";
-      if (!destinationDirectorateId) next.destinationDirectorateId = "Selecione a diretoria de destino.";
-      if (originDirectorateId && destinationDirectorateId && originDirectorateId === destinationDirectorateId) {
-        next.destinationDirectorateId = "A diretoria de destino deve ser diferente da origem.";
-      }
+      if (!costCenterId) next.costCenterId = "Selecione o centro de custo.";
     }
 
     setErrors(next);
@@ -119,18 +111,7 @@ export default function NewMovementPage() {
           quantity: Number(quantity),
           plannedSalary: Number(plannedSalary),
           directorateId,
-          effectiveDate,
-          justification,
-        };
-        break;
-      case "TRANSFERENCIA":
-        payload = {
-          type,
-          employeeId: employee!.id,
-          originDirectorateId,
-          destinationDirectorateId,
-          newPositionId: newPositionId || undefined,
-          newSalary: newSalary ? Number(newSalary) : undefined,
+          costCenterId,
           effectiveDate,
           justification,
         };
@@ -168,7 +149,7 @@ export default function NewMovementPage() {
             onChange={(e) => setType(e.target.value as MovementType)}
           />
 
-          {(type === "PROMOCAO" || type === "MERITO" || type === "TRANSFERENCIA") && (
+          {(type === "PROMOCAO" || type === "MERITO") && (
             <EmployeePicker value={employee} onChange={setEmployee} error={errors.employee} required />
           )}
 
@@ -229,6 +210,15 @@ export default function NewMovementPage() {
                 onChange={(e) => setDirectorateId(e.target.value)}
                 error={errors.directorateId}
               />
+              <Select
+                label="Centro de custo"
+                required
+                placeholder="Selecione"
+                options={costCenters.map((c) => ({ value: c.id, label: c.name }))}
+                value={costCenterId}
+                onChange={(e) => setCostCenterId(e.target.value)}
+                error={errors.costCenterId}
+              />
               <Input
                 label="Quantidade de vagas"
                 type="number"
@@ -246,43 +236,6 @@ export default function NewMovementPage() {
                 value={plannedSalary}
                 onChange={(e) => setPlannedSalary(e.target.value)}
                 error={errors.plannedSalary}
-              />
-            </div>
-          )}
-
-          {type === "TRANSFERENCIA" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <Select
-                label="Diretoria de origem"
-                required
-                placeholder="Selecione"
-                options={directorates.map((d) => ({ value: d.id, label: d.name }))}
-                value={originDirectorateId}
-                onChange={(e) => setOriginDirectorateId(e.target.value)}
-                error={errors.originDirectorateId}
-              />
-              <Select
-                label="Diretoria de destino"
-                required
-                placeholder="Selecione"
-                options={directorates.map((d) => ({ value: d.id, label: d.name }))}
-                value={destinationDirectorateId}
-                onChange={(e) => setDestinationDirectorateId(e.target.value)}
-                error={errors.destinationDirectorateId}
-              />
-              <Select
-                label="Novo cargo (opcional)"
-                placeholder="Manter cargo atual"
-                options={positions.map((p) => ({ value: p.id, label: p.name }))}
-                value={newPositionId}
-                onChange={(e) => setNewPositionId(e.target.value)}
-              />
-              <Input
-                label="Novo salário (opcional)"
-                type="number"
-                step="0.01"
-                value={newSalary}
-                onChange={(e) => setNewSalary(e.target.value)}
               />
             </div>
           )}

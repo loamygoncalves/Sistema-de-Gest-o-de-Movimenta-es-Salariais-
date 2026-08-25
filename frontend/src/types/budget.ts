@@ -9,8 +9,8 @@
 // Named `BudgetMovementType`/`BUDGET_MOVEMENT_TYPE_LABELS` (rather than
 // `MovementType`/`MOVEMENT_TYPE_LABELS`) to avoid colliding with the
 // unrelated movement-request `MovementType` enum already exported from
-// `./enums` (PROMOCAO | MERITO | TRANSFERENCIA | AUMENTO_QUADRO) — both are
-// re-exported from the same `@/types` barrel.
+// `./enums` (PROMOCAO | MERITO | AUMENTO_QUADRO) — both are re-exported from
+// the same `@/types` barrel.
 export type BudgetMovementType =
   | "SEM_MOVIMENTACAO"
   | "PROMOCAO"

@@ -18,7 +18,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import {
   AuthenticatedUser,
   CurrentUser,
-  isScopedToOwnDirectorate,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums';
 import { EmployeesService } from './employees.service';
@@ -31,10 +31,7 @@ export class EmployeesController {
 
   @Get()
   findAll(@Query() query: EmployeeQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.employeesService.findAll(
-      query,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
-    );
+    return this.employeesService.findAll(query, resolveAccessScope(user));
   }
 
   @Get('comparison')
@@ -46,7 +43,7 @@ export class EmployeesController {
     return this.employeesService.compareWithBudget(
       parseInt(year, 10) || new Date().getFullYear(),
       month ? parseInt(month, 10) : undefined,
-      isScopedToOwnDirectorate(user) ? user.directorateId ?? undefined : undefined,
+      resolveAccessScope(user),
     );
   }
 

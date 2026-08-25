@@ -19,7 +19,6 @@ export interface MovementsDashboard {
   promotions: number;
   merits: number;
   headcountIncrease: number;
-  transfers: number;
 }
 
 export interface ProjectionPoint {

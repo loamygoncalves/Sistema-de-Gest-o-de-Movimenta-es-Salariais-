@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { MovementStatus, MovementType, PlannedSituation } from '../../common/enums';
+import { AccessScope } from '../../common/decorators/current-user.decorator';
+import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { monthValue } from '../../common/utils/months.util';
 import { Employee } from '../employees/entities/employee.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
@@ -27,18 +29,24 @@ export class DashboardService {
     private readonly historyRepo: Repository<MovementHistory>,
   ) {}
 
-  async getHeadcount(year: number, month: number | undefined, directorateId?: string) {
+  async getHeadcount(
+    year: number,
+    month: number | undefined,
+    scope: AccessScope,
+    directorateId?: string,
+    costCenterId?: string,
+  ) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
 
     const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
-    if (directorateId) budgetQb.andWhere('b.directorateId = :d', { d: directorateId });
+    applyAccessScope(budgetQb, 'b', scope, directorateId, costCenterId);
     const allBudgetEntries = await budgetQb.getMany();
     const budgetEntries = allBudgetEntries.filter(
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
 
     const employeeQb = this.employeeRepo.createQueryBuilder('e');
-    if (directorateId) employeeQb.andWhere('e.directorateId = :d', { d: directorateId });
+    applyAccessScope(employeeQb, 'e', scope, directorateId, costCenterId);
     const hcCurrent = await employeeQb.getCount();
 
     const approvedIncreaseQb = this.movementRepo
@@ -46,7 +54,7 @@ export class DashboardService {
       .where('m.type = :type', { type: MovementType.AUMENTO_QUADRO })
       .andWhere('m.status = :status', { status: MovementStatus.APROVADO })
       .andWhere('EXTRACT(YEAR FROM m.effectiveDate) = :year', { year });
-    if (directorateId) approvedIncreaseQb.andWhere('m.directorateId = :d', { d: directorateId });
+    applyAccessScope(approvedIncreaseQb, 'm', scope, directorateId, costCenterId);
     const approvedIncreases = await approvedIncreaseQb.getMany();
     const hcApproved = approvedIncreases.reduce((sum, m) => sum + Number(m.quantity ?? 0), 0);
 
@@ -65,18 +73,24 @@ export class DashboardService {
     };
   }
 
-  async getPayroll(year: number, month: number | undefined, directorateId?: string) {
+  async getPayroll(
+    year: number,
+    month: number | undefined,
+    scope: AccessScope,
+    directorateId?: string,
+    costCenterId?: string,
+  ) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
 
     const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
-    if (directorateId) budgetQb.andWhere('b.directorateId = :d', { d: directorateId });
+    applyAccessScope(budgetQb, 'b', scope, directorateId, costCenterId);
     const allBudgetEntries = await budgetQb.getMany();
     const budgetEntries = allBudgetEntries.filter(
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
 
     const employeeQb = this.employeeRepo.createQueryBuilder('e');
-    if (directorateId) employeeQb.andWhere('e.directorateId = :d', { d: directorateId });
+    applyAccessScope(employeeQb, 'e', scope, directorateId, costCenterId);
     const employees = await employeeQb.getMany();
 
     const payrollBudgeted = budgetEntries.reduce(
@@ -94,36 +108,41 @@ export class DashboardService {
     };
   }
 
-  async getMovements(year: number, directorateId?: string) {
+  async getMovements(year: number, scope: AccessScope, directorateId?: string, costCenterId?: string) {
     const qb = this.movementRepo
       .createQueryBuilder('m')
       .where('EXTRACT(YEAR FROM m.effectiveDate) = :year', { year });
-    if (directorateId) qb.andWhere('m.directorateId = :d', { d: directorateId });
+    applyAccessScope(qb, 'm', scope, directorateId, costCenterId);
     const movements = await qb.getMany();
 
     return {
       promotions: movements.filter((m) => m.type === MovementType.PROMOCAO).length,
       merits: movements.filter((m) => m.type === MovementType.MERITO).length,
       headcountIncrease: movements.filter((m) => m.type === MovementType.AUMENTO_QUADRO).length,
-      transfers: movements.filter((m) => m.type === MovementType.TRANSFERENCIA).length,
     };
   }
 
-  async getFinancial(year: number, month: number | undefined, directorateId?: string) {
+  async getFinancial(
+    year: number,
+    month: number | undefined,
+    scope: AccessScope,
+    directorateId?: string,
+    costCenterId?: string,
+  ) {
     const historyQb = this.historyRepo
       .createQueryBuilder('h')
       .where('EXTRACT(YEAR FROM h.effectiveDate) = :year', { year });
-    if (directorateId) historyQb.andWhere('h.directorateId = :d', { d: directorateId });
+    applyAccessScope(historyQb, 'h', scope, directorateId, costCenterId);
     const historyRecords = await historyQb.getMany();
 
     const monthlyImpact = historyRecords.reduce((sum, h) => sum + Number(h.monthlyImpact || 0), 0);
     const annualImpact = historyRecords.reduce((sum, h) => sum + Number(h.annualImpact || 0), 0);
 
-    const payroll = await this.getPayroll(year, month, directorateId);
+    const payroll = await this.getPayroll(year, month, scope, directorateId, costCenterId);
     const budgetConsumedPercent =
       payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
-    const projection12Months = await this.getProjection12Months(directorateId);
+    const projection12Months = await this.getProjection12Months(scope, directorateId, costCenterId);
     const directorateRanking = await this.getDirectorateRanking();
 
     return {
@@ -135,7 +154,7 @@ export class DashboardService {
     };
   }
 
-  private async getProjection12Months(directorateId?: string) {
+  private async getProjection12Months(scope: AccessScope, directorateId?: string, costCenterId?: string) {
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(now.getFullYear(), now.getMonth() + 12, 0);
@@ -161,7 +180,7 @@ export class DashboardService {
         start: start.toISOString().slice(0, 10),
         end: end.toISOString().slice(0, 10),
       });
-    if (directorateId) qb.andWhere('m.directorateId = :d', { d: directorateId });
+    applyAccessScope(qb, 'm', scope, directorateId, costCenterId);
 
     const rows = await qb.getRawMany();
 

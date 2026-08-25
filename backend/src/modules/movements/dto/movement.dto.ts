@@ -16,7 +16,7 @@ export class CreateMovementDto {
   @IsEnum(MovementType)
   type: MovementType;
 
-  // Promoção / Mérito / Transferência
+  // Promoção / Mérito
   @IsOptional()
   @IsUUID()
   employeeId?: string;
@@ -25,6 +25,10 @@ export class CreateMovementDto {
   @IsOptional()
   @IsUUID()
   directorateId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  costCenterId?: string;
 
   @IsOptional()
   @IsUUID()
@@ -42,7 +46,7 @@ export class CreateMovementDto {
   @Min(0)
   plannedSalary?: number;
 
-  // Promoção / Transferência
+  // Promoção
   @IsOptional()
   @IsUUID()
   newPositionId?: string;
@@ -58,15 +62,6 @@ export class CreateMovementDto {
   @Type(() => Number)
   @IsNumber()
   percentage?: number;
-
-  // Transferência
-  @IsOptional()
-  @IsUUID()
-  originDirectorateId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  destinationDirectorateId?: string;
 
   @IsDateString()
   effectiveDate: string;
@@ -112,4 +107,8 @@ export class MovementQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsUUID()
   directorateId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  costCenterId?: string;
 }
