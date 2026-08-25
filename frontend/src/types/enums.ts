@@ -1,17 +1,11 @@
 // Enums mirroring the backend contract (docs/API_CONTRACT.md).
 
-export type Role =
-  | "ADMIN"
-  | "RH_REMUNERACAO"
-  | "DIRETOR"
-  | "FINANCEIRO"
-  | "GESTOR";
+export type Role = "ADMIN" | "RH_REMUNERACAO" | "DIRETOR" | "GESTOR";
 
 export const ROLE_LABELS: Record<Role, string> = {
   ADMIN: "Administrador",
   RH_REMUNERACAO: "RH Remuneração",
   DIRETOR: "Diretor",
-  FINANCEIRO: "Financeiro",
   GESTOR: "Gestor",
 };
 
@@ -23,25 +17,19 @@ export const MOVEMENT_TYPE_LABELS: Record<MovementType, string> = {
   AUMENTO_QUADRO: "Aumento de Quadro",
 };
 
-// The contract only explicitly names RASCUNHO and PENDENTE_DIRETOR as
-// movement statuses. The remaining statuses below are a judgment call to
-// model a realistic multi-step approval workflow (director -> financeiro ->
-// RH remuneração) consistent with the ApprovalStep roles used elsewhere in
-// the contract. Adjust here if the backend exposes a different status set.
+// O fluxo de aprovação agora é configurável (ver ApprovalWorkflowStep) — a
+// movimentação tem um único status "em aprovação", genérico; a etapa ativa é
+// derivada dinamicamente pela menor ApprovalStep.order ainda PENDENTE.
 export type MovementStatus =
   | "RASCUNHO"
-  | "PENDENTE_DIRETOR"
-  | "PENDENTE_FINANCEIRO"
-  | "PENDENTE_RH"
+  | "PENDENTE_APROVACAO"
   | "APROVADO"
   | "REPROVADO"
   | "CANCELADO";
 
 export const MOVEMENT_STATUS_LABELS: Record<MovementStatus, string> = {
   RASCUNHO: "Rascunho",
-  PENDENTE_DIRETOR: "Pendente Diretor",
-  PENDENTE_FINANCEIRO: "Pendente Financeiro",
-  PENDENTE_RH: "Pendente RH",
+  PENDENTE_APROVACAO: "Pendente de Aprovação",
   APROVADO: "Aprovado",
   REPROVADO: "Reprovado",
   CANCELADO: "Cancelado",
@@ -49,22 +37,22 @@ export const MOVEMENT_STATUS_LABELS: Record<MovementStatus, string> = {
 
 // Approval step status — judgment call, not enumerated explicitly in the
 // contract beyond the approve/reject actions.
-export type ApprovalStepStatus = "PENDENTE" | "APROVADO" | "REPROVADO";
+export type ApprovalStepStatus = "PENDENTE" | "APROVADO" | "REPROVADO" | "PULADO";
 
 export const APPROVAL_STEP_STATUS_LABELS: Record<ApprovalStepStatus, string> = {
   PENDENTE: "Pendente",
   APROVADO: "Aprovado",
   REPROVADO: "Reprovado",
+  PULADO: "Pulada",
 };
 
-// Role responsible for a given approval step. Judgment call based on the
-// roles named in the contract (`DIRETOR só vê steps DIRETOR da própria
-// diretoria etc.`).
-export type ApprovalStepRole = "DIRETOR" | "FINANCEIRO" | "RH_REMUNERACAO";
+// Perfis que podem decidir uma etapa de aprovação (ver ApprovalWorkflowStep).
+// GESTOR nunca aprova — só solicita.
+export type ApprovalStepRole = "ADMIN" | "DIRETOR" | "RH_REMUNERACAO";
 
 export const APPROVAL_STEP_ROLE_LABELS: Record<ApprovalStepRole, string> = {
+  ADMIN: "Administrador",
   DIRETOR: "Diretor",
-  FINANCEIRO: "Financeiro",
   RH_REMUNERACAO: "RH Remuneração",
 };
 

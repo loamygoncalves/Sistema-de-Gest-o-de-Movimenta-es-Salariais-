@@ -73,7 +73,6 @@
       ADMIN: 'Administrador',
       RH_REMUNERACAO: 'RH Remuneração',
       DIRETOR: 'Diretor',
-      FINANCEIRO: 'Financeiro',
       GESTOR: 'Gestor',
     },
     movementType: {
@@ -83,9 +82,7 @@
     },
     movementStatus: {
       RASCUNHO: 'Rascunho',
-      PENDENTE_DIRETOR: 'Pendente Diretor',
-      PENDENTE_RH: 'Pendente RH',
-      PENDENTE_FINANCEIRO: 'Pendente Financeiro',
+      PENDENTE_APROVACAO: 'Pendente de Aprovação',
       APROVADO: 'Aprovado',
       REPROVADO: 'Reprovado',
       CANCELADO: 'Cancelado',
@@ -97,9 +94,9 @@
       PULADO: 'Pulado',
     },
     approverRole: {
+      ADMIN: 'Administrador',
       DIRETOR: 'Diretor',
       RH_REMUNERACAO: 'RH Remuneração',
-      FINANCEIRO: 'Financeiro',
     },
     employeeStatus: {
       ATIVO: 'Ativo',
@@ -135,9 +132,7 @@
   var BADGE_CLASS = {
     movementStatus: {
       RASCUNHO: 'pill-slate',
-      PENDENTE_DIRETOR: 'pill-amber',
-      PENDENTE_RH: 'pill-amber',
-      PENDENTE_FINANCEIRO: 'pill-amber',
+      PENDENTE_APROVACAO: 'pill-amber',
       APROVADO: 'pill-green',
       REPROVADO: 'pill-red',
       CANCELADO: 'pill-slate',
@@ -191,7 +186,7 @@
     {
       title: 'Orçamento & Quadro',
       items: [
-        { label: 'Orçamento', href: '#/budget', roles: ['ADMIN', 'RH_REMUNERACAO', 'FINANCEIRO', 'DIRETOR', 'GESTOR'] },
+        { label: 'Orçamento', href: '#/budget', roles: ['ADMIN', 'RH_REMUNERACAO', 'DIRETOR', 'GESTOR'] },
         { label: 'Colaboradores', href: '#/employees' },
       ],
     },
@@ -200,13 +195,13 @@
       items: [
         { label: 'Simulador Rápido', href: '#/simulator' },
         { label: 'Movimentações', href: '#/movements' },
-        { label: 'Aprovações', href: '#/approvals', roles: ['ADMIN', 'DIRETOR', 'FINANCEIRO', 'RH_REMUNERACAO'] },
+        { label: 'Aprovações', href: '#/approvals', roles: ['ADMIN', 'DIRETOR', 'RH_REMUNERACAO'] },
         { label: 'Histórico', href: '#/history' },
       ],
     },
     {
       title: 'Mercado',
-      items: [{ label: 'Estudos Salariais', href: '#/salary-studies', roles: ['ADMIN', 'RH_REMUNERACAO', 'DIRETOR', 'FINANCEIRO'] }],
+      items: [{ label: 'Estudos Salariais', href: '#/salary-studies', roles: ['ADMIN', 'RH_REMUNERACAO', 'DIRETOR'] }],
     },
     {
       title: 'Administração',
@@ -214,6 +209,7 @@
         { label: 'Estrutura Organizacional', href: '#/admin/organization', roles: ['ADMIN', 'RH_REMUNERACAO'] },
         { label: 'Usuários', href: '#/admin/users', roles: ['ADMIN'] },
         { label: 'Encargos & Benefícios', href: '#/admin/charge-parameters', roles: ['ADMIN', 'RH_REMUNERACAO'] },
+        { label: 'Fluxo de Aprovação', href: '#/admin/approval-workflow', roles: ['ADMIN'] },
       ],
     },
   ];
@@ -238,6 +234,7 @@
     { segments: ['admin', 'organization'], title: 'Estrutura Organizacional', view: function (root) { Views.adminOrg(root); } },
     { segments: ['admin', 'users'], title: 'Usuários', view: function (root) { Views.adminUsers(root); } },
     { segments: ['admin', 'charge-parameters'], title: 'Encargos & Benefícios', view: function (root) { Views.adminCharges(root); } },
+    { segments: ['admin', 'approval-workflow'], title: 'Fluxo de Aprovação', view: function (root) { Views.adminApprovalWorkflow(root); } },
   ];
 
   function parseHash() {
@@ -434,7 +431,7 @@
       'Sua conta Google ainda não está cadastrada no BEEP Remunera.</p>' +
       '<p class="text-sm" style="margin-bottom:12px;color:var(--slate-600);">' +
       'Peça a um administrador para adicionar o seu e-mail na aba <strong>Usuarios</strong> da planilha do ' +
-      'sistema, definindo seu perfil (ADMIN, RH_REMUNERACAO, DIRETOR, FINANCEIRO ou GESTOR) e, se aplicável, ' +
+      'sistema, definindo seu perfil (ADMIN, RH_REMUNERACAO, DIRETOR ou GESTOR) e, se aplicável, ' +
       'a diretoria à qual você fica restrito.</p>' +
       '<p class="text-xs text-faint">Primeira configuração do sistema? Execute a função ' +
       '<code>setupSpreadsheet()</code> uma única vez pelo editor do Apps Script (menu Executar) — ela cria as ' +

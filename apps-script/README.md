@@ -84,7 +84,7 @@ tem o seu). Depois do primeiro `clasp push`:
    permissão de compartilhar), a tela avisa e é preciso compartilhar
    manualmente (planilha → Compartilhar → adicionar o e-mail como Editor).
    Editando a planilha diretamente (aba **Usuarios**: `email`, `role`
-   [`ADMIN`/`RH_REMUNERACAO`/`DIRETOR`/`FINANCEIRO`/`GESTOR`],
+   [`ADMIN`/`RH_REMUNERACAO`/`DIRETOR`/`GESTOR`],
    `directorateId` para `DIRETOR` — `id` na aba **Diretorias** — ou
    `costCenterIds` para `GESTOR` — ids da aba **CentrosCusto** separados por
    vírgula —, `active` = `TRUE`) essa concessão automática **não** acontece;
@@ -140,6 +140,7 @@ apps-script/
 ## Onde estão as regras de negócio
 
 As mesmas do sistema em NestJS, reimplementadas linha a linha:
-`SimulatorService.gs` (impacto financeiro) e `ApprovalsService.gs`
-(workflow Diretor → RH Remuneração → Financeiro) são os arquivos mais
-importantes — comece por eles se for auditar o comportamento.
+`SimulatorService.gs` (impacto financeiro) e `ApprovalsService.gs` (fluxo de
+aprovação configurável — etapas cadastradas em Administração > Fluxo de
+Aprovação, cada uma decidida por qualquer um dos perfis elegíveis) são os
+arquivos mais importantes — comece por eles se for auditar o comportamento.

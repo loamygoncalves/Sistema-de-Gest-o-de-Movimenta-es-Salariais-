@@ -4,7 +4,10 @@ export interface ApprovalStep {
   id: string;
   movementId: string;
   order: number;
-  role: ApprovalStepRole;
+  // Qualquer um destes perfis pode decidir a etapa — o que agir primeiro.
+  eligibleRoles: ApprovalStepRole[];
+  // Preenchido só depois de decidida: qual perfil de fato decidiu.
+  decidedByRole?: ApprovalStepRole | null;
   status: ApprovalStepStatus;
   approverId?: string | null;
   approverName?: string | null;
@@ -26,4 +29,13 @@ export interface PendingApproval extends ApprovalStep {
 
 export interface ApprovalActionPayload {
   comment?: string;
+}
+
+// Configuração do fluxo de aprovação (tela ADMIN "Fluxo de Aprovação") — uma
+// sequência de etapas ordenadas; cada etapa é decidida por QUALQUER UM dos
+// perfis listados, o que agir primeiro.
+export interface ApprovalWorkflowStep {
+  id?: string;
+  stepOrder: number;
+  roles: ApprovalStepRole[];
 }

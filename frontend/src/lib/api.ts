@@ -128,6 +128,13 @@ export const api = {
       body: data !== undefined ? JSON.stringify(data) : undefined,
     });
   },
+  put<T>(path: string, data?: unknown, params?: Record<string, unknown>): Promise<T> {
+    return request<T>(path, {
+      method: "PUT",
+      params,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
+  },
   delete<T>(path: string, params?: Record<string, unknown>, data?: unknown): Promise<T> {
     return request<T>(path, {
       method: "DELETE",

@@ -213,7 +213,7 @@ export class MovementsService {
 
     await this.simulate(id);
     await this.approvalsService.createStepsForMovement(id);
-    await this.movementRepo.update(id, { status: MovementStatus.PENDENTE_DIRETOR });
+    await this.movementRepo.update(id, { status: MovementStatus.PENDENTE_APROVACAO });
 
     const submitted = await this.loadMovementOrFail(id);
     await this.notificationsService.notifyMovementSubmitted(submitted);

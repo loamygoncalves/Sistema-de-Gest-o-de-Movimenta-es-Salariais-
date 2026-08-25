@@ -147,7 +147,7 @@ var MovementsService = {
     }
     this.simulate(id);
     ApprovalsService.createStepsForMovement(id);
-    Tables.movementRequests.update(id, { status: MovementStatus.PENDENTE_DIRETOR, updatedAt: nowIso_() });
+    Tables.movementRequests.update(id, { status: MovementStatus.PENDENTE_APROVACAO, updatedAt: nowIso_() });
     var submitted = this.get(id);
     notifyMovementSubmitted_(submitted);
     return submitted;

@@ -76,7 +76,6 @@ async function seed() {
   const usersToCreate = [
     { name: 'Administrador do Sistema', email: 'admin@empresa.com', role: UserRole.ADMIN },
     { name: 'Ana RH Remuneração', email: 'rh@empresa.com', role: UserRole.RH_REMUNERACAO },
-    { name: 'Carlos Financeiro', email: 'financeiro@empresa.com', role: UserRole.FINANCEIRO },
     {
       name: 'Diretor Comercial',
       email: 'diretor.comercial@empresa.com',

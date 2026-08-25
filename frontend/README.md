@@ -63,14 +63,16 @@ isso ocorreu, foi feita uma escolha de projeto razoável, sinalizada com
 comentários `judgment call` no código-fonte (principalmente em
 `src/types/*.ts`). Destaques:
 
-- **Status de movimentação**: o contrato só menciona `RASCUNHO` e
-  `PENDENTE_DIRETOR`. Foi modelado um fluxo de 3 etapas
-  (Diretor → Financeiro → RH Remuneração) com os status
-  `PENDENTE_FINANCEIRO`, `PENDENTE_RH`, `APROVADO`, `REPROVADO`,
-  `CANCELADO`. Ajuste `src/types/enums.ts` se o backend usar outro conjunto.
-- **Papel dos approval steps**: assumido como `DIRETOR | FINANCEIRO |
-  RH_REMUNERACAO`, com base na frase do contrato sobre filtragem de
-  pendências por perfil.
+- **Status de movimentação**: fluxo de aprovação configurável (ADMIN cadastra
+  as etapas em Administração > Fluxo de Aprovação), então
+  `movement_requests.status` fica em `PENDENTE_APROVACAO` genérico durante
+  todo o fluxo (além de `RASCUNHO`, `APROVADO`, `REPROVADO`, `CANCELADO`) —
+  qual etapa está ativa é derivado de `ApprovalStep` (a de menor `order`
+  ainda `PENDENTE`), não do status da movimentação.
+- **Papel dos approval steps**: cada etapa tem um conjunto de perfis
+  elegíveis (`eligibleRoles: ApprovalStepRole[]`, valores
+  `ADMIN | DIRETOR | RH_REMUNERACAO`) — qualquer um deles decide, o que agir
+  primeiro; `decidedByRole` registra qual perfil de fato decidiu.
 - **Paginação**: assumido o envelope `{ data, total, page, limit }` para os
   endpoints paginados (`Paginated<T>` em `src/types/common.ts`).
   Endpoints de catálogo simples (`/directorates`, `/positions`,

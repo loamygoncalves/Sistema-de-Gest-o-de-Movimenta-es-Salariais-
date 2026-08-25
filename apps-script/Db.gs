@@ -249,9 +249,13 @@ var TABLES_CONFIG = {
   approvalSteps: {
     sheet: 'AprovacaoEtapas',
     columns: [
-      'id', 'movementRequestId', 'stepOrder', 'approverRole', 'approverEmail',
+      'id', 'movementRequestId', 'stepOrder', 'eligibleRoles', 'decidedByRole', 'approverEmail',
       'status', 'comment', 'decidedAt', 'createdAt',
     ],
+  },
+  approvalWorkflowSteps: {
+    sheet: 'FluxoAprovacao',
+    columns: ['id', 'stepOrder', 'roles', 'createdAt', 'updatedAt'],
   },
   movementHistory: {
     sheet: 'Historico',

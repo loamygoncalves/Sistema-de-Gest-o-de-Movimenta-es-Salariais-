@@ -87,7 +87,11 @@
             '</div>' +
             (idx < ordered.length - 1 ? '<div class="timeline-line"></div>' : '') +
             '</div><div class="timeline-body"><div class="row" style="gap:8px;"><strong>' +
-            escapeHtml(labelFor('approverRole', step.approverRole)) +
+            escapeHtml(
+              step.decidedByRole
+                ? labelFor('approverRole', step.decidedByRole)
+                : (step.eligibleRoles || []).map(function (r) { return labelFor('approverRole', r); }).join(' ou ')
+            ) +
             '</strong>' +
             badge('approvalStatus', step.status) +
             '</div>' +

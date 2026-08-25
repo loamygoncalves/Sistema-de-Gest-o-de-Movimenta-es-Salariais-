@@ -23,11 +23,12 @@ sessão do navegador antes de usar o resto da API — ver seção **Senha
 (camada extra)** abaixo; toda função `api_*` (exceto as listadas ali) lança
 `SENHA_NAO_VERIFICADA` até isso acontecer.
 
-Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `FINANCEIRO`,
-`GESTOR`. `DIRETOR` tem `directorateId` e enxerga toda a diretoria; `GESTOR`
-tem `costCenterIds` (multi-seleção) e enxerga só os colaboradores/orçamento
-desses centros de custo (lista vazia = não vê nada — nunca "vê tudo" por
-omissão). O servidor resolve esse escopo a partir do usuário identificado
+Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `GESTOR`. `DIRETOR`
+tem `directorateId` e enxerga toda a diretoria; `GESTOR` tem `costCenterIds`
+(multi-seleção) e enxerga só os colaboradores/orçamento desses centros de
+custo (lista vazia = não vê nada — nunca "vê tudo" por omissão). GESTOR
+nunca aprova movimentações, só solicita. O servidor resolve esse escopo a
+partir do usuário identificado
 (`resolveAccessScope_`/`mergeAccessScope_`/`matchesAccessScope_` em Auth.gs)
 e aplica automaticamente — filtros `directorateId`/`costCenterId` enviados
 pelo cliente só valem para quem não tem escopo restrito.
@@ -158,15 +159,32 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   original), a comparação é sempre pelo **centro de custo exato** (diretoria
   + centro de custo) da movimentação — nunca pelo orçamento da diretoria
   inteira, e nunca restrita ao cargo específico da movimentação.
-- `api_submitMovement(id)` → dispara a simulação, cria as 3 etapas de aprovação,
-  muda o status para `PENDENTE_DIRETOR` e envia um e-mail de notificação (via
-  `MailApp`, de verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro
-  de custo e o DIRETOR da diretoria — ver `apps-script/Notifications.gs`.
+- `api_submitMovement(id)` → dispara a simulação, cria uma etapa de aprovação por
+  linha do fluxo configurado (ver seção Aprovações abaixo), muda o status para
+  `PENDENTE_APROVACAO` e envia um e-mail de notificação (via `MailApp`, de
+  verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de custo e o
+  DIRETOR da diretoria — ver `apps-script/Notifications.gs`.
 
 ## Aprovações — Módulo 5
-- `api_getPendingApprovals()` → etapas pendentes que o usuário atual pode decidir, cada uma com `.movement` embutido
-- `api_getApprovalTimeline(movementId)`
-- `api_approveStep(stepId, comment?)`, `api_rejectStep(stepId, comment)` (comentário obrigatório na reprovação)
+O fluxo de aprovação é configurável (ADMIN, tela Fluxo de Aprovação): uma
+sequência de etapas ordenadas, cada uma com um conjunto de perfis
+elegíveis — **qualquer um deles decide a etapa** (o que agir primeiro), não
+todos. `movementRequests.status` fica em `PENDENTE_APROVACAO` (genérico)
+durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
+`PENDENTE`. GESTOR nunca aprova, só solicita.
+
+- `api_getApprovalWorkflow()` → lista as etapas configuradas: `[{ id, stepOrder, roles }]`
+- `api_saveApprovalWorkflow(steps)` (ADMIN) — `steps: [{ roles }]` → substitui o fluxo inteiro
+  (a ordem do array define `stepOrder`); não afeta movimentações já submetidas (cada etapa
+  guarda um snapshot de `eligibleRoles` no momento da submissão)
+- `api_getPendingApprovals()` → etapas pendentes que o usuário atual pode decidir (perfil está
+  em `eligibleRoles` da etapa ativa), cada uma com `.movement` embutido
+- `api_getApprovalTimeline(movementId)` → cada etapa com `{ id, stepOrder, eligibleRoles,
+  decidedByRole, status, approverEmail, comment, decidedAt }`
+- `api_approveStep(stepId, comment?)` — se essa era a última etapa pendente, a movimentação
+  vira `APROVADO`
+- `api_rejectStep(stepId, comment)` (comentário obrigatório na reprovação) — reprova a
+  movimentação e pula as demais etapas
 
 ## Histórico — Módulo 6
 - `api_listHistory({ directorateId?, positionId?, type?, costCenterId?, startDate?, endDate? })`

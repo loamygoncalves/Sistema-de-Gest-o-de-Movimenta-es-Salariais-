@@ -113,12 +113,7 @@ var DashboardService = {
     var startIso = Utilities.formatDate(start, 'GMT', 'yyyy-MM-dd');
     var endIso = Utilities.formatDate(end, 'GMT', 'yyyy-MM-dd');
 
-    var eligibleStatuses = [
-      MovementStatus.APROVADO,
-      MovementStatus.PENDENTE_DIRETOR,
-      MovementStatus.PENDENTE_RH,
-      MovementStatus.PENDENTE_FINANCEIRO,
-    ];
+    var eligibleStatuses = [MovementStatus.APROVADO, MovementStatus.PENDENTE_APROVACAO];
 
     var movements = Tables.movementRequests.where(function (m) {
       if (eligibleStatuses.indexOf(m.status) === -1) return false;

@@ -19,7 +19,6 @@ CREATE TYPE user_role AS ENUM (
   'ADMIN',
   'RH_REMUNERACAO',
   'DIRETOR',
-  'FINANCEIRO',
   'GESTOR'
 );
 
@@ -53,20 +52,15 @@ CREATE TYPE movement_type AS ENUM (
   'AUMENTO_QUADRO'
 );
 
+-- O fluxo de aprovação agora é configurável (ver approval_workflow_steps) —
+-- a movimentação tem um único status "em aprovação" genérico; a etapa ativa
+-- é derivada dinamicamente (menor step_order ainda PENDENTE em approval_steps).
 CREATE TYPE movement_status AS ENUM (
   'RASCUNHO',
-  'PENDENTE_DIRETOR',
-  'PENDENTE_RH',
-  'PENDENTE_FINANCEIRO',
+  'PENDENTE_APROVACAO',
   'APROVADO',
   'REPROVADO',
   'CANCELADO'
-);
-
-CREATE TYPE approver_role AS ENUM (
-  'DIRETOR',
-  'RH_REMUNERACAO',
-  'FINANCEIRO'
 );
 
 CREATE TYPE approval_status AS ENUM (
@@ -357,14 +351,33 @@ CREATE TABLE movement_simulations (
 CREATE INDEX idx_movement_simulations_request ON movement_simulations(movement_request_id);
 
 -- ============================================================================
--- WORKFLOW DE APROVAÇÃO
+-- WORKFLOW DE APROVAÇÃO (configurável — ver Administração > Fluxo de Aprovação)
 -- ============================================================================
 
+-- Configuração do fluxo: uma sequência de etapas ordenadas por step_order;
+-- cada etapa tem um conjunto de perfis (roles, valores de ApproverRole) e é
+-- decidida por QUALQUER UM deles, o que agir primeiro. `roles` é TEXT[] (não
+-- um enum Postgres) de propósito — a lista de perfis válidos é definida em
+-- ApproverRole (TypeScript) e pode mudar sem nova migration. A tabela
+-- inteira é substituída a cada salvamento (ver ApprovalWorkflowService).
+CREATE TABLE approval_workflow_steps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  step_order SMALLINT NOT NULL UNIQUE,
+  roles TEXT[] NOT NULL CHECK (array_length(roles, 1) > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Uma ApprovalStep por etapa configurada, criada ao submeter a movimentação
+-- (snapshot dos perfis elegíveis daquele momento em eligible_roles — mudar o
+-- fluxo depois não afeta solicitações já em andamento). decided_by_role
+-- registra qual perfil de fato decidiu (auditoria), nulo enquanto PENDENTE.
 CREATE TABLE approval_steps (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   movement_request_id UUID NOT NULL REFERENCES movement_requests(id) ON DELETE CASCADE,
   step_order SMALLINT NOT NULL,
-  approver_role approver_role NOT NULL,
+  eligible_roles TEXT[] NOT NULL,
+  decided_by_role TEXT,
   approver_user_id UUID REFERENCES users(id),
   status approval_status NOT NULL DEFAULT 'PENDENTE',
   comment TEXT,

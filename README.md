@@ -27,9 +27,10 @@ de movimentações e estudos salariais de mercado.
 > Sheets como banco de dados). Elas não compartilham dados — escolha uma.
 
 - **Backend**: Node.js + NestJS, PostgreSQL via TypeORM, autenticação
-  JWT com RBAC (5 perfis: ADMIN, RH_REMUNERACAO, DIRETOR, FINANCEIRO,
-  GESTOR), importação de planilhas Excel (exceljs), exportação
-  Excel/PDF, documentação OpenAPI em `/docs` (Swagger).
+  JWT com RBAC (4 perfis: ADMIN, RH_REMUNERACAO, DIRETOR, GESTOR),
+  fluxo de aprovação configurável (etapas com perfis elegíveis
+  cadastradas pelo ADMIN), importação de planilhas Excel (exceljs),
+  exportação Excel/PDF, documentação OpenAPI em `/docs` (Swagger).
 - **Frontend**: Next.js 14 App Router, TypeScript, Tailwind CSS,
   gráficos com Recharts, autenticação client-side com guarda de rotas
   por perfil.
@@ -118,7 +119,6 @@ Senha padrão: `Senha@123`
 | -------------------------------- | --------------- |
 | admin@empresa.com                | ADMIN            |
 | rh@empresa.com                   | RH_REMUNERACAO   |
-| financeiro@empresa.com           | FINANCEIRO       |
 | diretor.comercial@empresa.com    | DIRETOR          |
 | gestor.comercial@empresa.com     | GESTOR           |
 

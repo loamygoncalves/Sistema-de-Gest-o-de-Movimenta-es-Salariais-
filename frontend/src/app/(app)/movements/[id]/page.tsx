@@ -195,7 +195,9 @@ function ApprovalTimeline({ steps, loading }: { steps: ApprovalStep[]; loading: 
           <div className="flex-1 pb-2">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-sm font-medium text-slate-800">
-                {APPROVAL_STEP_ROLE_LABELS[step.role] ?? step.role}
+                {step.decidedByRole
+                  ? APPROVAL_STEP_ROLE_LABELS[step.decidedByRole] ?? step.decidedByRole
+                  : step.eligibleRoles.map((role) => APPROVAL_STEP_ROLE_LABELS[role] ?? role).join(" ou ")}
               </span>
               <ApprovalStatusBadge status={step.status} />
             </div>

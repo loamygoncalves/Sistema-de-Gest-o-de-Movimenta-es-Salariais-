@@ -2,7 +2,6 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   RH_REMUNERACAO = 'RH_REMUNERACAO',
   DIRETOR = 'DIRETOR',
-  FINANCEIRO = 'FINANCEIRO',
   GESTOR = 'GESTOR',
 }
 
@@ -64,20 +63,28 @@ export enum MovementType {
   AUMENTO_QUADRO = 'AUMENTO_QUADRO',
 }
 
+/**
+ * PENDENTE_APROVACAO cobre qualquer etapa do fluxo configurável — qual
+ * etapa está ativa agora não é mais lido do status da movimentação, e sim
+ * de `approval_steps` (a de menor `stepOrder` ainda `PENDENTE`; ver
+ * ApprovalsService).
+ */
 export enum MovementStatus {
   RASCUNHO = 'RASCUNHO',
-  PENDENTE_DIRETOR = 'PENDENTE_DIRETOR',
-  PENDENTE_RH = 'PENDENTE_RH',
-  PENDENTE_FINANCEIRO = 'PENDENTE_FINANCEIRO',
+  PENDENTE_APROVACAO = 'PENDENTE_APROVACAO',
   APROVADO = 'APROVADO',
   REPROVADO = 'REPROVADO',
   CANCELADO = 'CANCELADO',
 }
 
+/**
+ * Perfis que podem aparecer numa etapa do fluxo de aprovação (ver
+ * ApprovalWorkflowStep). GESTOR nunca aprova — só solicita.
+ */
 export enum ApproverRole {
-  DIRETOR = 'DIRETOR',
+  ADMIN = 'ADMIN',
   RH_REMUNERACAO = 'RH_REMUNERACAO',
-  FINANCEIRO = 'FINANCEIRO',
+  DIRETOR = 'DIRETOR',
 }
 
 export enum ApprovalStatus {
@@ -112,15 +119,3 @@ export enum ChargeValueType {
   FIXO = 'FIXO',
 }
 
-/** Mapeia MovementStatus -> ApproverRole responsável pela etapa pendente atual. */
-export const STATUS_TO_APPROVER_ROLE: Partial<Record<MovementStatus, ApproverRole>> = {
-  [MovementStatus.PENDENTE_DIRETOR]: ApproverRole.DIRETOR,
-  [MovementStatus.PENDENTE_RH]: ApproverRole.RH_REMUNERACAO,
-  [MovementStatus.PENDENTE_FINANCEIRO]: ApproverRole.FINANCEIRO,
-};
-
-export const APPROVAL_WORKFLOW_ORDER: ApproverRole[] = [
-  ApproverRole.DIRETOR,
-  ApproverRole.RH_REMUNERACAO,
-  ApproverRole.FINANCEIRO,
-];

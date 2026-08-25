@@ -888,4 +888,147 @@
       });
     }
   };
+
+  // -----------------------------------------------------------------------
+  // Fluxo de Aprovação — ADMIN. api_getApprovalWorkflow / api_saveApprovalWorkflow
+  // -----------------------------------------------------------------------
+  var APPROVAL_WORKFLOW_ROLE_OPTIONS = ['ADMIN', 'RH_REMUNERACAO', 'DIRETOR'];
+
+  Views.adminApprovalWorkflow = function (root) {
+    var user = App.user;
+    if (!isAdminRole(user)) {
+      adminAccessDenied(root);
+      return;
+    }
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Fluxo de Aprovação</h1>' +
+      '<p>Defina as etapas do fluxo, em ordem. Em cada etapa, qualquer um dos perfis selecionados pode aprovar ou ' +
+      'reprovar — vale quem agir primeiro. A movimentação só é considerada aprovada depois que todas as etapas ' +
+      'forem concluídas. GESTOR nunca aprova, apenas solicita.</p></div>' +
+      '<div id="workflow-body">' +
+      loadingHtml() +
+      '</div>';
+
+    var steps = [];
+
+    loadAndRender();
+
+    function loadAndRender() {
+      var body = document.getElementById('workflow-body');
+      body.innerHTML = loadingHtml();
+      callApi('api_getApprovalWorkflow')
+        .then(function (list) {
+          steps = (list || []).slice().sort(function (a, b) { return a.stepOrder - b.stepOrder; });
+          renderBody();
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function renderBody() {
+      var body = document.getElementById('workflow-body');
+      body.innerHTML =
+        '<div class="card" style="display:flex;flex-direction:column;gap:14px;">' +
+        (steps.length === 0
+          ? '<p class="text-sm text-muted">Nenhuma etapa configurada. Adicione ao menos uma.</p>'
+          : steps.map(stepCardHtml).join('')) +
+        '<div><button class="btn btn-outline" id="workflow-add-step">Adicionar etapa</button></div>' +
+        '</div>' +
+        '<div class="row" style="justify-content:flex-end;margin-top:16px;">' +
+        '<button class="btn" id="workflow-save-btn">Salvar fluxo</button>' +
+        '</div>';
+
+      function stepCardHtml(step, idx) {
+        return (
+          '<div class="card" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start;justify-content:space-between;" data-step-index="' +
+          idx +
+          '">' +
+          '<div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px;">' +
+          '<strong>Etapa ' +
+          (idx + 1) +
+          '</strong>' +
+          '<div class="row" style="gap:16px;flex-wrap:wrap;">' +
+          APPROVAL_WORKFLOW_ROLE_OPTIONS.map(function (role) {
+            var checked = step.roles.indexOf(role) !== -1;
+            return (
+              '<label class="row" style="gap:6px;font-weight:400;"><input type="checkbox" data-role-checkbox="' +
+              role +
+              '"' +
+              (checked ? ' checked' : '') +
+              ' /> ' +
+              escapeHtml(labelFor('approverRole', role)) +
+              '</label>'
+            );
+          }).join('') +
+          '</div></div>' +
+          '<div class="row" style="gap:6px;">' +
+          '<button class="btn btn-outline btn-sm" data-move-up' + (idx === 0 ? ' disabled' : '') + '>↑</button>' +
+          '<button class="btn btn-outline btn-sm" data-move-down' + (idx === steps.length - 1 ? ' disabled' : '') + '>↓</button>' +
+          '<button class="btn btn-danger btn-sm" data-remove-step>Remover</button>' +
+          '</div></div>'
+        );
+      }
+
+      body.querySelectorAll('[data-step-index]').forEach(function (card) {
+        var idx = Number(card.getAttribute('data-step-index'));
+
+        card.querySelectorAll('[data-role-checkbox]').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var role = cb.getAttribute('data-role-checkbox');
+            var roles = steps[idx].roles;
+            var pos = roles.indexOf(role);
+            if (cb.checked && pos === -1) roles.push(role);
+            if (!cb.checked && pos !== -1) roles.splice(pos, 1);
+          });
+        });
+
+        var upBtn = card.querySelector('[data-move-up]');
+        if (upBtn) upBtn.addEventListener('click', function () { moveStep(idx, -1); });
+        var downBtn = card.querySelector('[data-move-down]');
+        if (downBtn) downBtn.addEventListener('click', function () { moveStep(idx, 1); });
+        card.querySelector('[data-remove-step]').addEventListener('click', function () {
+          steps.splice(idx, 1);
+          renderBody();
+        });
+      });
+
+      document.getElementById('workflow-add-step').addEventListener('click', function () {
+        steps.push({ stepOrder: steps.length + 1, roles: [] });
+        renderBody();
+      });
+
+      document.getElementById('workflow-save-btn').addEventListener('click', save);
+    }
+
+    function moveStep(idx, direction) {
+      var target = idx + direction;
+      if (target < 0 || target >= steps.length) return;
+      var tmp = steps[idx];
+      steps[idx] = steps[target];
+      steps[target] = tmp;
+      renderBody();
+    }
+
+    function save() {
+      if (steps.length === 0) {
+        toast('O fluxo precisa ter ao menos uma etapa.', 'error');
+        return;
+      }
+      var emptyStep = steps.some(function (s) { return s.roles.length === 0; });
+      if (emptyStep) {
+        toast('Toda etapa precisa de ao menos um perfil elegível.', 'error');
+        return;
+      }
+      var payload = steps.map(function (s) { return { roles: s.roles }; });
+      callApi('api_saveApprovalWorkflow', payload)
+        .then(function (list) {
+          steps = (list || []).slice().sort(function (a, b) { return a.stepOrder - b.stepOrder; });
+          toast('Fluxo de aprovação salvo com sucesso.', 'success');
+          renderBody();
+        })
+        .catch(toastError);
+    }
+  };
 </script>

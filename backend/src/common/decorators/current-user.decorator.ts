@@ -21,8 +21,8 @@ export const CurrentUser = createParamDecorator(
 /**
  * Escopo de acesso do usuário: DIRETOR enxerga a diretoria inteira,
  * GESTOR enxerga só os centros de custo atribuídos a ele, os demais perfis
- * (ADMIN, RH_REMUNERACAO, FINANCEIRO) não têm escopo restrito. Nunca ambos
- * os campos ao mesmo tempo.
+ * (ADMIN, RH_REMUNERACAO) não têm escopo restrito. Nunca ambos os campos ao
+ * mesmo tempo.
  */
 export interface AccessScope {
   directorateId?: string;

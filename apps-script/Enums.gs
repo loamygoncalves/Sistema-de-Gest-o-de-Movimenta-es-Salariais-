@@ -8,7 +8,6 @@ var UserRole = {
   ADMIN: 'ADMIN',
   RH_REMUNERACAO: 'RH_REMUNERACAO',
   DIRETOR: 'DIRETOR',
-  FINANCEIRO: 'FINANCEIRO',
   GESTOR: 'GESTOR',
 };
 
@@ -55,20 +54,24 @@ var MovementType = {
   AUMENTO_QUADRO: 'AUMENTO_QUADRO',
 };
 
+/**
+ * O fluxo de aprovação agora é configurável (ver ApprovalWorkflowSteps em
+ * Db.gs) — a movimentação tem um único status "em aprovação" genérico; a
+ * etapa ativa é derivada dinamicamente (menor stepOrder ainda PENDENTE).
+ */
 var MovementStatus = {
   RASCUNHO: 'RASCUNHO',
-  PENDENTE_DIRETOR: 'PENDENTE_DIRETOR',
-  PENDENTE_RH: 'PENDENTE_RH',
-  PENDENTE_FINANCEIRO: 'PENDENTE_FINANCEIRO',
+  PENDENTE_APROVACAO: 'PENDENTE_APROVACAO',
   APROVADO: 'APROVADO',
   REPROVADO: 'REPROVADO',
   CANCELADO: 'CANCELADO',
 };
 
+/** Perfis que podem decidir uma etapa de aprovação. GESTOR nunca aprova — só solicita. */
 var ApproverRole = {
-  DIRETOR: 'DIRETOR',
+  ADMIN: 'ADMIN',
   RH_REMUNERACAO: 'RH_REMUNERACAO',
-  FINANCEIRO: 'FINANCEIRO',
+  DIRETOR: 'DIRETOR',
 };
 
 var ApprovalStatus = {
@@ -89,20 +92,11 @@ var ChargeValueType = {
   FIXO: 'FIXO',
 };
 
-/** Ordem fixa do workflow de aprovação sequencial. */
-var APPROVAL_WORKFLOW_ORDER = [ApproverRole.DIRETOR, ApproverRole.RH_REMUNERACAO, ApproverRole.FINANCEIRO];
-
-/** Status da movimentação que corresponde a cada etapa pendente. */
-var STATUS_FOR_APPROVER_ROLE = {};
-STATUS_FOR_APPROVER_ROLE[ApproverRole.DIRETOR] = MovementStatus.PENDENTE_DIRETOR;
-STATUS_FOR_APPROVER_ROLE[ApproverRole.RH_REMUNERACAO] = MovementStatus.PENDENTE_RH;
-STATUS_FOR_APPROVER_ROLE[ApproverRole.FINANCEIRO] = MovementStatus.PENDENTE_FINANCEIRO;
-
-/** Status seguinte após a aprovação de cada etapa. */
-var STATUS_AFTER_STEP = {};
-STATUS_AFTER_STEP[ApproverRole.DIRETOR] = MovementStatus.PENDENTE_RH;
-STATUS_AFTER_STEP[ApproverRole.RH_REMUNERACAO] = MovementStatus.PENDENTE_FINANCEIRO;
-STATUS_AFTER_STEP[ApproverRole.FINANCEIRO] = MovementStatus.APROVADO;
+/** Fluxo de aprovação padrão usado ao inicializar a planilha (ver Setup.gs). */
+var DEFAULT_APPROVAL_WORKFLOW = [
+  { stepOrder: 1, roles: [ApproverRole.RH_REMUNERACAO, ApproverRole.ADMIN] },
+  { stepOrder: 2, roles: [ApproverRole.DIRETOR] },
+];
 
 /** Parametrização de regras de negócio (equivalente a backend/.env). */
 var RULES = {

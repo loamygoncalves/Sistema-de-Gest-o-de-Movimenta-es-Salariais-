@@ -169,12 +169,7 @@ export class DashboardService {
       .select('m.effectiveDate', 'effectiveDate')
       .addSelect('sim.totalMonthlyImpact', 'impact')
       .where('m.status IN (:...statuses)', {
-        statuses: [
-          MovementStatus.APROVADO,
-          MovementStatus.PENDENTE_DIRETOR,
-          MovementStatus.PENDENTE_RH,
-          MovementStatus.PENDENTE_FINANCEIRO,
-        ],
+        statuses: [MovementStatus.APROVADO, MovementStatus.PENDENTE_APROVACAO],
       })
       .andWhere('m.effectiveDate BETWEEN :start AND :end', {
         start: start.toISOString().slice(0, 10),

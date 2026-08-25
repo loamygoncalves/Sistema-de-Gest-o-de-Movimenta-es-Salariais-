@@ -4,12 +4,12 @@ Base URL: `http://localhost:3001/api`. Todas as rotas (exceto `/auth/login`)
 exigem header `Authorization: Bearer <jwt>`. Respostas de erro seguem o formato
 padrão do Nest: `{ statusCode, message, error }`.
 
-Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `FINANCEIRO`, `GESTOR`.
+Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `GESTOR`.
 `DIRETOR` tem `directorateId` e enxerga toda a diretoria; `GESTOR` tem
 `costCenterIds` (multi-seleção) e enxerga só os colaboradores/orçamento
 desses centros de custo (lista vazia = não vê nada — nunca "vê tudo" por
-omissão). `ADMIN`/`RH_REMUNERACAO`/`FINANCEIRO` não têm escopo restrito. O
-backend resolve esse escopo a partir do token
+omissão). `ADMIN`/`RH_REMUNERACAO` não têm escopo restrito. GESTOR nunca
+aprova movimentações — só solicita. O backend resolve esse escopo a partir do token
 (`resolveAccessScope`/`applyAccessScope`) e aplica automaticamente em toda
 consulta filtrável por diretoria/centro de custo — filtros de query string
 (`directorateId`/`costCenterId`) só valem para quem não tem escopo restrito.
@@ -97,9 +97,10 @@ já que não há colaborador para derivar).
   - `MERITO`: `{ type, employeeId, percentage, effectiveDate, justification }` (valor calculado no backend)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
 - `PATCH /movements/:id` (somente RASCUNHO)
-- `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` + muda status para
-  `PENDENTE_DIRETOR` + envia e-mail de notificação para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es)
-  do centro de custo e o DIRETOR da diretoria (ver seção Notificações abaixo)
+- `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` a partir do fluxo
+  configurado (ver seção Aprovações abaixo) + muda status para `PENDENTE_APROVACAO` + envia
+  e-mail de notificação para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de custo e o
+  DIRETOR da diretoria (ver seção Notificações abaixo)
 - `DELETE /movements/:id` (somente RASCUNHO, cancela)
 
 ## Simulador — módulo 4
@@ -145,10 +146,24 @@ Script do sistema envia o e-mail de verdade via `MailApp`, usando a própria
 conta Google do deploy.
 
 ## Aprovações — módulo 5
-- `GET /approvals/pending` (filtra pela role do usuário logado: DIRETOR só vê steps `DIRETOR` da própria diretoria etc.)
-- `POST /approvals/:stepId/approve` `{ comment? }`
-- `POST /approvals/:stepId/reject` `{ comment }`
-- `GET /approvals/movement/:movementId` → linha do tempo completa
+O fluxo de aprovação é configurável (ADMIN, tela Fluxo de Aprovação): uma
+sequência de etapas ordenadas, cada uma com um conjunto de perfis
+elegíveis — **qualquer um deles decide a etapa** (o que agir primeiro), não
+todos. `movement_requests.status` fica em `PENDENTE_APROVACAO` (genérico)
+durante todo o fluxo; a etapa "ativa" é a de menor `order` ainda `PENDENTE`
+em `approvalSteps`. GESTOR nunca aprova, só solicita.
+
+- `GET /approval-workflow` → lista as etapas configuradas: `[{ id, stepOrder, roles }]`
+- `PUT /approval-workflow` (ADMIN) `{ steps: [{ roles }] }` → substitui o fluxo inteiro (a
+  ordem do array define `stepOrder`); não afeta movimentações já submetidas (cada
+  `approvalStep` guarda um snapshot de `eligibleRoles` no momento da submissão)
+- `GET /approvals/pending` (filtra pela etapa ativa cujo `eligibleRoles` inclui o perfil do
+  usuário logado; DIRETOR só vê movimentações da própria diretoria)
+- `POST /approvals/:stepId/approve` `{ comment? }` — se essa era a última etapa pendente, a
+  movimentação vira `APROVADO`
+- `POST /approvals/:stepId/reject` `{ comment }` — reprova a movimentação e pula as demais etapas
+- `GET /approvals/movement/:movementId` → linha do tempo completa, cada etapa com
+  `{ id, order, eligibleRoles, decidedByRole, status, approverId, approverName, comment, decidedAt }`
 
 ## Histórico — módulo 6
 - `GET /history?directorateId=&positionId=&type=&costCenterId=&startDate=&endDate=&page=&limit=`

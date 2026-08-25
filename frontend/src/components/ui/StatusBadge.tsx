@@ -16,9 +16,7 @@ import {
 
 const MOVEMENT_STATUS_COLOR: Record<MovementStatus, "slate" | "green" | "red" | "amber" | "blue"> = {
   RASCUNHO: "slate",
-  PENDENTE_DIRETOR: "amber",
-  PENDENTE_FINANCEIRO: "amber",
-  PENDENTE_RH: "amber",
+  PENDENTE_APROVACAO: "amber",
   APROVADO: "green",
   REPROVADO: "red",
   CANCELADO: "slate",
@@ -32,6 +30,7 @@ const APPROVAL_STATUS_COLOR: Record<ApprovalStepStatus, "slate" | "green" | "red
   PENDENTE: "amber",
   APROVADO: "green",
   REPROVADO: "red",
+  PULADO: "slate",
 };
 
 export function ApprovalStatusBadge({ status }: { status: ApprovalStepStatus }) {

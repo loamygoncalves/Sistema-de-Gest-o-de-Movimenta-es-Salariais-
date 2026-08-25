@@ -22,6 +22,7 @@ function setupSpreadsheet() {
   migrateLegacyBudgetSheet_(ss);
   migrateUsersSheet_(ss);
   migrateMovementRequestsSheet_(ss);
+  migrateApprovalStepsSheet_(ss);
 
   Object.keys(TABLES_CONFIG).forEach(function (key) {
     var cfg = TABLES_CONFIG[key];
@@ -44,6 +45,9 @@ function setupSpreadsheet() {
 
   seedReferenceData_();
   seedAdminUser_();
+  seedDefaultApprovalWorkflow_();
+  migratePendingMovementStatuses_();
+  migrateFinanceiroUsers_();
 
   Logger.log('Planilha configurada: ' + ss.getUrl());
   return ss.getUrl();
@@ -182,6 +186,86 @@ function migrateMovementRequestsSheet_(ss) {
   });
 
   Logger.log(removedIdList.length + ' solicitação(ões) de Transferência removida(s) (funcionalidade descontinuada).');
+}
+
+/**
+ * AprovacaoEtapas trocou a coluna única `approverRole` (um perfil fixo) por
+ * `eligibleRoles` (texto[], snapshot dos perfis elegíveis daquela etapa) +
+ * `decidedByRole` (quem de fato decidiu, para auditoria) — equivalente à
+ * migration TypeORM ConfigurableApprovalWorkflow. Etapas existentes viram
+ * eligibleRoles = [approverRole antigo]; se já tinham sido decididas
+ * (APROVADO/REPROVADO), decidedByRole recebe o mesmo valor.
+ */
+function migrateApprovalStepsSheet_(ss) {
+  migrateSheetColumns_(ss, 'approvalSteps', function (obj) {
+    var oldRole = obj.approverRole;
+    obj.eligibleRoles = oldRole ? String(oldRole) : '';
+    obj.decidedByRole = oldRole && (obj.status === 'APROVADO' || obj.status === 'REPROVADO') ? String(oldRole) : '';
+    return obj;
+  });
+}
+
+/**
+ * O fluxo de aprovação passou a ser configurável (aba FluxoAprovacao) — se
+ * ainda não há nenhuma etapa cadastrada (planilha nova ou vinda de uma
+ * versão anterior a essa funcionalidade), semeia o fluxo padrão: etapa 1 =
+ * RH Remuneração ou Admin; etapa 2 = Diretor.
+ */
+function seedDefaultApprovalWorkflow_() {
+  if (Tables.approvalWorkflowSteps.all().length > 0) return;
+  var now = nowIso_();
+  DEFAULT_APPROVAL_WORKFLOW.forEach(function (step) {
+    Tables.approvalWorkflowSteps.insert({
+      stepOrder: step.stepOrder,
+      roles: rolesToCsv_(step.roles),
+      createdAt: now,
+      updatedAt: now,
+    });
+  });
+  Logger.log('Fluxo de aprovação padrão semeado (RH Remuneração/Admin -> Diretor).');
+}
+
+/**
+ * `movement_requests.status` perdeu os valores nomeados por etapa
+ * (PENDENTE_DIRETOR/PENDENTE_RH/PENDENTE_FINANCEIRO) em favor de um único
+ * PENDENTE_APROVACAO genérico — qual etapa está ativa passa a ser lido de
+ * AprovacaoEtapas (a de menor stepOrder ainda PENDENTE), não mais do status
+ * da movimentação. Equivalente à migration TypeORM
+ * ConfigurableApprovalWorkflow.
+ */
+function migratePendingMovementStatuses_() {
+  var legacyStatuses = ['PENDENTE_DIRETOR', 'PENDENTE_RH', 'PENDENTE_FINANCEIRO'];
+  var toMigrate = Tables.movementRequests.where(function (m) {
+    return legacyStatuses.indexOf(m.status) !== -1;
+  });
+  toMigrate.forEach(function (m) {
+    Tables.movementRequests.update(m.id, { status: MovementStatus.PENDENTE_APROVACAO, updatedAt: nowIso_() });
+  });
+  if (toMigrate.length > 0) {
+    Logger.log(toMigrate.length + ' movimentação(ões) migrada(s) para o status único PENDENTE_APROVACAO.');
+  }
+}
+
+/**
+ * Remove o perfil FINANCEIRO do sistema: usuários existentes com esse
+ * perfil são reatribuídos para RH_REMUNERACAO e desativados (não há um
+ * perfil equivalente — fica marcado inativo para um ADMIN revisar e
+ * reatribuir corretamente). Equivalente à migration TypeORM
+ * ConfigurableApprovalWorkflow.
+ */
+function migrateFinanceiroUsers_() {
+  var affected = Tables.users.where(function (u) {
+    return u.role === 'FINANCEIRO';
+  });
+  affected.forEach(function (u) {
+    Tables.users.update(u.id, { role: UserRole.RH_REMUNERACAO, active: false });
+  });
+  if (affected.length > 0) {
+    Logger.log(
+      affected.length +
+        ' usuário(s) com perfil FINANCEIRO (removido do sistema) reatribuído(s) para RH_REMUNERACAO e desativado(s) — revise manualmente.',
+    );
+  }
 }
 
 function seedReferenceData_() {

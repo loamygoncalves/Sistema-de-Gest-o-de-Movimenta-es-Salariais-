@@ -1,37 +1,21 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import {
-  APPROVAL_WORKFLOW_ORDER,
-  ApprovalStatus,
-  ApproverRole,
-  MovementStatus,
-  STATUS_TO_APPROVER_ROLE,
-  UserRole,
-} from '../../common/enums';
+import { LessThan, Repository } from 'typeorm';
+import { ApprovalStatus, MovementStatus, UserRole } from '../../common/enums';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
 import { MovementSimulation } from '../movements/entities/movement-simulation.entity';
 import { MovementHistory } from '../history/entities/movement-history.entity';
 import { ApprovalStep } from './entities/approval-step.entity';
-
-const ROLE_TO_APPROVER_ROLE: Partial<Record<UserRole, ApproverRole>> = {
-  [UserRole.DIRETOR]: ApproverRole.DIRETOR,
-  [UserRole.RH_REMUNERACAO]: ApproverRole.RH_REMUNERACAO,
-  [UserRole.FINANCEIRO]: ApproverRole.FINANCEIRO,
-};
-
-const STATUS_AFTER_STEP: Record<ApproverRole, MovementStatus> = {
-  [ApproverRole.DIRETOR]: MovementStatus.PENDENTE_RH,
-  [ApproverRole.RH_REMUNERACAO]: MovementStatus.PENDENTE_FINANCEIRO,
-  [ApproverRole.FINANCEIRO]: MovementStatus.APROVADO,
-};
+import { ApprovalWorkflowStep } from './entities/approval-workflow-step.entity';
 
 @Injectable()
 export class ApprovalsService {
   constructor(
     @InjectRepository(ApprovalStep)
     private readonly stepRepo: Repository<ApprovalStep>,
+    @InjectRepository(ApprovalWorkflowStep)
+    private readonly workflowStepRepo: Repository<ApprovalWorkflowStep>,
     @InjectRepository(MovementRequest)
     private readonly movementRepo: Repository<MovementRequest>,
     @InjectRepository(MovementSimulation)
@@ -40,12 +24,20 @@ export class ApprovalsService {
     private readonly historyRepo: Repository<MovementHistory>,
   ) {}
 
+  /** Cria uma ApprovalStep por etapa configurada em ApprovalWorkflowStep, na ordem cadastrada. */
   async createStepsForMovement(movementRequestId: string): Promise<ApprovalStep[]> {
-    const steps = APPROVAL_WORKFLOW_ORDER.map((role, index) =>
+    const workflow = await this.workflowStepRepo.find({ order: { stepOrder: 'ASC' } });
+    if (workflow.length === 0) {
+      throw new ForbiddenException(
+        'Nenhum fluxo de aprovação configurado — cadastre em Administração > Fluxo de Aprovação antes de submeter.',
+      );
+    }
+
+    const steps = workflow.map((configStep) =>
       this.stepRepo.create({
         movementRequestId,
-        stepOrder: index + 1,
-        approverRole: role,
+        stepOrder: configStep.stepOrder,
+        eligibleRoles: configStep.roles,
         status: ApprovalStatus.PENDENTE,
       }),
     );
@@ -58,7 +50,8 @@ export class ApprovalsService {
       id: step.id,
       movementId: step.movementRequestId,
       order: step.stepOrder,
-      role: step.approverRole,
+      eligibleRoles: step.eligibleRoles,
+      decidedByRole: step.decidedByRole ?? null,
       status: step.status,
       approverId: step.approverUserId ?? null,
       approverName: step.approverUser?.name ?? null,
@@ -77,9 +70,15 @@ export class ApprovalsService {
     return steps.map((step) => this.toStepDto(step));
   }
 
+  /**
+   * Etapas pendentes que o usuário atual pode decidir agora: a de menor
+   * `stepOrder` ainda PENDENTE de cada movimentação (etapas seguintes só
+   * ficam "ativas" depois que as anteriores forem decididas) cujo conjunto
+   * de perfis elegíveis inclui o perfil do usuário. GESTOR nunca aprova —
+   * só solicita.
+   */
   async findPending(user: AuthenticatedUser) {
-    const approverRole = ROLE_TO_APPROVER_ROLE[user.role];
-    if (!approverRole) return [];
+    if (user.role === UserRole.GESTOR) return [];
 
     const qb = this.stepRepo
       .createQueryBuilder('step')
@@ -87,10 +86,17 @@ export class ApprovalsService {
       .leftJoinAndSelect('movement.directorate', 'directorate')
       .leftJoinAndSelect('movement.employee', 'employee')
       .where('step.status = :pending', { pending: ApprovalStatus.PENDENTE })
-      .andWhere('step.approverRole = :approverRole', { approverRole })
-      .andWhere('movement.status = :movementStatus', {
-        movementStatus: this.statusForApproverRole(approverRole),
-      });
+      .andWhere('movement.status = :movementStatus', { movementStatus: MovementStatus.PENDENTE_APROVACAO })
+      .andWhere(':role = ANY(step.eligibleRoles)', { role: user.role })
+      .andWhere(
+        `NOT EXISTS (
+          SELECT 1 FROM approval_steps earlier
+          WHERE earlier.movement_request_id = step.movement_request_id
+            AND earlier.step_order < step.step_order
+            AND earlier.status = :pendingInner
+        )`,
+        { pendingInner: ApprovalStatus.PENDENTE },
+      );
 
     if (user.role === UserRole.DIRETOR && user.directorateId) {
       qb.andWhere('movement.directorateId = :directorateId', {
@@ -119,15 +125,10 @@ export class ApprovalsService {
     }));
   }
 
-  private statusForApproverRole(role: ApproverRole): MovementStatus {
-    const entry = Object.entries(STATUS_TO_APPROVER_ROLE).find(([, r]) => r === role);
-    return entry![0] as MovementStatus;
-  }
-
-  private async loadActionableStep(stepId: string, user: AuthenticatedUser): Promise<{
-    step: ApprovalStep;
-    movement: MovementRequest;
-  }> {
+  private async loadActionableStep(
+    stepId: string,
+    user: AuthenticatedUser,
+  ): Promise<{ step: ApprovalStep; movement: MovementRequest }> {
     const step = await this.stepRepo.findOne({ where: { id: stepId } });
     if (!step) throw new NotFoundException('Etapa de aprovação não encontrada');
 
@@ -136,19 +137,25 @@ export class ApprovalsService {
     if (step.status !== ApprovalStatus.PENDENTE) {
       throw new ForbiddenException('Esta etapa já foi decidida');
     }
-    if (movement.status !== this.statusForApproverRole(step.approverRole)) {
+    if (movement.status !== MovementStatus.PENDENTE_APROVACAO) {
       throw new ForbiddenException('Esta etapa não está ativa no fluxo atual');
     }
 
-    const userApproverRole = ROLE_TO_APPROVER_ROLE[user.role];
-    if (user.role !== UserRole.ADMIN && userApproverRole !== step.approverRole) {
+    const earlierPending = await this.stepRepo.count({
+      where: {
+        movementRequestId: movement.id,
+        stepOrder: LessThan(step.stepOrder),
+        status: ApprovalStatus.PENDENTE,
+      },
+    });
+    if (earlierPending > 0) {
+      throw new ForbiddenException('Esta etapa não está ativa no fluxo atual');
+    }
+
+    if (user.role !== UserRole.ADMIN && !step.eligibleRoles.includes(user.role)) {
       throw new ForbiddenException('Perfil sem permissão para decidir esta etapa');
     }
-    if (
-      step.approverRole === ApproverRole.DIRETOR &&
-      user.role === UserRole.DIRETOR &&
-      user.directorateId !== movement.directorateId
-    ) {
+    if (user.role === UserRole.DIRETOR && user.directorateId && user.directorateId !== movement.directorateId) {
       throw new ForbiddenException('Diretor só pode aprovar movimentações da própria diretoria');
     }
 
@@ -161,14 +168,16 @@ export class ApprovalsService {
     await this.stepRepo.update(step.id, {
       status: ApprovalStatus.APROVADO,
       approverUserId: user.id,
+      decidedByRole: user.role,
       comment,
       decidedAt: new Date(),
     });
 
-    const nextStatus = STATUS_AFTER_STEP[step.approverRole];
-    await this.movementRepo.update(movement.id, { status: nextStatus });
-
-    if (nextStatus === MovementStatus.APROVADO) {
+    const remaining = await this.stepRepo.count({
+      where: { movementRequestId: movement.id, status: ApprovalStatus.PENDENTE },
+    });
+    if (remaining === 0) {
+      await this.movementRepo.update(movement.id, { status: MovementStatus.APROVADO });
       await this.recordHistory(movement);
     }
 
@@ -181,6 +190,7 @@ export class ApprovalsService {
     await this.stepRepo.update(step.id, {
       status: ApprovalStatus.REPROVADO,
       approverUserId: user.id,
+      decidedByRole: user.role,
       comment,
       decidedAt: new Date(),
     });

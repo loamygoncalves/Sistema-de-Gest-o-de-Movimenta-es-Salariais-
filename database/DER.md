@@ -89,8 +89,14 @@ erDiagram
         uuid id PK
         uuid movement_request_id FK
         int step_order
-        string approver_role
+        string[] eligible_roles
+        string decided_by_role
         string status
+    }
+    APPROVAL_WORKFLOW_STEPS {
+        uuid id PK
+        int step_order
+        string[] roles
     }
     MOVEMENT_HISTORY {
         uuid id PK
@@ -155,10 +161,22 @@ erDiagram
   centros de custo (em vez de uma diretoria inteira, como o `DIRETOR`, que
   usa `users.directorate_id`). Ausência de linhas = o Gestor não vê nada
   (nunca "vê tudo" por omissão).
-- **`approval_steps`** materializa o workflow Diretor → RH Remuneração →
-  Financeiro como linhas ordenadas por `step_order`, permitindo auditoria de
-  quem aprovou, quando e com qual comentário, além de paralelizar consultas de
-  "pendências por perfil".
+- **`approval_workflow_steps`** é a configuração do fluxo de aprovação
+  (tela Administração > Fluxo de Aprovação, só ADMIN): uma sequência de
+  etapas ordenadas por `step_order`, cada uma com um conjunto de perfis
+  (`roles`) — qualquer um deles decide a etapa, o que agir primeiro. Sem FK
+  para nenhuma outra tabela; a tabela inteira é substituída a cada
+  salvamento. `roles` é `TEXT[]` (não um enum Postgres) de propósito: a
+  lista de perfis válidos é definida em `ApproverRole` (TypeScript) e pode
+  mudar sem nova migration.
+- **`approval_steps`** materializa, por movimentação, uma etapa por linha de
+  `approval_workflow_steps` no momento da submissão (`eligible_roles` é um
+  snapshot — mudar o fluxo depois não afeta solicitações já em andamento).
+  Qual etapa está "ativa" é derivado dinamicamente (a de menor `step_order`
+  ainda `PENDENTE`), não armazenado no status da movimentação.
+  `decided_by_role` registra qual perfil, dentre os elegíveis, de fato
+  decidiu — para auditoria — junto com quem aprovou/reprovou, quando e com
+  qual comentário.
 - **`movement_simulations`** persiste o resultado do simulador no momento da
   submissão (não é recalculado silenciosamente depois), garantindo que a
   decisão de aprovação seja auditável com os números que o aprovador viu.

@@ -6,7 +6,7 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { ApprovalStatus, ApproverRole } from '../../../common/enums';
+import { ApprovalStatus } from '../../../common/enums';
 import { MovementRequest } from '../../movements/entities/movement-request.entity';
 import { User } from '../../users/entities/user.entity';
 
@@ -25,8 +25,13 @@ export class ApprovalStep {
   @Column({ type: 'smallint', name: 'step_order' })
   stepOrder: number;
 
-  @Column({ type: 'enum', enum: ApproverRole, name: 'approver_role' })
-  approverRole: ApproverRole;
+  /** Snapshot dos perfis elegíveis para decidir esta etapa (qualquer um deles), tirado de ApprovalWorkflowStep no momento da submissão. */
+  @Column({ type: 'text', array: true, name: 'eligible_roles' })
+  eligibleRoles: string[];
+
+  /** Perfil que o aprovador tinha ao decidir (auditoria) — nulo enquanto PENDENTE. */
+  @Column({ type: 'text', name: 'decided_by_role', nullable: true })
+  decidedByRole?: string;
 
   @ManyToOne(() => User, { nullable: true })
   @JoinColumn({ name: 'approver_user_id' })

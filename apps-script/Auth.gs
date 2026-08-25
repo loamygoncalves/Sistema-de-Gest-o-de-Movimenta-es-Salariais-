@@ -91,8 +91,8 @@ function requireRole_(user, allowedRoles) {
 /**
  * Escopo de acesso do usuário: DIRETOR enxerga a diretoria inteira, GESTOR
  * enxerga só os centros de custo atribuídos a ele, os demais perfis (ADMIN,
- * RH_REMUNERACAO, FINANCEIRO) não têm escopo restrito. Nunca os dois campos
- * ao mesmo tempo. Espelha
+ * RH_REMUNERACAO) não têm escopo restrito. Nunca os dois campos ao mesmo
+ * tempo. Espelha
  * backend/src/common/decorators/current-user.decorator.ts#resolveAccessScope.
  */
 function resolveAccessScope_(user) {
@@ -124,7 +124,7 @@ function matchesAccessScope_(record, scope) {
  * (directorateId/costCenterId escolhidos em um <select>) — mesma regra do
  * applyAccessScope() do backend NestJS: o escopo do usuário sempre vence
  * quando definido; o filtro explícito só é considerado para quem não tem
- * escopo restrito (ADMIN/RH_REMUNERACAO/FINANCEIRO).
+ * escopo restrito (ADMIN/RH_REMUNERACAO).
  */
 function mergeAccessScope_(scope, queryDirectorateId, queryCostCenterId) {
   var merged = {};

@@ -83,7 +83,7 @@
                 '</td><td>' +
                 fmt.date(m.effectiveDate) +
                 '</td><td>' +
-                badge('approverRole', step.approverRole) +
+                escapeHtml((step.eligibleRoles || []).map(function (r) { return labelFor('approverRole', r); }).join(' ou ')) +
                 '</td><td>' +
                 fmt.dateTime(m.createdAt) +
                 '</td><td><div class="row"><button class="btn btn-success btn-sm" data-approve="' +

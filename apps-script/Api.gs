@@ -369,6 +369,19 @@ function api_rejectStep(stepId, comment) {
   return stripRow_(ApprovalsService.reject(stepId, user, comment));
 }
 
+function api_getApprovalWorkflow() {
+  requireUser_();
+  return ApprovalWorkflowService.list();
+}
+
+function api_saveApprovalWorkflow(steps) {
+  var user = requireUser_();
+  requireRole_(user, [UserRole.ADMIN]);
+  var result = ApprovalWorkflowService.replace(steps);
+  recordAudit_(user.email, 'UPDATE', 'approval_workflow_steps', '', { steps: steps });
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Histórico (Módulo 6)
 // ---------------------------------------------------------------------------
