@@ -837,6 +837,68 @@
     );
   }
 
+  /**
+   * Gráfico de barras agrupadas (2 séries por coluna) em CSS puro — usado
+   * pelo Dashboard Executivo para orçado x atual por centro de custo.
+   * items: [{label, budgeted, current, status}] — a barra "atual" fica
+   * vermelha quando status === 'ACIMA' (fora do orçamento).
+   */
+  function renderGroupedBarChart(items, opts) {
+    opts = opts || {};
+    if (!items || items.length === 0) {
+      return '<p class="text-sm text-muted">Sem dados para exibir.</p>';
+    }
+    var max = Math.max.apply(
+      null,
+      items
+        .map(function (i) { return Math.abs(Number(i.budgeted) || 0); })
+        .concat(items.map(function (i) { return Math.abs(Number(i.current) || 0); }))
+        .concat([1])
+    );
+    var legend =
+      '<div class="bar-chart-legend">' +
+      '<span><span class="bar-chart-legend-dot" style="background:var(--slate-300,#cbd5e1);"></span>Orçado</span>' +
+      '<span><span class="bar-chart-legend-dot" style="background:var(--brand-500);"></span>Dentro do orçamento</span>' +
+      '<span><span class="bar-chart-legend-dot" style="background:var(--red-500,#ef4444);"></span>Acima do orçamento</span>' +
+      '</div>';
+    return (
+      legend +
+      '<div class="bar-chart">' +
+      items
+        .map(function (i) {
+          var budgeted = Number(i.budgeted) || 0;
+          var current = Number(i.current) || 0;
+          var hBudgeted = Math.max(2, Math.round((Math.abs(budgeted) / max) * 100));
+          var hCurrent = Math.max(2, Math.round((Math.abs(current) / max) * 100));
+          var currentClass = i.status === 'ACIMA' ? ' negative' : '';
+          var title =
+            escapeHtml(i.label) +
+            ' — Orçado: ' +
+            escapeHtml(opts.formatter ? opts.formatter(budgeted) : String(budgeted)) +
+            ' / Atual: ' +
+            escapeHtml(opts.formatter ? opts.formatter(current) : String(current));
+          return (
+            '<div class="bar-chart-col" title="' +
+            title +
+            '"><div class="bar-chart-group">' +
+            '<div class="bar-chart-bar muted" style="height:' +
+            hBudgeted +
+            '%"></div>' +
+            '<div class="bar-chart-bar' +
+            currentClass +
+            '" style="height:' +
+            hCurrent +
+            '%"></div>' +
+            '</div><div class="bar-chart-label">' +
+            escapeHtml(i.label) +
+            '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
   function loadingHtml(label) {
     return '<div class="loading-row"><div class="spinner"></div><span>' + escapeHtml(label || 'Carregando...') + '</span></div>';
   }

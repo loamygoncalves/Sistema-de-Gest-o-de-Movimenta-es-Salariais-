@@ -18,7 +18,7 @@ export class DashboardController {
   getHeadcount(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.dashboardService.getHeadcount(
       query.year,
-      query.month,
+      query.months,
       resolveAccessScope(user),
       query.directorateId,
       query.costCenterId,
@@ -29,10 +29,20 @@ export class DashboardController {
   getPayroll(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.dashboardService.getPayroll(
       query.year,
-      query.month,
+      query.months,
       resolveAccessScope(user),
       query.directorateId,
       query.costCenterId,
+    );
+  }
+
+  @Get('cost-centers')
+  getCostCenterBreakdown(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.dashboardService.getCostCenterBreakdown(
+      query.year,
+      query.months,
+      resolveAccessScope(user),
+      query.directorateId,
     );
   }
 
@@ -50,7 +60,7 @@ export class DashboardController {
   getFinancial(@Query() query: DashboardQueryDto, @CurrentUser() user: AuthenticatedUser) {
     return this.dashboardService.getFinancial(
       query.year,
-      query.month,
+      query.months,
       resolveAccessScope(user),
       query.directorateId,
       query.costCenterId,

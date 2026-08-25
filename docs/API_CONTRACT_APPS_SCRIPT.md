@@ -7,7 +7,7 @@ cliente (HtmlService) assim, nunca com `await`/Promise nativo:
 google.script.run
   .withSuccessHandler(function (result) { /* ... */ })
   .withFailureHandler(function (error) { /* error.message */ })
-  .api_getDashboardHeadcount(2026, 1, null);
+  .api_getDashboardHeadcount(2026, [1], null);
 ```
 
 `Client_Core.html` envolve isso num helper `callApi(fnName, ...args)` que
@@ -215,19 +215,38 @@ durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
 - `api_getSalaryPositioning({ directorateId?, positionId? })` → `[{ employee, currentSalary, marketP25, marketP50, marketP75, marketP90, classification }]`, `classification` ∈ `ABAIXO_DO_MERCADO | DENTRO_DO_MERCADO | ACIMA_DO_MERCADO | null`
 
 ## Dashboards executivos — Módulo 8
-- `api_getDashboardHeadcount(year, month?, directorateId?)` → `{ year, month, hcBudgeted, hcCurrent, hcApproved, hcOpen, monthClosed }`
-  (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente;
-  vaga em aberto = linha de orçamento com `movementType = AUMENTO_DE_QUADRO` ativa no mês)
-- `api_getDashboardPayroll(year, month?, directorateId?)` → `{ year, month, payrollCurrent, payrollBudgeted, difference, monthClosed }`
-  (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
-  `hcCurrent`/`payrollCurrent` usam **exclusivamente** o fechamento de folha do mês exato
-  pedido (aba `FechamentoFolha`) — nunca o `currentSalary` ao vivo. Sem fechamento para o
-  mês pedido, ambos vêm zerados e `monthClosed: false` (ver `api_importEmployees` acima);
-  usar o `currentSalary` faria um mês sem fechamento "herdar" os números do último mês
-  fechado, como se as folhas tivessem sido somadas entre meses.
+Todas as funções abaixo (exceto `api_getDashboardMovements`, sempre anual)
+recebem `months` como um **array** de 1-12 (`[7]` ou `[7,8,9]`; padrão: só o
+mês corrente) — o Dashboard Executivo permite selecionar vários meses de
+uma vez e ver o dashboard refletir exatamente o período escolhido, em vez
+de só um mês por vez. **Custo (folha) é somado entre os meses selecionados**
+(gasto acumulado do período); **headcount é a média** (não é aditivo).
+Selecionar os 12 meses dá a visão "acumulado do ano".
+
+- `api_getDashboardHeadcount(year, months?, directorateId?)` →
+  `{ year, months, hcBudgeted, hcCurrent, hcApproved, hcOpen, monthClosed, openMonths, byMonth: [{month, hcBudgeted, hcCurrent, hcOpen, monthClosed}] }`
+  (`hcBudgeted`/`hcCurrent`/`hcOpen` são a média entre os meses selecionados; `hcApproved` é
+  sempre anual; vaga em aberto = linha de orçamento com `movementType = AUMENTO_DE_QUADRO`
+  ativa no mês)
+- `api_getDashboardPayroll(year, months?, directorateId?)` →
+  `{ year, months, payrollCurrent, payrollBudgeted, difference, monthClosed, openMonths, byMonth: [{month, payrollBudgeted, payrollCurrent, monthClosed}] }`
+  (`payrollCurrent`/`payrollBudgeted` são a SOMA entre os meses selecionados — gasto
+  acumulado do período)
+  `hcCurrent`/`payrollCurrent` de cada mês usam **exclusivamente** o fechamento de folha
+  daquele mês exato (aba `FechamentoFolha`) — nunca o `currentSalary` ao vivo. Mês sem
+  fechamento entra zerado (não "herda" os números de outro mês fechado) e aparece em
+  `openMonths`; `monthClosed` só é `true` quando TODOS os meses selecionados estão fechados.
+- `api_getDashboardCostCenters(year, months?, directorateId?)` →
+  `{ year, months, items: [{ directorateId, directorateName, costCenterId, costCenterName, budgetedCost, currentCost, difference, budgetedCount, currentCount, status }] }`
+  Orçado x Atual por centro de custo, somando o custo e mediando o headcount entre os meses
+  selecionados — é o que permite a uma diretoria (filtro `directorateId`) ver exatamente quais
+  dos seus centros de custo estão `DENTRO` ou `ACIMA` do orçamento no período escolhido.
+  `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `api_getDashboardMovements(year, directorateId?)` → `{ promotions, merits, headcountIncrease }`
-- `api_getDashboardFinancial(year, month?, directorateId?)` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}], monthClosed }`
-  (`monthClosed` reflete o mesmo mês usado em `budgetConsumedPercent`, herdado de `api_getDashboardPayroll`)
+- `api_getDashboardFinancial(year, months?, directorateId?)` →
+  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}], monthClosed, openMonths }`
+  (`monthClosed`/`openMonths` refletem os mesmos meses usados em `budgetConsumedPercent`,
+  herdados de `api_getDashboardPayroll`)
 
 ## Upload de arquivo (import)
 

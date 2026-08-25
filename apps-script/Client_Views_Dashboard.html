@@ -2,7 +2,8 @@
   /* =====================================================================
      Módulo 8 — Dashboards executivos
      api_getDashboardHeadcount / api_getDashboardPayroll /
-     api_getDashboardMovements / api_getDashboardFinancial
+     api_getDashboardCostCenters / api_getDashboardMovements /
+     api_getDashboardFinancial
      ===================================================================== */
 
   var DASHBOARD_MONTH_LABELS_ = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -12,7 +13,7 @@
     var now = new Date();
     var state = {
       year: now.getFullYear(),
-      month: now.getMonth() + 1,
+      months: [now.getMonth() + 1],
       directorateId: isScopedRole(user) ? user.directorateId || '' : '',
     };
 
@@ -66,6 +67,64 @@
       );
     }
 
+    function costCenterTableHtml(items) {
+      if (!items || items.length === 0) return emptyStateHtml('Nenhum centro de custo com orçado ou folha fechada no período.');
+      return (
+        '<div class="table-wrap"><table><thead><tr><th>Diretoria</th><th>Centro de Custo</th>' +
+        '<th class="cell-num">HC Orçado</th><th class="cell-num">HC Atual</th>' +
+        '<th class="cell-num">Custo Orçado</th><th class="cell-num">Custo Atual</th>' +
+        '<th class="cell-num">Diferença</th><th>Status</th></tr></thead><tbody>' +
+        items
+          .map(function (r) {
+            var statusHtml =
+              '<span class="pill ' +
+              (r.status === 'ACIMA' ? 'pill-red' : 'pill-green') +
+              '">' +
+              (r.status === 'ACIMA' ? 'Acima do orçamento' : 'Dentro do orçamento') +
+              '</span>';
+            return (
+              '<tr><td>' +
+              escapeHtml(r.directorateName || '—') +
+              '</td><td>' +
+              escapeHtml(r.costCenterName || '—') +
+              '</td><td class="cell-num">' +
+              fmt.number(r.budgetedCount) +
+              '</td><td class="cell-num">' +
+              fmt.number(r.currentCount) +
+              '</td><td class="cell-num">' +
+              fmt.currency(r.budgetedCost) +
+              '</td><td class="cell-num">' +
+              fmt.currency(r.currentCost) +
+              '</td><td class="cell-num" style="' +
+              (r.difference > 0 ? 'color:var(--red-600);font-weight:600;' : 'color:var(--green-600,#059669);font-weight:600;') +
+              '">' +
+              fmt.currency(r.difference) +
+              '</td><td>' +
+              statusHtml +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>'
+      );
+    }
+
+    function monthCheckboxesHtml() {
+      return DASHBOARD_MONTH_LABELS_.map(function (label, i) {
+        var month = i + 1;
+        var checked = state.months.indexOf(month) !== -1 ? ' checked' : '';
+        return (
+          '<label class="month-check"><input type="checkbox" data-month="' +
+          month +
+          '"' +
+          checked +
+          '> ' +
+          label +
+          '</label>'
+        );
+      }).join('');
+    }
+
     function renderFilters() {
       var el = document.getElementById('dash-filters');
       var directorateFilterHtml = '';
@@ -79,14 +138,25 @@
         '<div class="col"><label>Ano</label><input type="number" id="dash-year" value="' +
         state.year +
         '" style="width:110px;"></div>' +
-        '<div class="col"><label>Mês de referência</label><select id="dash-month">' +
-        optionsHtml(
-          DASHBOARD_MONTH_LABELS_.map(function (label, i) {
-            return { id: i + 1, name: label };
-          }),
-          { selected: state.month },
-        ) +
-        '</select></div>' +
+        '<div class="col" style="position:relative;">' +
+        '<label>Meses</label>' +
+        '<button type="button" class="btn btn-outline btn-sm" id="dash-months-toggle">' +
+        (state.months.length === 12
+          ? 'Ano todo'
+          : state.months.length === 1
+            ? DASHBOARD_MONTH_LABELS_[state.months[0] - 1]
+            : state.months.length + ' meses selecionados') +
+        ' ▾</button>' +
+        '<div id="dash-months-panel" class="dropdown-panel" style="display:none;">' +
+        '<div class="dropdown-panel-actions">' +
+        '<button type="button" class="btn-link" id="dash-months-all">Ano todo</button>' +
+        '<button type="button" class="btn-link" id="dash-months-current">Só mês atual</button>' +
+        '</div>' +
+        '<div class="month-check-grid">' +
+        monthCheckboxesHtml() +
+        '</div>' +
+        '</div>' +
+        '</div>' +
         directorateFilterHtml +
         '<div class="col" style="justify-content:flex-end;"><button class="btn btn-outline btn-sm" id="dash-refresh">Atualizar</button></div>';
 
@@ -94,10 +164,42 @@
         state.year = Number(e.target.value) || state.year;
         loadData();
       });
-      document.getElementById('dash-month').addEventListener('change', function (e) {
-        state.month = Number(e.target.value) || state.month;
+
+      var panel = document.getElementById('dash-months-panel');
+      var toggle = document.getElementById('dash-months-toggle');
+      toggle.addEventListener('click', function () {
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      });
+      document.addEventListener('click', function (e) {
+        if (!panel.contains(e.target) && e.target !== toggle) panel.style.display = 'none';
+      });
+      panel.querySelectorAll('input[type=checkbox]').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          var month = Number(cb.getAttribute('data-month'));
+          if (cb.checked) {
+            if (state.months.indexOf(month) === -1) state.months.push(month);
+          } else if (state.months.length > 1) {
+            state.months = state.months.filter(function (m) { return m !== month; });
+          } else {
+            cb.checked = true;
+            return;
+          }
+          state.months.sort(function (a, b) { return a - b; });
+          renderFilters();
+          loadData();
+        });
+      });
+      document.getElementById('dash-months-all').addEventListener('click', function () {
+        state.months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+        renderFilters();
         loadData();
       });
+      document.getElementById('dash-months-current').addEventListener('click', function () {
+        state.months = [new Date().getMonth() + 1];
+        renderFilters();
+        loadData();
+      });
+
       var dirEl = document.getElementById('dash-directorate');
       if (dirEl) {
         dirEl.addEventListener('change', function (e) {
@@ -113,40 +215,44 @@
       body.innerHTML = loadingHtml();
       var dirId = state.directorateId || null;
       Promise.all([
-        callApi('api_getDashboardHeadcount', state.year, state.month, dirId),
-        callApi('api_getDashboardPayroll', state.year, state.month, dirId),
+        callApi('api_getDashboardHeadcount', state.year, state.months, dirId),
+        callApi('api_getDashboardPayroll', state.year, state.months, dirId),
+        callApi('api_getDashboardCostCenters', state.year, state.months, dirId),
         callApi('api_getDashboardMovements', state.year, dirId),
-        callApi('api_getDashboardFinancial', state.year, state.month, dirId),
+        callApi('api_getDashboardFinancial', state.year, state.months, dirId),
       ])
         .then(function (results) {
-          renderBody(results[0], results[1], results[2], results[3]);
+          renderBody(results[0], results[1], results[2], results[3], results[4]);
         })
         .catch(function (err) {
           body.innerHTML = errorStateHtml(apiErrorMessage(err));
         });
     }
 
-    function renderBody(headcount, payroll, movements, financial) {
+    function renderBody(headcount, payroll, costCenters, movements, financial) {
       var body = document.getElementById('dash-body');
-      var monthClosedWarning = !headcount.monthClosed
+      var isMulti = (headcount.months || []).length > 1;
+      var openMonths = headcount.openMonths || [];
+      var monthClosedWarning = openMonths.length
         ? '<div class="banner banner-warn">O fechamento da folha de ' +
-          (DASHBOARD_MONTH_LABELS_[headcount.month - 1] || headcount.month) +
-          '/' +
-          headcount.year +
-          ' ainda não foi importado — Headcount Atual, Folha Atual e Diferença estão zerados para este mês (não mostram o salário de outro mês).</div>'
+          openMonths
+            .map(function (m) { return DASHBOARD_MONTH_LABELS_[m - 1] || m; })
+            .join(', ') +
+          ' ainda não foi importado — esses meses entram zerados no período selecionado (não mostram o salário de outro mês).</div>'
         : '';
+
       body.innerHTML =
         '<div class="stack">' +
         monthClosedWarning +
         '<div class="grid grid-4">' +
-        kpiTile('Headcount Orçado (mês)', fmt.number(headcount.hcBudgeted)) +
-        kpiTile('Headcount Atual', fmt.number(headcount.hcCurrent)) +
+        kpiTile('Headcount Orçado' + (isMulti ? ' (média)' : ''), fmt.number(headcount.hcBudgeted)) +
+        kpiTile('Headcount Atual' + (isMulti ? ' (média)' : ''), fmt.number(headcount.hcCurrent)) +
         kpiTile('Vagas Aprovadas (ano)', fmt.number(headcount.hcApproved), 'highlight') +
         kpiTile('Vagas em Aberto', fmt.number(headcount.hcOpen)) +
         '</div>' +
         '<div class="grid grid-3">' +
-        kpiTile('Folha Orçada (mês)', fmt.currency(payroll.payrollBudgeted)) +
-        kpiTile('Folha Atual', fmt.currency(payroll.payrollCurrent)) +
+        kpiTile('Folha Orçada' + (isMulti ? ' (acumulado)' : ''), fmt.currency(payroll.payrollBudgeted)) +
+        kpiTile('Folha Atual' + (isMulti ? ' (acumulado)' : ''), fmt.currency(payroll.payrollCurrent)) +
         kpiTile('Diferença (Atual − Orçado)', fmt.currency(payroll.difference), payroll.difference > 0 ? 'danger' : 'good') +
         '</div>' +
         '<div class="grid grid-4">' +
@@ -154,6 +260,42 @@
         kpiTile('Méritos', fmt.number(movements.merits)) +
         kpiTile('Aumento de Quadro', fmt.number(movements.headcountIncrease)) +
         kpiTile('Transferências', fmt.number(movements.transfers)) +
+        '</div>' +
+        '<div class="grid grid-3">' +
+        kpiTile('Impacto Mensal (histórico aprovado)', fmt.currency(financial.monthlyImpact)) +
+        kpiTile('Impacto Anual (histórico aprovado)', fmt.currency(financial.annualImpact)) +
+        kpiTile('% Orçamento Consumido (Financeiro)', fmt.percent(financial.budgetConsumedPercent), financial.budgetConsumedPercent > 100 ? 'danger' : '') +
+        '</div>' +
+        cardOpen('Orçado x Atual por Centro de Custo', {
+          subtitle: state.directorateId
+            ? 'Filtrado pela diretoria selecionada'
+            : 'Todas as diretorias — selecione uma no filtro acima para focar em uma diretoria',
+        }) +
+        renderGroupedBarChart(
+          (costCenters.items || []).map(function (c) {
+            return { label: c.costCenterName || '—', budgeted: c.budgetedCost, current: c.currentCost, status: c.status };
+          }),
+          { formatter: fmt.currency }
+        ) +
+        costCenterTableHtml(costCenters.items) +
+        cardClose() +
+        '<div class="grid grid-2">' +
+        cardOpen('Folha Orçada x Atual — por mês do período') +
+        renderGroupedBarChart(
+          (payroll.byMonth || []).map(function (p) {
+            return { label: DASHBOARD_MONTH_LABELS_[p.month - 1], budgeted: p.payrollBudgeted, current: p.payrollCurrent };
+          }),
+          { formatter: fmt.currency }
+        ) +
+        cardClose() +
+        cardOpen('Headcount Orçado x Atual — por mês do período') +
+        renderGroupedBarChart(
+          (headcount.byMonth || []).map(function (h) {
+            return { label: DASHBOARD_MONTH_LABELS_[h.month - 1], budgeted: h.hcBudgeted, current: h.hcCurrent };
+          }),
+          { formatter: fmt.number }
+        ) +
+        cardClose() +
         '</div>' +
         '<div class="grid grid-2">' +
         cardOpen('Projeção de Impacto — Próximos 12 meses', { subtitle: 'Movimentações aprovadas ou em fluxo de aprovação' }) +
@@ -167,11 +309,6 @@
         cardOpen('Ranking de Diretorias por Consumo Orçamentário') +
         rankingTableHtml(financial.directorateRanking) +
         cardClose() +
-        '</div>' +
-        '<div class="grid grid-3">' +
-        kpiTile('Impacto Mensal (histórico aprovado)', fmt.currency(financial.monthlyImpact)) +
-        kpiTile('Impacto Anual (histórico aprovado)', fmt.currency(financial.annualImpact)) +
-        kpiTile('% Orçamento Consumido (Financeiro)', fmt.percent(financial.budgetConsumedPercent), financial.budgetConsumedPercent > 100 ? 'danger' : '') +
         '</div>' +
         '</div>';
     }

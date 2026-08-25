@@ -11,11 +11,10 @@ import { ImportBatch } from '../../imports/entities/import-batch.entity';
  * year/month informados). Existe porque `employees.current_salary` é um
  * valor único e vivo: sem isso, consultar "a folha de janeiro" depois que
  * fevereiro já foi importado mostraria o valor de fevereiro para os dois
- * meses. Onde existir um snapshot para (year, month), os relatórios usam
- * esse valor "congelado"; onde não existir (mês corrente ainda não fechado,
- * ou histórico anterior a este recurso), cai para `employees.current_salary`
- * ao vivo — ver DashboardService#getPayroll/getHeadcount e
- * EmployeesService#compareWithBudget.
+ * meses. `DashboardService`/`EmployeesService#compareWithBudget` usam
+ * exclusivamente o snapshot do mês exato pedido — nunca `current_salary`
+ * ao vivo; sem snapshot para o mês pedido, os indicadores desse mês vêm
+ * zerados (`monthClosed: false` na resposta da API).
  */
 @Entity('payroll_snapshots')
 @Index(['year', 'month'])

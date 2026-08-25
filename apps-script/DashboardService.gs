@@ -4,17 +4,31 @@
  * Auth.gs#mergeAccessScope_, chamado em Api.gs).
  */
 
-var DashboardService = {
-  getHeadcount: function (year, month, scope) {
-    scope = scope || {};
-    var referenceMonth = month || new Date().getMonth() + 1;
-    var allBudgetEntries = BudgetService.listEntries(year, scope);
-    var budgetEntries = allBudgetEntries.filter(function (entry) {
-      return monthValue_(entry, referenceMonth) !== null;
-    });
+/** Meses efetivos para um filtro opcional: os informados, ou só o mês corrente. */
+function resolveDashboardMonths_(months) {
+  if (months && months.length > 0) return months;
+  return [new Date().getMonth() + 1];
+}
 
-    var monthlySalaries = resolveMonthlySalaryRows_(year, referenceMonth, scope, false);
-    var hcCurrent = monthlySalaries.rows.length;
+function average_(values) {
+  if (values.length === 0) return 0;
+  var sum = values.reduce(function (a, b) { return a + b; }, 0);
+  return Math.round(sum / values.length);
+}
+
+var DashboardService = {
+  /**
+   * `months` é uma lista (1 ou mais meses, 1-12). HC é a MÉDIA entre os
+   * meses selecionados (headcount não é aditivo); folha é a SOMA (ver
+   * getPayroll). Isso é o que dá ao Dashboard Executivo a visão "acumulado
+   * do ano"/"vários meses selecionados" pedida pelo usuário, em vez de só
+   * um mês por vez.
+   */
+  getHeadcount: function (year, months, scope) {
+    scope = scope || {};
+    var referenceMonths = resolveDashboardMonths_(months);
+    var allBudgetEntries = BudgetService.listEntries(year, scope);
+    var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, referenceMonths, scope);
 
     var approvedIncreases = Tables.movementRequests.where(function (m) {
       if (m.type !== MovementType.AUMENTO_QUADRO) return false;
@@ -27,46 +41,150 @@ var DashboardService = {
       return sum + Number(m.quantity || 0);
     }, 0);
 
-    var openPositions = budgetEntries.filter(function (b) {
-      return b.movementType === PlannedSituation.AUMENTO_DE_QUADRO;
-    }).length;
-    var hcOpen = Math.max(0, openPositions - hcApproved);
+    var byMonth = referenceMonths.map(function (month) {
+      var budgetEntries = allBudgetEntries.filter(function (entry) {
+        return monthValue_(entry, month) !== null;
+      });
+      var openPositions = budgetEntries.filter(function (b) {
+        return b.movementType === PlannedSituation.AUMENTO_DE_QUADRO;
+      }).length;
+      var monthly = salariesByMonth[month];
+      return {
+        month: month,
+        hcBudgeted: budgetEntries.length,
+        hcCurrent: monthly.rows.length,
+        hcOpen: Math.max(0, openPositions - hcApproved),
+        monthClosed: monthly.monthClosed,
+      };
+    });
+
+    var openMonths = byMonth.filter(function (m) { return !m.monthClosed; }).map(function (m) { return m.month; });
 
     return {
       year: year,
-      month: referenceMonth,
-      hcBudgeted: budgetEntries.length,
-      hcCurrent: hcCurrent,
+      months: referenceMonths,
+      hcBudgeted: average_(byMonth.map(function (m) { return m.hcBudgeted; })),
+      hcCurrent: average_(byMonth.map(function (m) { return m.hcCurrent; })),
       hcApproved: hcApproved,
-      hcOpen: hcOpen,
-      monthClosed: monthlySalaries.monthClosed,
+      hcOpen: average_(byMonth.map(function (m) { return m.hcOpen; })),
+      monthClosed: openMonths.length === 0,
+      openMonths: openMonths,
+      byMonth: byMonth,
     };
   },
 
-  getPayroll: function (year, month, scope) {
+  getPayroll: function (year, months, scope) {
     scope = scope || {};
-    var referenceMonth = month || new Date().getMonth() + 1;
+    var referenceMonths = resolveDashboardMonths_(months);
     var allBudgetEntries = BudgetService.listEntries(year, scope);
-    var budgetEntries = allBudgetEntries.filter(function (entry) {
-      return monthValue_(entry, referenceMonth) !== null;
+    var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, referenceMonths, scope);
+
+    var byMonth = referenceMonths.map(function (month) {
+      var budgeted = allBudgetEntries.reduce(function (sum, b) {
+        return sum + Number(monthValue_(b, month) || 0);
+      }, 0);
+      var monthly = salariesByMonth[month];
+      var current = monthly.rows.reduce(function (sum, row) { return sum + row.salary; }, 0);
+      return { month: month, payrollBudgeted: budgeted, payrollCurrent: current, monthClosed: monthly.monthClosed };
     });
 
-    var monthlySalaries = resolveMonthlySalaryRows_(year, referenceMonth, scope, false);
-
-    var payrollBudgeted = budgetEntries.reduce(function (sum, b) {
-      return sum + Number(monthValue_(b, referenceMonth) || 0);
-    }, 0);
-    var payrollCurrent = monthlySalaries.rows.reduce(function (sum, row) {
-      return sum + row.salary;
-    }, 0);
+    var openMonths = byMonth.filter(function (m) { return !m.monthClosed; }).map(function (m) { return m.month; });
+    var payrollBudgeted = byMonth.reduce(function (sum, m) { return sum + m.payrollBudgeted; }, 0);
+    var payrollCurrent = byMonth.reduce(function (sum, m) { return sum + m.payrollCurrent; }, 0);
 
     return {
       year: year,
-      month: referenceMonth,
+      months: referenceMonths,
       payrollCurrent: payrollCurrent,
       payrollBudgeted: payrollBudgeted,
       difference: payrollCurrent - payrollBudgeted,
-      monthClosed: monthlySalaries.monthClosed,
+      monthClosed: openMonths.length === 0,
+      openMonths: openMonths,
+      byMonth: byMonth,
+    };
+  },
+
+  /**
+   * Orçado x Atual por centro de custo, somando/mediando os meses do
+   * filtro — dá a uma diretoria a visão de quais dos seus centros de custo
+   * estão dentro ou fora do orçamento no período escolhido. Custo é somado
+   * entre os meses (gasto acumulado); headcount é a média.
+   */
+  getCostCenterBreakdown: function (year, months, scope) {
+    scope = scope || {};
+    var referenceMonths = resolveDashboardMonths_(months);
+    var allBudgetEntries = BudgetService.listEntries(year, scope);
+    var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, referenceMonths, scope);
+    var directorateNames = indexById_(Tables.directorates.all());
+    var costCenterNames = indexById_(Tables.costCenters.all());
+
+    var buckets = {};
+    function bucketKey(directorateId, costCenterId) {
+      return directorateId + '|' + costCenterId;
+    }
+    function getBucket(directorateId, costCenterId, directorateName, costCenterName) {
+      var key = bucketKey(directorateId, costCenterId);
+      if (!buckets[key]) {
+        buckets[key] = {
+          directorateId: directorateId,
+          directorateName: directorateName,
+          costCenterId: costCenterId,
+          costCenterName: costCenterName,
+          budgetedCost: 0,
+          currentCost: 0,
+          budgetedCountByMonth: {},
+          currentCountByMonth: {},
+        };
+      }
+      return buckets[key];
+    }
+
+    referenceMonths.forEach(function (month) {
+      allBudgetEntries.forEach(function (entry) {
+        var value = monthValue_(entry, month);
+        if (value === null) return;
+        var directorateName = directorateNames[entry.directorateId] ? directorateNames[entry.directorateId].name : null;
+        var costCenterName = costCenterNames[entry.costCenterId] ? costCenterNames[entry.costCenterId].name : null;
+        var bucket = getBucket(entry.directorateId, entry.costCenterId, directorateName, costCenterName);
+        bucket.budgetedCost += Number(value);
+        bucket.budgetedCountByMonth[month] = (bucket.budgetedCountByMonth[month] || 0) + 1;
+      });
+      salariesByMonth[month].rows.forEach(function (row) {
+        if (!row.costCenterId) return;
+        var bucket = getBucket(row.directorateId, row.costCenterId, row.directorateName, row.costCenterName);
+        bucket.currentCost += row.salary;
+        bucket.currentCountByMonth[month] = (bucket.currentCountByMonth[month] || 0) + 1;
+      });
+    });
+
+    var monthCount = referenceMonths.length;
+    function avgFromMonthMap(map) {
+      var sum = referenceMonths.reduce(function (s, m) { return s + (map[m] || 0); }, 0);
+      return Math.round(sum / monthCount);
+    }
+
+    var items = Object.keys(buckets)
+      .map(function (key) {
+        var bucket = buckets[key];
+        return {
+          directorateId: bucket.directorateId,
+          directorateName: bucket.directorateName,
+          costCenterId: bucket.costCenterId,
+          costCenterName: bucket.costCenterName,
+          budgetedCost: bucket.budgetedCost,
+          currentCost: bucket.currentCost,
+          difference: bucket.currentCost - bucket.budgetedCost,
+          budgetedCount: avgFromMonthMap(bucket.budgetedCountByMonth),
+          currentCount: avgFromMonthMap(bucket.currentCountByMonth),
+          status: bucket.currentCost > bucket.budgetedCost ? 'ACIMA' : 'DENTRO',
+        };
+      })
+      .sort(function (a, b) { return b.difference - a.difference; });
+
+    return {
+      year: year,
+      months: referenceMonths,
+      items: items,
     };
   },
 
@@ -84,7 +202,7 @@ var DashboardService = {
     };
   },
 
-  getFinancial: function (year, month, scope) {
+  getFinancial: function (year, months, scope) {
     scope = scope || {};
     var historyRecords = Tables.movementHistory.where(function (h) {
       if (String(h.effectiveDate).slice(0, 4) !== String(year)) return false;
@@ -95,16 +213,18 @@ var DashboardService = {
     var monthlyImpact = sumBy_(historyRecords, 'monthlyImpact');
     var annualImpact = sumBy_(historyRecords, 'annualImpact');
 
-    var payroll = this.getPayroll(year, month, scope);
+    var payroll = this.getPayroll(year, months, scope);
     var budgetConsumedPercent = payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
     return {
+      months: payroll.months,
       monthlyImpact: monthlyImpact,
       annualImpact: annualImpact,
       budgetConsumedPercent: round2_(budgetConsumedPercent),
       projection12Months: this._projection12Months(scope),
       directorateRanking: this._directorateRanking(),
       monthClosed: payroll.monthClosed,
+      openMonths: payroll.openMonths,
     };
   },
 

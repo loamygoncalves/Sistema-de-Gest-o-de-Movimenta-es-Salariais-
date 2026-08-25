@@ -198,18 +198,38 @@ em `approvalSteps`. GESTOR nunca aprova, só solicita.
   onde `classification` ∈ `ABAIXO_DO_MERCADO | DENTRO_DO_MERCADO | ACIMA_DO_MERCADO`
 
 ## Dashboards executivos — módulo 8
-- `GET /dashboard/headcount?year=&month=&directorateId=` → `{ year, month, hcBudgeted, hcCurrent, hcApproved, hcOpen, monthClosed }`
-  (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente)
-- `GET /dashboard/payroll?year=&month=&directorateId=` → `{ year, month, payrollCurrent, payrollBudgeted, difference, monthClosed }`
-  (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
-  `hcCurrent`/`payrollCurrent` usam **exclusivamente** o fechamento de folha do mês exato
-  pedido (`payroll_snapshots`) — nunca o salário atual ao vivo. Sem fechamento para o mês
-  pedido, ambos vêm zerados e `monthClosed: false` (ver `POST /employees/import` na seção
-  Employees acima); usar o salário atual faria um mês sem fechamento "herdar" os números do
-  último mês fechado, como se as folhas tivessem sido somadas entre meses.
+Todos os endpoints abaixo (exceto `/movements`, que é sempre anual) aceitam
+`months=` com um ou mais meses (`months=7` ou `months=7,8,9`; padrão: só o
+mês corrente) — o Dashboard Executivo permite selecionar vários meses de
+uma vez e ver o dashboard refletir exatamente o período escolhido, em vez
+de só um mês por vez. **Custo (folha) é somado entre os meses selecionados**
+(gasto acumulado do período); **headcount é a média** (não é aditivo — não
+faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
+"acumulado do ano".
+
+- `GET /dashboard/headcount?year=&months=&directorateId=` →
+  `{ year, months, hcBudgeted, hcCurrent, hcApproved, hcOpen, monthClosed, openMonths, byMonth: [{month, hcBudgeted, hcCurrent, hcOpen, monthClosed}] }`
+  (`hcBudgeted`/`hcCurrent`/`hcOpen` são a média entre os meses selecionados; `hcApproved` é
+  sempre anual)
+- `GET /dashboard/payroll?year=&months=&directorateId=` →
+  `{ year, months, payrollCurrent, payrollBudgeted, difference, monthClosed, openMonths, byMonth: [{month, payrollBudgeted, payrollCurrent, monthClosed}] }`
+  (`payrollCurrent`/`payrollBudgeted` são a SOMA entre os meses selecionados — gasto
+  acumulado do período)
+  `hcCurrent`/`payrollCurrent` de cada mês usam **exclusivamente** o fechamento de folha
+  daquele mês exato (`payroll_snapshots`) — nunca o salário atual ao vivo. Mês sem
+  fechamento entra zerado (não "herda" os números de outro mês fechado) e aparece em
+  `openMonths`; `monthClosed` só é `true` quando TODOS os meses selecionados estão fechados.
+- `GET /dashboard/cost-centers?year=&months=&directorateId=` →
+  `{ year, months, items: [{ directorateId, directorateName, costCenterId, costCenterName, budgetedCost, currentCost, difference, budgetedCount, currentCount, status }] }`
+  Orçado x Atual por centro de custo, somando o custo e mediando o headcount entre os meses
+  selecionados — é o que permite a uma diretoria (filtro `directorateId`) ver exatamente quais
+  dos seus centros de custo estão `DENTRO` ou `ACIMA` do orçamento no período escolhido.
+  `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
-- `GET /dashboard/financial?year=&month=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}], monthClosed }`
-  (`monthClosed` reflete o mesmo mês usado em `budgetConsumedPercent`, herdado de `GET /dashboard/payroll`)
+- `GET /dashboard/financial?year=&months=&directorateId=` →
+  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}], monthClosed, openMonths }`
+  (`monthClosed`/`openMonths` refletem os mesmos meses usados em `budgetConsumedPercent`,
+  herdados de `GET /dashboard/payroll`)
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).

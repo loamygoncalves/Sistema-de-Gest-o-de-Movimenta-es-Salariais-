@@ -13,28 +13,47 @@
  * costCenterId, salary}], monthClosed}.
  */
 function resolveMonthlySalaryRows_(year, month, scope, filterActiveOnly) {
+  var byMonth = resolveMonthlySalaryRowsForMonths_(year, [month], scope);
+  return byMonth[month];
+}
+
+/**
+ * Igual a resolveMonthlySalaryRows_, mas para vários meses de uma vez (uma
+ * única varredura da aba FechamentoFolha) — usado pelo Dashboard Executivo
+ * para permitir selecionar vários meses e ver o acumulado/média do período
+ * (ver DashboardService.gs#getHeadcount/getPayroll/getCostCenterBreakdown).
+ * Devolve um objeto { [month]: { rows, monthClosed } }.
+ */
+function resolveMonthlySalaryRowsForMonths_(year, months, scope) {
   scope = scope || {};
   var directorateNames = indexById_(Tables.directorates.all());
+  var costCenterNames = indexById_(Tables.costCenters.all());
 
   var snapshots = Tables.payrollSnapshots.where(function (s) {
-    if (Number(s.year) !== Number(year) || Number(s.month) !== Number(month)) return false;
+    if (Number(s.year) !== Number(year) || months.indexOf(Number(s.month)) === -1) return false;
     if (!matchesAccessScope_(s, scope)) return false;
     return true;
   });
-  if (snapshots.length === 0) {
-    return { rows: [], monthClosed: false };
-  }
-  return {
-    rows: snapshots.map(function (s) {
-      return {
-        directorateId: s.directorateId,
-        directorateName: directorateNames[s.directorateId] ? directorateNames[s.directorateId].name : null,
-        costCenterId: s.costCenterId || '',
-        salary: Number(s.salary || 0),
-      };
-    }),
-    monthClosed: true,
-  };
+
+  var byMonth = {};
+  months.forEach(function (month) {
+    var monthSnapshots = snapshots.filter(function (s) {
+      return Number(s.month) === Number(month);
+    });
+    byMonth[month] = {
+      rows: monthSnapshots.map(function (s) {
+        return {
+          directorateId: s.directorateId,
+          directorateName: directorateNames[s.directorateId] ? directorateNames[s.directorateId].name : null,
+          costCenterId: s.costCenterId || '',
+          costCenterName: costCenterNames[s.costCenterId] ? costCenterNames[s.costCenterId].name : null,
+          salary: Number(s.salary || 0),
+        };
+      }),
+      monthClosed: monthSnapshots.length > 0,
+    };
+  });
+  return byMonth;
 }
 
 var EmployeesService = {

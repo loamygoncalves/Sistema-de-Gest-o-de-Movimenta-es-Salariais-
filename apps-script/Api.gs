@@ -447,16 +447,22 @@ function api_getSalaryPositioning(filters) {
 // Dashboards executivos (Módulo 8)
 // ---------------------------------------------------------------------------
 
-function api_getDashboardHeadcount(year, month, directorateId, costCenterId) {
+function api_getDashboardHeadcount(year, months, directorateId, costCenterId) {
   var user = requireUser_();
   var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
-  return DashboardService.getHeadcount(year, month, scope);
+  return DashboardService.getHeadcount(year, months, scope);
 }
 
-function api_getDashboardPayroll(year, month, directorateId, costCenterId) {
+function api_getDashboardPayroll(year, months, directorateId, costCenterId) {
   var user = requireUser_();
   var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
-  return DashboardService.getPayroll(year, month, scope);
+  return DashboardService.getPayroll(year, months, scope);
+}
+
+function api_getDashboardCostCenters(year, months, directorateId) {
+  var user = requireUser_();
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, null);
+  return DashboardService.getCostCenterBreakdown(year, months, scope);
 }
 
 function api_getDashboardMovements(year, directorateId, costCenterId) {
@@ -465,8 +471,8 @@ function api_getDashboardMovements(year, directorateId, costCenterId) {
   return DashboardService.getMovements(year, scope);
 }
 
-function api_getDashboardFinancial(year, month, directorateId, costCenterId) {
+function api_getDashboardFinancial(year, months, directorateId, costCenterId) {
   var user = requireUser_();
   var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
-  return DashboardService.getFinancial(year, month, scope);
+  return DashboardService.getFinancial(year, months, scope);
 }

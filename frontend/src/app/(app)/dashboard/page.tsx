@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
+  Legend,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -15,12 +17,13 @@ import {
 import { Card } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
 import { PageLoading } from "@/components/ui/Spinner";
-import { DirectorateSelect, MonthSelect, YearSelect } from "@/components/shared/Filters";
+import { DirectorateSelect, MonthMultiSelect, YearSelect } from "@/components/shared/Filters";
 import { useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent, getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import {
+  CostCenterBreakdownDashboard,
   FinancialDashboard,
   FULL_MONTH_LABELS,
   HeadcountDashboard,
@@ -32,7 +35,7 @@ export default function DashboardPage() {
   const { directorates } = useDirectorates();
   const { showToast } = useToast();
   const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
+  const [months, setMonths] = useState<number[]>([new Date().getMonth() + 1]);
   const [directorateId, setDirectorateId] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -40,24 +43,27 @@ export default function DashboardPage() {
   const [payroll, setPayroll] = useState<PayrollDashboard | null>(null);
   const [movements, setMovements] = useState<MovementsDashboard | null>(null);
   const [financial, setFinancial] = useState<FinancialDashboard | null>(null);
+  const [costCenters, setCostCenters] = useState<CostCenterBreakdownDashboard | null>(null);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    const params = { year, month, directorateId: directorateId || undefined };
+    const params = { year, months, directorateId: directorateId || undefined };
 
     Promise.all([
       api.get<HeadcountDashboard>("/dashboard/headcount", params),
       api.get<PayrollDashboard>("/dashboard/payroll", params),
       api.get<MovementsDashboard>("/dashboard/movements", { year, directorateId: directorateId || undefined }),
       api.get<FinancialDashboard>("/dashboard/financial", params),
+      api.get<CostCenterBreakdownDashboard>("/dashboard/cost-centers", params),
     ])
-      .then(([hc, pay, mov, fin]) => {
+      .then(([hc, pay, mov, fin, cc]) => {
         if (!active) return;
         setHeadcount(hc);
         setPayroll(pay);
         setMovements(mov);
         setFinancial(fin);
+        setCostCenters(cc);
       })
       .catch((err) => showToast(getErrorMessage(err), "error"))
       .finally(() => {
@@ -68,9 +74,29 @@ export default function DashboardPage() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, month, directorateId]);
+  }, [year, months, directorateId]);
 
-  const referenceLabel = `${FULL_MONTH_LABELS[headcount?.month ?? month]}/${headcount?.year ?? year}`;
+  const periodLabel = useMemo(() => {
+    const selected = headcount?.months ?? months;
+    if (selected.length === 12) return `Ano todo/${year}`;
+    if (selected.length === 1) return `${FULL_MONTH_LABELS[selected[0]]}/${year}`;
+    return `${selected.length} meses selecionados/${year}`;
+  }, [headcount?.months, months, year]);
+
+  const isMultiMonth = (headcount?.months ?? months).length > 1;
+  const openMonths = headcount?.openMonths ?? [];
+
+  const costCenterChartData = useMemo(
+    () =>
+      (costCenters?.items ?? []).map((item) => ({
+        name: item.costCenterName ?? "—",
+        directorate: item.directorateName,
+        Orçado: item.budgetedCost,
+        Atual: item.currentCost,
+        status: item.status,
+      })),
+    [costCenters],
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,7 +107,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-3">
           <YearSelect value={year} onChange={setYear} />
-          <MonthSelect value={month} onChange={setMonth} />
+          <MonthMultiSelect value={months} onChange={setMonths} />
           <DirectorateSelect value={directorateId} onChange={setDirectorateId} directorates={directorates} />
         </div>
       </div>
@@ -90,20 +116,23 @@ export default function DashboardPage() {
         <PageLoading />
       ) : (
         <>
-          {headcount && !headcount.monthClosed && (
+          {openMonths.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              O fechamento da folha de {referenceLabel} ainda não foi importado — HC Atual, Folha Atual e Diferença
-              estão zerados para este mês (não mostram o salário de outro mês).
+              O fechamento da folha de {openMonths.map((m) => FULL_MONTH_LABELS[m]).join(", ")} ainda não foi
+              importado — esses meses entram zerados no período selecionado (não mostram o salário de outro mês).
             </div>
           )}
 
           <section>
             <div className="mb-2 flex items-baseline justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Headcount</h2>
-              <span className="text-xs text-brand-text">Mês de referência: {referenceLabel}</span>
+              <span className="text-xs text-brand-text">
+                Período: {periodLabel}
+                {isMultiMonth && " (média entre os meses)"}
+              </span>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <KpiCard label="HC Orçado" value={formatNumber(headcount?.hcBudgeted)} hint={referenceLabel} />
+              <KpiCard label="HC Orçado" value={formatNumber(headcount?.hcBudgeted)} hint={periodLabel} />
               <KpiCard label="HC Atual" value={formatNumber(headcount?.hcCurrent)} />
               <KpiCard label="HC Aprovado" value={formatNumber(headcount?.hcApproved)} />
               <KpiCard label="Vagas em Aberto" value={formatNumber(headcount?.hcOpen)} />
@@ -113,11 +142,14 @@ export default function DashboardPage() {
           <section>
             <div className="mb-2 flex items-baseline justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Folha de Pagamento</h2>
-              <span className="text-xs text-brand-text">Mês de referência: {referenceLabel}</span>
+              <span className="text-xs text-brand-text">
+                Período: {periodLabel}
+                {isMultiMonth && " (acumulado dos meses)"}
+              </span>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <KpiCard label="Folha Atual" value={formatCurrency(payroll?.payrollCurrent)} />
-              <KpiCard label="Folha Orçada" value={formatCurrency(payroll?.payrollBudgeted)} hint={referenceLabel} />
+              <KpiCard label="Folha Orçada" value={formatCurrency(payroll?.payrollBudgeted)} hint={periodLabel} />
               <KpiCard
                 label="Diferença"
                 value={formatCurrency(payroll?.difference)}
@@ -148,7 +180,113 @@ export default function DashboardPage() {
             </div>
           </section>
 
+          <section>
+            <div className="mb-2 flex items-baseline justify-between">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Orçado x Atual por Centro de Custo
+              </h2>
+              <span className="text-xs text-brand-text">
+                {directorateId
+                  ? "Filtrado pela diretoria selecionada"
+                  : "Todas as diretorias — selecione uma no filtro acima para focar em uma diretoria"}
+              </span>
+            </div>
+            <Card>
+              {costCenterChartData.length === 0 ? (
+                <p className="py-8 text-center text-sm text-brand-text">
+                  Nenhum centro de custo com orçado ou folha fechada no período selecionado.
+                </p>
+              ) : (
+                <>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={costCenterChartData} margin={{ left: 8, right: 8 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={70} />
+                        <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => formatCurrency(v)} width={90} />
+                        <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                        <Legend />
+                        <Bar dataKey="Orçado" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Atual" radius={[4, 4, 0, 0]}>
+                          {costCenterChartData.map((entry, i) => (
+                            <Cell key={i} fill={entry.status === "ACIMA" ? "#dc2626" : "#00AFAA"} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  <div className="mt-4 overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-brand-border text-xs uppercase tracking-wide text-slate-400">
+                          <th className="py-2 pr-4">Diretoria</th>
+                          <th className="py-2 pr-4">Centro de Custo</th>
+                          <th className="py-2 pr-4 text-right">HC Orçado</th>
+                          <th className="py-2 pr-4 text-right">HC Atual</th>
+                          <th className="py-2 pr-4 text-right">Custo Orçado</th>
+                          <th className="py-2 pr-4 text-right">Custo Atual</th>
+                          <th className="py-2 pr-4 text-right">Diferença</th>
+                          <th className="py-2 pr-4">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(costCenters?.items ?? []).map((item) => (
+                          <tr key={`${item.directorateId}-${item.costCenterId}`} className="border-b border-brand-border/60">
+                            <td className="py-2 pr-4 text-brand-text">{item.directorateName ?? "—"}</td>
+                            <td className="py-2 pr-4 font-medium text-slate-800">{item.costCenterName ?? "—"}</td>
+                            <td className="py-2 pr-4 text-right">{formatNumber(item.budgetedCount)}</td>
+                            <td className="py-2 pr-4 text-right">{formatNumber(item.currentCount)}</td>
+                            <td className="py-2 pr-4 text-right">{formatCurrency(item.budgetedCost)}</td>
+                            <td className="py-2 pr-4 text-right">{formatCurrency(item.currentCost)}</td>
+                            <td
+                              className={`py-2 pr-4 text-right font-medium ${item.difference > 0 ? "text-red-600" : "text-emerald-600"}`}
+                            >
+                              {formatCurrency(item.difference)}
+                            </td>
+                            <td className="py-2 pr-4">
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                                  item.status === "ACIMA"
+                                    ? "bg-red-50 text-red-700"
+                                    : "bg-emerald-50 text-emerald-700"
+                                }`}
+                              >
+                                {item.status === "ACIMA" ? "Acima do orçamento" : "Dentro do orçamento"}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </Card>
+          </section>
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card title="Folha Orçada x Atual — 12 meses">
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={(payroll?.byMonth ?? []).map((m) => ({ ...m, monthLabel: FULL_MONTH_LABELS[m.month] }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      stroke="#94a3b8"
+                      tickFormatter={(v) => formatCurrency(v)}
+                      width={90}
+                    />
+                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                    <Legend />
+                    <Line type="monotone" dataKey="payrollBudgeted" stroke="#94a3b8" strokeWidth={2} dot={false} name="Orçado" />
+                    <Line type="monotone" dataKey="payrollCurrent" stroke="#00AFAA" strokeWidth={2} dot={false} name="Atual" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
             <Card title="Projeção de Impacto — 12 meses">
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
@@ -177,6 +315,22 @@ export default function DashboardPage() {
                     <YAxis type="category" dataKey="directorate" tick={{ fontSize: 12 }} stroke="#94a3b8" width={120} />
                     <Tooltip formatter={(v: number) => formatPercent(v)} />
                     <Bar dataKey="consumedPercent" fill="#00AFAA" radius={[0, 4, 4, 0]} name="% Consumido" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            <Card title="Headcount Orçado x Atual — período selecionado">
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={(headcount?.byMonth ?? []).map((m) => ({ ...m, monthLabel: FULL_MONTH_LABELS[m.month] }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" allowDecimals={false} />
+                    <Tooltip />
+                    <Legend />
+                    <Bar dataKey="hcBudgeted" fill="#94a3b8" radius={[4, 4, 0, 0]} name="Orçado" />
+                    <Bar dataKey="hcCurrent" fill="#00AFAA" radius={[4, 4, 0, 0]} name="Atual" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
