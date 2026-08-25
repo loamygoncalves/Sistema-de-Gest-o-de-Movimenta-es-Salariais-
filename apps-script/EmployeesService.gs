@@ -80,7 +80,7 @@ var EmployeesService = {
 
   create: function (input) {
     var existing = Tables.employees.findOne(function (r) {
-      return r.registration === input.registration;
+      return String(r.registration).trim() === String(input.registration).trim();
     });
     if (existing) throw new Error('Já existe um colaborador com esta matrícula: ' + input.registration);
 
@@ -167,7 +167,7 @@ var EmployeesService = {
       seen[registration] = true;
 
       var existing = Tables.employees.findOne(function (r) {
-        return r.registration === registration;
+        return String(r.registration).trim() === registration;
       });
 
       var payload = {
