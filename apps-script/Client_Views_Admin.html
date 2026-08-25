@@ -618,8 +618,16 @@
             btn.addEventListener('click', function () {
               var item = users.filter(function (u) { return u.id === btn.getAttribute('data-toggle'); })[0];
               callApi('api_updateUser', item.id, { active: !item.active })
-                .then(function () {
+                .then(function (updated) {
                   toast(item.active ? 'Usuário desativado.' : 'Usuário ativado.', 'success');
+                  if (updated && updated.driveAccessGranted === false) {
+                    toast(
+                      'Não consegui liberar automaticamente o acesso à planilha para ' +
+                        updated.email +
+                        ' — compartilhe manualmente com permissão de Editor.',
+                      'error'
+                    );
+                  }
                   renderBody();
                 })
                 .catch(toastError);
