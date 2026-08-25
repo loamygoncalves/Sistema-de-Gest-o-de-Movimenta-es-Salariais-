@@ -162,7 +162,8 @@ erDiagram
   estourado e outro com sobra no mesmo centro de custo aparecerem como dois
   problemas separados em vez de se cancelarem.
 - **`payroll_snapshots`** é o fechamento mensal da folha (`POST
-  /employees/import` com `year`/`month`): um "retrato" do salário de cada
+  /employees/import`, coluna `mes_de_referencia` da planilha, formato
+  `MM/AAAA`): um "retrato" do salário de cada
   colaborador no mês em que a base foi fechada. `employees.current_salary` é
   um valor único e vivo — sem esse snapshot, um relatório de um mês passado
   mostraria o salário mais recente (re-importado depois) em vez do que a

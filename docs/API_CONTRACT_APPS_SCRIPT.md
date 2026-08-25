@@ -98,12 +98,16 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
 - `api_createEmployee({ registration, name, positionId, directorateId, admissionDate, currentSalary, ... })`
 - `api_updateEmployee(id, patch)`
 - `api_deactivateEmployee(id)`
-- `api_importEmployees(base64Data, mimeType, filename, year, month)` — **fechamento mensal
-  da folha**: `year`/`month` (obrigatórios) identificam o mês que está sendo fechado. Além
-  de atualizar `employees.currentSalary` de cada colaborador (como sempre), grava um
-  snapshot desse mês na aba `FechamentoFolha` — reimportar o mesmo (year, month) substitui
-  o snapshot anterior de cada colaborador, nunca duplica. Retorna
-  `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
+- `api_importEmployees(base64Data, mimeType, filename)` — **fechamento mensal da folha**.
+  Colunas esperadas (normalizadas): `matricula, nome, cargo, centro_de_custo, admissao,
+  salario_atual, mes_de_referencia`. `mes_de_referencia` é `MM/AAAA` (ex.: `08/2026`) — o
+  mês que está sendo fechado, lido linha a linha (não um parâmetro do arquivo inteiro); a
+  diretoria é derivada do centro de custo informado (não é mais uma coluna própria — o
+  centro de custo precisa já ter uma diretoria vinculada em Estrutura Organizacional). Além
+  de atualizar `employees.currentSalary`/`employees.costCenterId` de cada colaborador (como
+  sempre), grava um snapshot do mês de cada linha na aba `FechamentoFolha` — reimportar o
+  mesmo (year, month) substitui o snapshot anterior de cada colaborador, nunca duplica.
+  Retorna `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
   (o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte base64 após a vírgula)
 - `api_getEmployeesComparison(year, month?)` → compara a base x orçada, agregando por
   centro de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de
@@ -225,7 +229,7 @@ durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
 `google.script.run`. O padrão usado aqui: no cliente, ler o arquivo com
 `FileReader.readAsDataURL(file)`, extrair a string base64 (depois da
 vírgula em `data:<mime>;base64,<...>`), e chamar `api_importEmployees(base64,
-file.type, file.name, year, month)` (ou o equivalente de orçamento/estudo salarial).
+file.type, file.name)` (ou o equivalente de orçamento/estudo salarial).
 Arquivos `.xlsx` são convertidos no servidor via Google Drive (exige o
 serviço avançado Drive API habilitado — ver `apps-script/README.md`);
 arquivos `.csv` são lidos diretamente, sem precisar do Drive.

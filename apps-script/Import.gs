@@ -121,6 +121,25 @@ function toDateIso_(value) {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * Extrai {year, month} de uma coluna "mês de referência" — aceita "MM/AAAA"
+ * (texto) ou uma data (caso a planilha converta a célula automaticamente).
+ * Usado pelo fechamento mensal da folha (ver EmployeesService#importFromFile).
+ */
+function toMonthYear_(value) {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return null;
+    return { year: value.getFullYear(), month: value.getMonth() + 1 };
+  }
+  var match = String(value).trim().match(/^(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  var month = Number(match[1]);
+  var year = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return { year: year, month: month };
+}
+
 function logImportBatch_(type, referenceYear, importedByEmail, totalRows, successRows, errors) {
   return Tables.importLog.insert({
     type: type,

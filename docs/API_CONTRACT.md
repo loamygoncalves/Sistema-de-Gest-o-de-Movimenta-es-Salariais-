@@ -46,12 +46,17 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
 - `GET /employees?directorateId=&positionId=&status=&search=&page=&limit=`
 - `GET /employees/:id`
 - `POST /employees` / `PATCH /employees/:id` / `DELETE /employees/:id`
-- `POST /employees/import?year=&month=` (multipart `file`) — **fechamento mensal da folha**:
-  `year`/`month` (obrigatórios) identificam o mês que está sendo fechado. Processa a
-  planilha Excel, atualiza `employees.current_salary` de cada colaborador (como sempre) e
-  além disso grava um snapshot desse mês em `payroll_snapshots` — reimportar o mesmo
-  (year, month) substitui o snapshot anterior de cada colaborador, nunca duplica. Retorna
-  `ImportBatch` com `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
+- `POST /employees/import` (multipart `file`) — **fechamento mensal da folha**. Colunas
+  esperadas (normalizadas): `matricula, nome, cargo, centro_de_custo, admissao,
+  salario_atual, mes_de_referencia`. `mes_de_referencia` é `MM/AAAA` (ex.: `08/2026`) — o
+  mês que está sendo fechado, lido linha a linha (não um parâmetro do arquivo inteiro); a
+  diretoria é derivada do centro de custo informado (não é mais uma coluna própria — o
+  centro de custo precisa já ter uma diretoria vinculada em Estrutura Organizacional).
+  Processa a planilha, atualiza `employees.current_salary`/`employees.cost_center_id` de
+  cada colaborador (como sempre) e além disso grava um snapshot do mês de cada linha em
+  `payroll_snapshots` — reimportar o mesmo (year, month) substitui o snapshot anterior de
+  cada colaborador, nunca duplica. Retorna `ImportBatch` com
+  `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
 - `GET /employees/import/:batchId`
 - `GET /employees/comparison?year=&month=` → compara base x orçada, agregando por centro
   de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de referência

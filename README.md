@@ -135,8 +135,11 @@ Colunas esperadas (case-insensitive, acentos e espaços são normalizados):
   `Sem Movimentação, Promoção, Mérito, Substituição, Aumento de Quadro,
   Desligamento`. Nas colunas de mês, `-` (ou vazio) significa sem custo
   orçado naquele mês.
-- **Base de colaboradores** (`POST /employees/import`): `matricula, nome,
-  cargo, diretoria, salario_atual, data_admissao, status`.
+- **Fechamento mensal da folha** (`POST /employees/import`): `matricula, nome,
+  cargo, centro_de_custo, admissao, salario_atual, mes_de_referencia`.
+  `mes_de_referencia` é `MM/AAAA` (ex.: `08/2026`) — o mês que está sendo
+  fechado, lido linha a linha; a diretoria é derivada do centro de custo
+  informado (precisa já ter uma diretoria vinculada).
 - **Estudo salarial** (`POST /salary-studies/import`): `cargo, empresa,
   salario_minimo, salario_medio, salario_maximo, percentil_25,
   percentil_50, percentil_75, percentil_90`.

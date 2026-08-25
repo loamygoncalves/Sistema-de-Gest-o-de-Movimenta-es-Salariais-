@@ -5,7 +5,7 @@ import { paginate } from '../../common/dto/pagination-query.dto';
 import { EmployeeStatus, ImportType, PlannedSituation } from '../../common/enums';
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
-import { parseExcelBuffer, toDate, toNumber } from '../../common/utils/excel.util';
+import { parseExcelBuffer, toDate, toMonthYear, toNumber } from '../../common/utils/excel.util';
 import { monthValue } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
@@ -76,17 +76,19 @@ export class EmployeesService {
   }
 
   /**
-   * Importa a base atual de colaboradores a partir de uma planilha Excel —
-   * o fechamento mensal da folha (ver payroll-snapshot.entity.ts). Colunas
-   * esperadas (normalizadas): matricula, nome, cargo, diretoria, gerencia,
-   * coordenacao, centro_de_custo, cidade, estado, tipo_contrato,
-   * data_admissao, salario_atual, status. `year`/`month` identificam o mês
-   * que está sendo fechado: além de atualizar `employees.current_salary`
-   * (como sempre), grava um snapshot em `payroll_snapshots` para esse mês —
-   * reimportar o mesmo (year, month) substitui o snapshot anterior daquele
-   * colaborador (idempotente), nunca duplica.
+   * Importa a base de colaboradores a partir de uma planilha Excel — o
+   * fechamento mensal da folha (ver payroll-snapshot.entity.ts). Colunas
+   * esperadas (normalizadas): matricula, nome, cargo, centro_de_custo,
+   * admissao, salario_atual, mes_de_referencia (`MM/AAAA`, ex.: `08/2026` —
+   * o mês que está sendo fechado, lido linha a linha, não um parâmetro do
+   * arquivo inteiro). A diretoria é derivada do centro de custo informado
+   * (não é mais uma coluna própria). Além de atualizar
+   * `employees.current_salary`/`employees.cost_center_id` de cada
+   * colaborador (como sempre), grava um snapshot em `payroll_snapshots` para
+   * o mês daquela linha — reimportar o mesmo (year, month) substitui o
+   * snapshot anterior daquele colaborador (idempotente), nunca duplica.
    */
-  async importFromExcel(buffer: Buffer, filename: string, importedById: string, year: number, month: number) {
+  async importFromExcel(buffer: Buffer, filename: string, importedById: string) {
     const batch = await this.importBatchService.create(
       ImportType.BASE_COLABORADORES,
       filename,
@@ -104,9 +106,10 @@ export class EmployeesService {
       const registration = String(data['matricula'] ?? '').trim();
       const name = String(data['nome'] ?? '').trim();
       const positionName = String(data['cargo'] ?? '').trim();
-      const directorateName = String(data['diretoria'] ?? '').trim();
+      const costCenterName = String(data['centro_de_custo'] ?? '').trim();
       const currentSalary = toNumber(data['salario_atual']);
-      const admissionDate = toDate(data['data_admissao']);
+      const admissionDate = toDate(data['admissao']);
+      const monthYear = toMonthYear(data['mes_de_referencia']);
 
       if (!registration) {
         errors.push({ rowNumber: row.rowNumber, field: 'matricula', message: 'Matrícula é obrigatória' });
@@ -124,8 +127,8 @@ export class EmployeesService {
         errors.push({ rowNumber: row.rowNumber, field: 'cargo', message: 'Cargo é obrigatório' });
         continue;
       }
-      if (!directorateName) {
-        errors.push({ rowNumber: row.rowNumber, field: 'diretoria', message: 'Diretoria é obrigatória' });
+      if (!costCenterName) {
+        errors.push({ rowNumber: row.rowNumber, field: 'centro_de_custo', message: 'Centro de custo é obrigatório' });
         continue;
       }
       const position = await this.orgService.findPositionByName(positionName);
@@ -133,9 +136,17 @@ export class EmployeesService {
         errors.push({ rowNumber: row.rowNumber, field: 'cargo', message: `Cargo inexistente: ${positionName}` });
         continue;
       }
-      const directorate = await this.orgService.findDirectorateByName(directorateName);
-      if (!directorate) {
-        errors.push({ rowNumber: row.rowNumber, field: 'diretoria', message: `Diretoria inexistente: ${directorateName}` });
+      const costCenter = await this.orgService.findCostCenterByName(costCenterName);
+      if (!costCenter) {
+        errors.push({ rowNumber: row.rowNumber, field: 'centro_de_custo', message: `Centro de custo inexistente: ${costCenterName}` });
+        continue;
+      }
+      if (!costCenter.directorateId) {
+        errors.push({
+          rowNumber: row.rowNumber,
+          field: 'centro_de_custo',
+          message: `Centro de custo "${costCenterName}" não tem diretoria vinculada — cadastre a diretoria dele em Administração > Estrutura Organizacional antes de importar`,
+        });
         continue;
       }
       if (currentSalary === null || currentSalary < 0) {
@@ -143,26 +154,31 @@ export class EmployeesService {
         continue;
       }
       if (!admissionDate) {
-        errors.push({ rowNumber: row.rowNumber, field: 'data_admissao', message: 'Data de admissão inválida' });
+        errors.push({ rowNumber: row.rowNumber, field: 'admissao', message: 'Data de admissão inválida' });
+        continue;
+      }
+      if (!monthYear) {
+        errors.push({
+          rowNumber: row.rowNumber,
+          field: 'mes_de_referencia',
+          message: 'Mês de referência inválido — use o formato MM/AAAA (ex.: 08/2026)',
+        });
         continue;
       }
 
       seenRegistrations.add(registration);
 
       const existing = await this.employeeRepo.findOne({ where: { registration } });
-      const statusRaw = String(data['status'] ?? 'ATIVO').trim().toUpperCase();
-      const status = Object.values(EmployeeStatus).includes(statusRaw as EmployeeStatus)
-        ? (statusRaw as EmployeeStatus)
-        : EmployeeStatus.ATIVO;
 
       const payload = {
         registration,
         name,
         positionId: position.id,
-        directorateId: directorate.id,
+        directorateId: costCenter.directorateId,
+        costCenterId: costCenter.id,
         currentSalary,
         admissionDate: admissionDate.toISOString().slice(0, 10),
-        status,
+        status: existing?.status ?? EmployeeStatus.ATIVO,
         lastImportBatchId: batch.id,
       };
 
@@ -176,14 +192,14 @@ export class EmployeesService {
       }
 
       const existingSnapshot = await this.payrollSnapshotRepo.findOne({
-        where: { year, month, employeeId },
+        where: { year: monthYear.year, month: monthYear.month, employeeId },
       });
       const snapshotPayload = {
-        year,
-        month,
+        year: monthYear.year,
+        month: monthYear.month,
         employeeId,
-        directorateId: directorate.id,
-        costCenterId: existing?.costCenterId,
+        directorateId: costCenter.directorateId,
+        costCenterId: costCenter.id,
         positionId: position.id,
         salary: currentSalary,
         importBatchId: batch.id,

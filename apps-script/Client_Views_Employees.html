@@ -234,35 +234,14 @@
 
     function renderImportTab() {
       var body = document.getElementById('emp-body');
-      var now = new Date();
-      if (!state.importYear) state.importYear = now.getFullYear();
-      if (!state.importMonth) state.importMonth = now.getMonth() + 1;
       body.innerHTML =
         cardOpen('Fechamento mensal da folha', {
-          subtitle: 'Envie a planilha (.csv ou .xlsx) com a base de colaboradores referente ao mês que está sendo fechado. Colunas esperadas: matricula, nome, cargo, diretoria, cidade, estado, tipo_contrato, data_admissao, salario_atual, status. Além de atualizar o salário atual, o sistema guarda um retrato desse mês para que relatórios de meses passados não sejam substituídos pelo salário mais recente.',
+          subtitle: 'Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente.',
         }) +
-        '<div class="filter-bar">' +
-        '<div class="col"><label>Ano de referência</label><input type="number" id="emp-import-year" value="' + state.importYear + '" style="width:110px;"></div>' +
-        '<div class="col"><label>Mês de referência</label><select id="emp-import-month">' +
-        optionsHtml(
-          ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map(function (label, i) {
-            return { id: i + 1, name: label };
-          }),
-          { selected: state.importMonth },
-        ) +
-        '</select></div>' +
-        '</div>' +
         '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="emp-import-file" accept=".csv,.xlsx"></div>' +
         '<div class="form-actions"><button class="btn" id="emp-import-btn">Fechar mês</button></div>' +
         '<div id="emp-import-result" style="margin-top:16px;"></div>' +
         cardClose();
-
-      document.getElementById('emp-import-year').addEventListener('change', function (e) {
-        state.importYear = Number(e.target.value) || state.importYear;
-      });
-      document.getElementById('emp-import-month').addEventListener('change', function (e) {
-        state.importMonth = Number(e.target.value) || state.importMonth;
-      });
 
       document.getElementById('emp-import-btn').addEventListener('click', function () {
         var btn = this;
@@ -276,7 +255,7 @@
         btn.classList.add('is-loading');
         readFileAsBase64(file)
           .then(function (base64) {
-            return callApi('api_importEmployees', base64, file.type || 'text/csv', file.name, state.importYear, state.importMonth);
+            return callApi('api_importEmployees', base64, file.type || 'text/csv', file.name);
           })
           .then(function (result) {
             document.getElementById('emp-import-result').innerHTML = renderImportResultHtml(result);

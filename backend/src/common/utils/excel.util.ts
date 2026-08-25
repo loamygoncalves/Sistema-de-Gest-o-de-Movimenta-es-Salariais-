@@ -136,3 +136,23 @@ export function toDate(value: any): Date | null {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
+
+/**
+ * Extrai {year, month} de uma coluna "mês de referência" — aceita "MM/AAAA"
+ * (texto) ou uma data (caso o Excel converta a célula automaticamente, ex.:
+ * célula formatada como data). Usado pelo fechamento mensal da folha (ver
+ * EmployeesService#importFromExcel).
+ */
+export function toMonthYear(value: any): { year: number; month: number } | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return { year: value.getFullYear(), month: value.getMonth() + 1 };
+  }
+  const match = String(value).trim().match(/^(\d{1,2})\/(\d{4})$/);
+  if (!match) return null;
+  const month = Number(match[1]);
+  const year = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return { year, month };
+}

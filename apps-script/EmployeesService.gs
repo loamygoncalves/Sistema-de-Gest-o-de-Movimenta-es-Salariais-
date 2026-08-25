@@ -122,17 +122,18 @@ var EmployeesService = {
   },
 
   /**
-   * Importa a base atual de colaboradores — o fechamento mensal da folha
-   * (ver Db.gs#payrollSnapshots). Colunas esperadas (normalizadas):
-   * matricula, nome, cargo, diretoria, cidade, estado, tipo_contrato,
-   * data_admissao, salario_atual, status. `year`/`month` identificam o mês
-   * que está sendo fechado: além de atualizar employees.currentSalary (como
-   * sempre), grava um snapshot na aba FechamentoFolha para esse mês —
-   * reimportar o mesmo (year, month) substitui o snapshot anterior daquele
-   * colaborador (idempotente), nunca duplica.
+   * Importa a base de colaboradores — o fechamento mensal da folha (ver
+   * Db.gs#payrollSnapshots). Colunas esperadas (normalizadas): matricula,
+   * nome, cargo, centro_de_custo, admissao, salario_atual, mes_de_referencia
+   * (MM/AAAA, ex.: 08/2026 — o mês que está sendo fechado, lido linha a
+   * linha, não um parâmetro do arquivo inteiro). A diretoria é derivada do
+   * centro de custo informado (não é mais uma coluna própria). Além de
+   * atualizar employees.currentSalary/employees.costCenterId de cada
+   * colaborador (como sempre), grava um snapshot na aba FechamentoFolha para
+   * o mês daquela linha — reimportar o mesmo (year, month) substitui o
+   * snapshot anterior daquele colaborador (idempotente), nunca duplica.
    */
-  importFromFile: function (base64Data, mimeType, filename, importedByEmail, year, month) {
-    if (!year || !month) throw new Error('Informe o ano e o mês de referência do fechamento.');
+  importFromFile: function (base64Data, mimeType, filename, importedByEmail) {
     var records = parseUploadedSpreadsheet_(base64Data, mimeType, filename);
     var errors = [];
     var successRows = 0;
@@ -143,9 +144,10 @@ var EmployeesService = {
       var registration = String(data.matricula || '').trim();
       var name = String(data.nome || '').trim();
       var positionName = String(data.cargo || '').trim();
-      var directorateName = String(data.diretoria || '').trim();
+      var costCenterName = String(data.centro_de_custo || '').trim();
       var currentSalary = toNumber_(data.salario_atual);
-      var admissionDate = toDateIso_(data.data_admissao);
+      var admissionDate = toDateIso_(data.admissao);
+      var monthYear = toMonthYear_(data.mes_de_referencia);
 
       function fail(field, message) {
         errors.push({ rowNumber: record.rowNumber, field: field, message: message });
@@ -155,19 +157,23 @@ var EmployeesService = {
       if (seen[registration]) return fail('matricula', 'Matrícula duplicada na planilha: ' + registration);
       if (!name) return fail('nome', 'Nome é obrigatório');
       if (!positionName) return fail('cargo', 'Cargo é obrigatório');
-      if (!directorateName) return fail('diretoria', 'Diretoria é obrigatória');
+      if (!costCenterName) return fail('centro_de_custo', 'Centro de custo é obrigatório');
 
       var position = OrgService.findPositionByName(positionName);
       if (!position) return fail('cargo', 'Cargo inexistente: ' + positionName);
-      var directorate = OrgService.findDirectorateByName(directorateName);
-      if (!directorate) return fail('diretoria', 'Diretoria inexistente: ' + directorateName);
+      var costCenter = OrgService.findCostCenterByName(costCenterName);
+      if (!costCenter) return fail('centro_de_custo', 'Centro de custo inexistente: ' + costCenterName);
+      if (!costCenter.directorateId) {
+        return fail(
+          'centro_de_custo',
+          'Centro de custo "' + costCenterName + '" não tem diretoria vinculada — cadastre a diretoria dele em Administração > Estrutura Organizacional antes de importar',
+        );
+      }
       if (currentSalary === null || currentSalary < 0) return fail('salario_atual', 'Salário atual inválido');
-      if (!admissionDate) return fail('data_admissao', 'Data de admissão inválida');
+      if (!admissionDate) return fail('admissao', 'Data de admissão inválida');
+      if (!monthYear) return fail('mes_de_referencia', 'Mês de referência inválido — use o formato MM/AAAA (ex.: 08/2026)');
 
       seen[registration] = true;
-
-      var statusRaw = String(data.status || 'ATIVO').trim().toUpperCase();
-      var status = EmployeeStatus[statusRaw] ? statusRaw : EmployeeStatus.ATIVO;
 
       var existing = Tables.employees.findOne(function (r) {
         return r.registration === registration;
@@ -177,10 +183,11 @@ var EmployeesService = {
         registration: registration,
         name: name,
         positionId: position.id,
-        directorateId: directorate.id,
+        directorateId: costCenter.directorateId,
+        costCenterId: costCenter.id,
         currentSalary: currentSalary,
         admissionDate: admissionDate,
-        status: status,
+        status: existing ? existing.status : EmployeeStatus.ATIVO,
         updatedAt: nowIso_(),
       };
 
@@ -195,17 +202,17 @@ var EmployeesService = {
 
       var existingSnapshot = Tables.payrollSnapshots.findOne(function (s) {
         return (
-          Number(s.year) === Number(year) &&
-          Number(s.month) === Number(month) &&
+          Number(s.year) === Number(monthYear.year) &&
+          Number(s.month) === Number(monthYear.month) &&
           s.employeeId === employeeId
         );
       });
       var snapshotPayload = {
-        year: year,
-        month: month,
+        year: monthYear.year,
+        month: monthYear.month,
         employeeId: employeeId,
-        directorateId: directorate.id,
-        costCenterId: existing ? existing.costCenterId || '' : '',
+        directorateId: costCenter.directorateId,
+        costCenterId: costCenter.id,
         positionId: position.id,
         salary: currentSalary,
         importBatchId: '',

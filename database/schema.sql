@@ -228,7 +228,8 @@ CREATE INDEX idx_employees_position ON employees(position_id);
 CREATE INDEX idx_employees_status ON employees(status);
 
 -- Fechamento mensal da folha: um "retrato" do salário de cada colaborador no
--- mês em que a base foi fechada (ver POST /employees/import com year/month).
+-- mês em que a base foi fechada (ver POST /employees/import, coluna
+-- mes_de_referencia da planilha, formato MM/AAAA).
 -- employees.current_salary é um valor único e vivo — sem isso, um relatório
 -- de um mês passado mostraria o salário mais recente para todos os meses.
 -- Onde existir snapshot para (year, month), os relatórios usam esse valor

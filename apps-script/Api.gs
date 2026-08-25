@@ -185,13 +185,14 @@ function api_deactivateEmployee(id) {
 }
 
 /**
- * Fechamento mensal da folha: year/month identificam o mês que está sendo
- * fechado — ver EmployeesService#importFromFile.
+ * Fechamento mensal da folha: o mês que está sendo fechado vem da coluna
+ * mes_de_referencia (MM/AAAA) da própria planilha, linha a linha — ver
+ * EmployeesService#importFromFile.
  */
-function api_importEmployees(base64Data, mimeType, filename, year, month) {
+function api_importEmployees(base64Data, mimeType, filename) {
   var user = requireUser_();
   requireRole_(user, manageRoles_());
-  return EmployeesService.importFromFile(base64Data, mimeType, filename, user.email, year, month);
+  return EmployeesService.importFromFile(base64Data, mimeType, filename, user.email);
 }
 
 function api_getEmployeesComparison(year, month) {

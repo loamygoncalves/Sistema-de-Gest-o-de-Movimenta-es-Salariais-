@@ -161,8 +161,6 @@ function EmployeeListTab() {
 function EmployeeImportTab() {
   const { showToast } = useToast();
   const [file, setFile] = useState<File | null>(null);
-  const [year, setYear] = useState(new Date().getFullYear());
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [importing, setImporting] = useState(false);
   const [batch, setBatch] = useState<ImportBatch | null>(null);
 
@@ -176,7 +174,7 @@ function EmployeeImportTab() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await api.upload<ImportBatch>("/employees/import", formData, { year, month });
+      const res = await api.upload<ImportBatch>("/employees/import", formData);
       setBatch(res);
       showToast("Fechamento da folha importado com sucesso.", "success");
     } catch (err) {
@@ -190,13 +188,9 @@ function EmployeeImportTab() {
     <div className="flex flex-col gap-6">
       <Card
         title="Fechamento mensal da folha"
-        subtitle="Envie a planilha (.xlsx) com a base de colaboradores referente ao mês que está sendo fechado. Além de atualizar o salário atual, o sistema guarda um retrato desse mês para que relatórios de meses passados não sejam substituídos pelo salário mais recente."
+        subtitle="Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente."
       >
         <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:max-w-md">
-            <YearSelect value={year} onChange={setYear} label="Ano de referência" />
-            <MonthSelect value={month} onChange={setMonth} label="Mês de referência" />
-          </div>
           <FileDropzone file={file} onFileSelected={setFile} accept=".xlsx,.xls" />
           <div>
             <Button onClick={handleImport} loading={importing} disabled={!file}>
