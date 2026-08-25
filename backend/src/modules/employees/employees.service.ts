@@ -11,6 +11,7 @@ import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { Employee } from './entities/employee.entity';
+import { PayrollSnapshot } from './entities/payroll-snapshot.entity';
 import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
 
 @Injectable()
@@ -18,6 +19,8 @@ export class EmployeesService {
   constructor(
     @InjectRepository(Employee)
     private readonly employeeRepo: Repository<Employee>,
+    @InjectRepository(PayrollSnapshot)
+    private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
     private readonly orgService: OrgService,
@@ -73,12 +76,17 @@ export class EmployeesService {
   }
 
   /**
-   * Importa a base atual de colaboradores a partir de uma planilha Excel.
-   * Colunas esperadas (normalizadas): matricula, nome, cargo, diretoria,
-   * gerencia, coordenacao, centro_de_custo, cidade, estado, tipo_contrato,
-   * data_admissao, salario_atual, status.
+   * Importa a base atual de colaboradores a partir de uma planilha Excel —
+   * o fechamento mensal da folha (ver payroll-snapshot.entity.ts). Colunas
+   * esperadas (normalizadas): matricula, nome, cargo, diretoria, gerencia,
+   * coordenacao, centro_de_custo, cidade, estado, tipo_contrato,
+   * data_admissao, salario_atual, status. `year`/`month` identificam o mês
+   * que está sendo fechado: além de atualizar `employees.current_salary`
+   * (como sempre), grava um snapshot em `payroll_snapshots` para esse mês —
+   * reimportar o mesmo (year, month) substitui o snapshot anterior daquele
+   * colaborador (idempotente), nunca duplica.
    */
-  async importFromExcel(buffer: Buffer, filename: string, importedById: string) {
+  async importFromExcel(buffer: Buffer, filename: string, importedById: string, year: number, month: number) {
     const batch = await this.importBatchService.create(
       ImportType.BASE_COLABORADORES,
       filename,
@@ -158,11 +166,34 @@ export class EmployeesService {
         lastImportBatchId: batch.id,
       };
 
+      let employeeId: string;
       if (existing) {
         await this.employeeRepo.update(existing.id, payload);
+        employeeId = existing.id;
       } else {
-        await this.employeeRepo.save(this.employeeRepo.create(payload));
+        const created = await this.employeeRepo.save(this.employeeRepo.create(payload));
+        employeeId = created.id;
       }
+
+      const existingSnapshot = await this.payrollSnapshotRepo.findOne({
+        where: { year, month, employeeId },
+      });
+      const snapshotPayload = {
+        year,
+        month,
+        employeeId,
+        directorateId: directorate.id,
+        costCenterId: existing?.costCenterId,
+        positionId: position.id,
+        salary: currentSalary,
+        importBatchId: batch.id,
+      };
+      if (existingSnapshot) {
+        await this.payrollSnapshotRepo.update(existingSnapshot.id, snapshotPayload);
+      } else {
+        await this.payrollSnapshotRepo.save(this.payrollSnapshotRepo.create(snapshotPayload));
+      }
+
       successRows += 1;
     }
 
@@ -174,6 +205,50 @@ export class EmployeesService {
     const batch = await this.importBatchService.findOne(batchId);
     const errors = await this.importBatchService.findErrors(batchId);
     return { ...batch, errors };
+  }
+
+  /**
+   * Folha "daquele mês": se o mês já foi fechado (existe ao menos um
+   * snapshot em payroll_snapshots para year+month, dentro do escopo), usa os
+   * salários congelados de lá — não o salário atual re-lido depois. Sem
+   * fechamento para esse mês (mês corrente ainda em aberto, ou histórico
+   * anterior a este recurso), cai para employees.current_salary ao vivo.
+   */
+  private async resolveMonthlySalaryRows(
+    year: number,
+    month: number,
+    scope: AccessScope,
+    directorateId?: string,
+    costCenterId?: string,
+  ): Promise<{ directorateId: string; directorateName?: string; costCenterId?: string; salary: number }[]> {
+    const snapshotQb = this.payrollSnapshotRepo
+      .createQueryBuilder('s')
+      .leftJoinAndSelect('s.directorate', 'directorate')
+      .where('s.year = :year', { year })
+      .andWhere('s.month = :month', { month });
+    applyAccessScope(snapshotQb, 's', scope, directorateId, costCenterId);
+    const snapshots = await snapshotQb.getMany();
+    if (snapshots.length > 0) {
+      return snapshots.map((s) => ({
+        directorateId: s.directorateId,
+        directorateName: s.directorate?.name,
+        costCenterId: s.costCenterId,
+        salary: Number(s.salary),
+      }));
+    }
+
+    const employeeQb = this.employeeRepo
+      .createQueryBuilder('e')
+      .leftJoinAndSelect('e.directorate', 'directorate')
+      .where('e.status = :status', { status: EmployeeStatus.ATIVO });
+    applyAccessScope(employeeQb, 'e', scope, directorateId, costCenterId);
+    const employees = await employeeQb.getMany();
+    return employees.map((e) => ({
+      directorateId: e.directorateId,
+      directorateName: e.directorate?.name,
+      costCenterId: e.costCenterId,
+      salary: Number(e.currentSalary || 0),
+    }));
   }
 
   /**
@@ -198,13 +273,7 @@ export class EmployeesService {
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
 
-    const employeeQb = this.employeeRepo
-      .createQueryBuilder('e')
-      .leftJoinAndSelect('e.position', 'position')
-      .leftJoinAndSelect('e.directorate', 'directorate')
-      .where('e.status = :status', { status: EmployeeStatus.ATIVO });
-    applyAccessScope(employeeQb, 'e', scope);
-    const employees = await employeeQb.getMany();
+    const salaryRows = await this.resolveMonthlySalaryRows(year, referenceMonth, scope);
 
     type Bucket = {
       directorateId: string;
@@ -236,20 +305,20 @@ export class EmployeesService {
       buckets.set(key, bucket);
     }
 
-    for (const employee of employees) {
-      if (!employee.costCenterId) continue;
-      const key = bucketKey(employee.directorateId, employee.costCenterId);
+    for (const row of salaryRows) {
+      if (!row.costCenterId) continue;
+      const key = bucketKey(row.directorateId, row.costCenterId);
       const bucket = buckets.get(key) ?? {
-        directorateId: employee.directorateId,
-        directorateName: employee.directorate?.name,
-        costCenterId: employee.costCenterId,
+        directorateId: row.directorateId,
+        directorateName: row.directorateName,
+        costCenterId: row.costCenterId,
         budgetedCount: 0,
         budgetedCost: 0,
         currentCount: 0,
         currentCost: 0,
       };
       bucket.currentCount += 1;
-      bucket.currentCost += Number(employee.currentSalary || 0);
+      bucket.currentCost += row.salary;
       buckets.set(key, bucket);
     }
 
@@ -293,7 +362,7 @@ export class EmployeesService {
       year,
       month: referenceMonth,
       hcBudgeted: budgetEntries.length,
-      hcCurrent: employees.length,
+      hcCurrent: salaryRows.length,
       openPositions,
       headcountExcess,
       budgetSavings,

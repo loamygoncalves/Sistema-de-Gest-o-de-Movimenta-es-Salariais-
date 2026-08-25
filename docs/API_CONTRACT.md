@@ -46,13 +46,19 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
 - `GET /employees?directorateId=&positionId=&status=&search=&page=&limit=`
 - `GET /employees/:id`
 - `POST /employees` / `PATCH /employees/:id` / `DELETE /employees/:id`
-- `POST /employees/import` (multipart `file`) → processa Excel, retorna `ImportBatch`
-  com `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
+- `POST /employees/import?year=&month=` (multipart `file`) — **fechamento mensal da folha**:
+  `year`/`month` (obrigatórios) identificam o mês que está sendo fechado. Processa a
+  planilha Excel, atualiza `employees.current_salary` de cada colaborador (como sempre) e
+  além disso grava um snapshot desse mês em `payroll_snapshots` — reimportar o mesmo
+  (year, month) substitui o snapshot anterior de cada colaborador, nunca duplica. Retorna
+  `ImportBatch` com `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
 - `GET /employees/import/:batchId`
-- `GET /employees/comparison?year=&month=` → compara base atual x orçada, agregando
-  por centro de custo (nunca por cargo — sempre diretoria + centro de custo)
-  no mês de referência (`month` 1-12, padrão mês corrente) — o orçamento não é
-  vinculado a colaborador, então a comparação não casa por matrícula:
+- `GET /employees/comparison?year=&month=` → compara base x orçada, agregando por centro
+  de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de referência
+  (`month` 1-12, padrão mês corrente). O lado "atual" usa o snapshot de fechamento daquele
+  mês quando existir (ver `POST /employees/import` acima); sem fechamento para esse mês,
+  cai para `employees.current_salary` ao vivo. O orçamento não é vinculado a colaborador,
+  então a comparação não casa por matrícula:
   ```json
   {
     "year": 2026, "month": 1,
@@ -94,7 +100,9 @@ já que não há colaborador para derivar).
 - `GET /movements/:id` (inclui `simulation` mais recente e `approvalSteps`)
 - `POST /movements` body varia por `type`:
   - `PROMOCAO`: `{ type, employeeId, newPositionId, newSalary, effectiveDate, justification }`
-  - `MERITO`: `{ type, employeeId, percentage, effectiveDate, justification }` (valor calculado no backend)
+  - `MERITO`: `{ type, employeeId, newSalary, effectiveDate, justification }` — igual à Promoção,
+    informa-se o novo salário; o backend calcula e persiste `meritPercentage` automaticamente
+    (`newSalary` precisa ser maior que o salário atual do colaborador)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
 - `PATCH /movements/:id` (somente RASCUNHO)
 - `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` a partir do fluxo
@@ -129,8 +137,9 @@ já que não há colaborador para derivar).
 - `POST /simulator/preview` — Simulador Rápido (Gestor/Diretor testam o
   impacto de uma promoção/mérito para um colaborador ANTES de abrir a
   solicitação de fato; não persiste nada). Body:
-  `{ employeeId, type: 'PROMOCAO'|'MERITO', newPositionId?, newSalary?, percentage?, effectiveDate }`
-  (`newPositionId`/`newSalary` para `PROMOCAO`, `percentage` para `MERITO`).
+  `{ employeeId, type: 'PROMOCAO'|'MERITO', newPositionId?, newSalary?, effectiveDate }`
+  (`newPositionId` só para `PROMOCAO`; `newSalary` é obrigatório para os dois — para `MERITO` o
+  percentual de mérito é calculado a partir dele, mesma UX da Promoção).
   Retorna o mesmo formato de `POST /movements/:id/simulate` acima. 403 se o
   colaborador estiver fora do escopo de acesso do usuário.
 - `GET /charge-parameters` / `POST` / `PATCH /:id` (ADMIN, RH_REMUNERACAO) — encargos/benefícios parametrizáveis
@@ -184,6 +193,9 @@ em `approvalSteps`. GESTOR nunca aprova, só solicita.
   (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente)
 - `GET /dashboard/payroll?year=&month=&directorateId=` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
   (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
+  `hcCurrent`/`payrollCurrent` usam o fechamento de folha daquele mês (`payroll_snapshots`)
+  quando existir, senão caem para `employees.current_salary` ao vivo — ver `POST
+  /employees/import` na seção Employees acima.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
 - `GET /dashboard/financial?year=&month=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}] }`
 

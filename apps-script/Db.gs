@@ -257,6 +257,13 @@ var TABLES_CONFIG = {
     sheet: 'FluxoAprovacao',
     columns: ['id', 'stepOrder', 'roles', 'createdAt', 'updatedAt'],
   },
+  payrollSnapshots: {
+    sheet: 'FechamentoFolha',
+    columns: [
+      'id', 'year', 'month', 'employeeId', 'directorateId', 'costCenterId', 'positionId',
+      'salary', 'importBatchId', 'createdAt',
+    ],
+  },
   movementHistory: {
     sheet: 'Historico',
     columns: [

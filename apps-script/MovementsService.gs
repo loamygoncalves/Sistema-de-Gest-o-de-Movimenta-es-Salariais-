@@ -80,16 +80,19 @@ var MovementsService = {
       base.newSalary = Number(input.newSalary);
     } else if (input.type === MovementType.MERITO) {
       if (!employee) throw new Error('Colaborador é obrigatório para mérito');
-      if (!input.percentage || Number(input.percentage) <= 0) {
-        throw new Error('Percentual de mérito deve ser maior que zero');
+      if (input.newSalary === undefined || input.newSalary === null) throw new Error('Novo salário é obrigatório');
+      if (Number(input.newSalary) <= Number(employee.currentSalary)) {
+        throw new Error('Mérito precisa ter novo salário maior que o salário atual do colaborador');
       }
       base.employeeId = employee.id;
       base.directorateId = employee.directorateId;
       base.costCenterId = employee.costCenterId || '';
       base.currentPositionId = employee.positionId;
       base.currentSalary = Number(employee.currentSalary);
-      base.newSalary = round2_(Number(employee.currentSalary) * (1 + Number(input.percentage) / 100));
-      base.meritPercentage = Number(input.percentage);
+      base.newSalary = Number(input.newSalary);
+      base.meritPercentage = round2_(
+        ((Number(input.newSalary) - Number(employee.currentSalary)) / Number(employee.currentSalary)) * 100,
+      );
     } else if (input.type === MovementType.AUMENTO_QUADRO) {
       if (!input.directorateId) throw new Error('Diretoria é obrigatória');
       if (!input.costCenterId) throw new Error('Centro de custo é obrigatório');

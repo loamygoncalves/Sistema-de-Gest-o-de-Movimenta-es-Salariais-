@@ -20,6 +20,22 @@ import {
 
 const TYPE_OPTIONS = Object.entries(MOVEMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
+// Mostra o salário atual do colaborador e, assim que um novo salário válido
+// é digitado, o % de reajuste que ele representa — usado tanto em Promoção
+// quanto em Mérito (que agora também parte do novo salário, não do %).
+function reajusteHint(employee: Employee | null, newSalaryStr: string, label: string): string | undefined {
+  if (!employee) return undefined;
+  const current = employee.currentSalary;
+  const currentFormatted = current.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const newSalary = Number(newSalaryStr);
+  if (newSalaryStr && !Number.isNaN(newSalary) && current > 0) {
+    const percent = ((newSalary - current) / current) * 100;
+    const sign = percent >= 0 ? "+" : "";
+    return `${label}: ${currentFormatted} (${sign}${percent.toFixed(2)}% de reajuste)`;
+  }
+  return `${label}: ${currentFormatted}`;
+}
+
 export default function NewMovementPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -32,7 +48,6 @@ export default function NewMovementPage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [newPositionId, setNewPositionId] = useState("");
   const [newSalary, setNewSalary] = useState<string>("");
-  const [percentage, setPercentage] = useState<string>("");
   const [positionId, setPositionId] = useState("");
   const [quantity, setQuantity] = useState<string>("1");
   const [plannedSalary, setPlannedSalary] = useState<string>("");
@@ -54,8 +69,6 @@ export default function NewMovementPage() {
     if (prefNewPositionId) setNewPositionId(prefNewPositionId);
     const prefNewSalary = searchParams.get("newSalary");
     if (prefNewSalary) setNewSalary(prefNewSalary);
-    const prefPercentage = searchParams.get("percentage");
-    if (prefPercentage) setPercentage(prefPercentage);
     const prefEffectiveDate = searchParams.get("effectiveDate");
     if (prefEffectiveDate) setEffectiveDate(prefEffectiveDate);
 
@@ -88,8 +101,13 @@ export default function NewMovementPage() {
 
     if (type === "MERITO") {
       if (!employee) next.employee = "Selecione o colaborador.";
-      if (!percentage) next.percentage = "Informe o percentual de aumento.";
-      if (percentage && Number(percentage) <= 0) next.percentage = "O percentual deve ser maior que zero.";
+      if (!newSalary) next.newSalary = "Informe o novo salário.";
+      if (employee && newSalary && Number(newSalary) <= employee.currentSalary) {
+        next.newSalary = `O novo salário precisa ser maior que o salário atual (${employee.currentSalary.toLocaleString(
+          "pt-BR",
+          { style: "currency", currency: "BRL" }
+        )}).`;
+      }
     }
 
     if (type === "AUMENTO_QUADRO") {
@@ -124,7 +142,7 @@ export default function NewMovementPage() {
         payload = {
           type,
           employeeId: employee!.id,
-          percentage: Number(percentage),
+          newSalary: Number(newSalary),
           effectiveDate,
           justification,
         };
@@ -197,21 +215,21 @@ export default function NewMovementPage() {
                 value={newSalary}
                 onChange={(e) => setNewSalary(e.target.value)}
                 error={errors.newSalary}
-                hint={employee ? `Salário atual: ${employee.currentSalary.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : undefined}
+                hint={reajusteHint(employee, newSalary, "Salário atual")}
               />
             </div>
           )}
 
           {type === "MERITO" && (
             <Input
-              label="Percentual de aumento (%)"
+              label="Novo salário"
               type="number"
               step="0.01"
               required
-              value={percentage}
-              onChange={(e) => setPercentage(e.target.value)}
-              error={errors.percentage}
-              hint="O valor do reajuste será calculado automaticamente pelo backend."
+              value={newSalary}
+              onChange={(e) => setNewSalary(e.target.value)}
+              error={errors.newSalary}
+              hint={reajusteHint(employee, newSalary, "Salário atual") ?? "O percentual de mérito é calculado automaticamente a partir do novo salário."}
             />
           )}
 

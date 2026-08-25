@@ -51,17 +51,15 @@ export class CreateMovementDto {
   @IsUUID()
   newPositionId?: string;
 
+  // Novo salário — para PROMOCAO é o salário do novo cargo; para MERITO é o
+  // novo salário desejado, a partir do qual o backend calcula o percentual
+  // de mérito automaticamente (meritPercentage), em vez de receber o
+  // percentual como entrada.
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   newSalary?: number;
-
-  // Mérito
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  percentage?: number;
 
   @IsDateString()
   effectiveDate: string;

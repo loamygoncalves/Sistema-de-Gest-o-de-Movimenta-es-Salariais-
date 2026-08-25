@@ -184,10 +184,14 @@ function api_deactivateEmployee(id) {
   return stripRow_(EmployeesService.deactivate(id));
 }
 
-function api_importEmployees(base64Data, mimeType, filename) {
+/**
+ * Fechamento mensal da folha: year/month identificam o mês que está sendo
+ * fechado — ver EmployeesService#importFromFile.
+ */
+function api_importEmployees(base64Data, mimeType, filename, year, month) {
   var user = requireUser_();
   requireRole_(user, manageRoles_());
-  return EmployeesService.importFromFile(base64Data, mimeType, filename, user.email);
+  return EmployeesService.importFromFile(base64Data, mimeType, filename, user.email, year, month);
 }
 
 function api_getEmployeesComparison(year, month) {
@@ -278,15 +282,17 @@ function api_previewSimulation(input) {
     });
   }
 
-  if (!input.percentage || Number(input.percentage) <= 0) {
-    throw new Error('Percentual de mérito deve ser maior que zero');
+  if (input.newSalary === undefined || input.newSalary === null) throw new Error('Novo salário é obrigatório');
+  if (Number(input.newSalary) <= Number(employee.currentSalary)) {
+    throw new Error('Mérito precisa ter novo salário maior que o salário atual do colaborador');
   }
+  var meritPercentage = ((Number(input.newSalary) - Number(employee.currentSalary)) / Number(employee.currentSalary)) * 100;
   return SimulatorService.simulate({
     type: MovementType.MERITO,
     directorateId: employee.directorateId,
     costCenterId: employee.costCenterId,
     currentSalary: Number(employee.currentSalary),
-    meritPercentage: Number(input.percentage),
+    meritPercentage: round2_(meritPercentage),
     effectiveDate: input.effectiveDate,
   });
 }

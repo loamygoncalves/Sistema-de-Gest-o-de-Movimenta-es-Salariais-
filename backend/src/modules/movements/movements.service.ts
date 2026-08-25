@@ -110,17 +110,21 @@ export class MovementsService {
       }
       case MovementType.MERITO: {
         if (!employee) throw new BadRequestException('Colaborador é obrigatório para mérito');
-        if (dto.percentage === undefined || dto.percentage <= 0) {
-          throw new BadRequestException('Percentual de mérito deve ser maior que zero');
+        if (dto.newSalary === undefined) throw new BadRequestException('Novo salário é obrigatório');
+        if (dto.newSalary <= employee.currentSalary) {
+          throw new BadRequestException(
+            'Mérito precisa ter novo salário maior que o salário atual do colaborador',
+          );
         }
+        const meritPercentage = ((dto.newSalary - employee.currentSalary) / employee.currentSalary) * 100;
         Object.assign(base, {
           employeeId: employee.id,
           directorateId: employee.directorateId,
           costCenterId: employee.costCenterId,
           currentPositionId: employee.positionId,
           currentSalary: employee.currentSalary,
-          newSalary: Number((employee.currentSalary * (1 + dto.percentage / 100)).toFixed(2)),
-          meritPercentage: dto.percentage,
+          newSalary: dto.newSalary,
+          meritPercentage: Number(meritPercentage.toFixed(2)),
         });
         break;
       }

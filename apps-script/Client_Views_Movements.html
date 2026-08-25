@@ -12,6 +12,24 @@
     });
   }
 
+  /**
+   * Mostra o salário atual do colaborador e, assim que um novo salário
+   * válido é digitado, o % de reajuste que ele representa — usado por
+   * Promoção e Mérito (que agora também parte do novo salário, não do %).
+   */
+  function reajusteHintText_(emp, newSalaryStr) {
+    if (!emp) return '';
+    var current = Number(emp.currentSalary);
+    var text = 'Salário atual: ' + fmt.currency(current);
+    var newSalary = Number(newSalaryStr);
+    if (newSalaryStr && !isNaN(newSalary) && current > 0) {
+      var percent = ((newSalary - current) / current) * 100;
+      var sign = percent >= 0 ? '+' : '';
+      text += ' (' + sign + percent.toFixed(2) + '% de reajuste)';
+    }
+    return text;
+  }
+
   function metricTile(label, value, highlight) {
     return (
       '<div class="kpi-tile' +
@@ -262,9 +280,8 @@
         return (
           '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="mn-employee-picker"></div>' +
           '<p class="field-error" id="mn-err-employee" style="display:none;"></p></div>' +
-          '<div class="field"><label>Percentual de Aumento (%) <span class="req">*</span></label><input type="number" step="0.01" id="mn-percentage">' +
-          '<p class="field-hint">O novo salário será calculado automaticamente pelo servidor.</p>' +
-          '<p class="field-error" id="mn-err-percentage" style="display:none;"></p></div>'
+          '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="mn-newSalary">' +
+          '<p class="field-hint" id="mn-hint-newSalary"></p><p class="field-error" id="mn-err-newSalary" style="display:none;"></p></div>'
         );
       }
       if (t === 'AUMENTO_QUADRO') {
@@ -319,6 +336,14 @@
       }
     }
 
+    function updateSalaryHint() {
+      var hint = document.getElementById('mn-hint-newSalary');
+      if (!hint) return;
+      var emp = employeePicker && employeePicker.getSelected();
+      var salEl = document.getElementById('mn-newSalary');
+      hint.textContent = reajusteHintText_(emp, salEl ? salEl.value : '');
+    }
+
     function renderTypeFields() {
       var el = document.getElementById('mn-type-fields');
       el.innerHTML = typeFieldsHtml(type);
@@ -327,28 +352,20 @@
       if (pickerEl) {
         employeePicker = mountEmployeePicker(pickerEl, employees, {
           initialEmployee: prefillEmployee,
-          onChange: function (emp) {
-            var hint = document.getElementById('mn-hint-newSalary');
-            if (hint && emp) hint.textContent = 'Salário atual: ' + fmt.currency(emp.currentSalary);
-            else if (hint) hint.textContent = '';
-          },
+          onChange: updateSalaryHint,
         });
-        var hint = document.getElementById('mn-hint-newSalary');
-        if (hint && prefillEmployee) hint.textContent = 'Salário atual: ' + fmt.currency(prefillEmployee.currentSalary);
       }
-      if (prefill && type === 'PROMOCAO') {
-        if (prefill.newPositionId) {
-          var posEl = document.getElementById('mn-newPositionId');
-          if (posEl) posEl.value = prefill.newPositionId;
-        }
-        if (prefill.newSalary != null) {
-          var salEl = document.getElementById('mn-newSalary');
-          if (salEl) salEl.value = prefill.newSalary;
-        }
-      } else if (prefill && type === 'MERITO' && prefill.percentage != null) {
-        var pctEl = document.getElementById('mn-percentage');
-        if (pctEl) pctEl.value = prefill.percentage;
+      var salEl = document.getElementById('mn-newSalary');
+      if (salEl) salEl.addEventListener('input', updateSalaryHint);
+
+      if (prefill && prefill.newSalary != null && salEl) {
+        salEl.value = prefill.newSalary;
       }
+      if (prefill && type === 'PROMOCAO' && prefill.newPositionId) {
+        var posEl = document.getElementById('mn-newPositionId');
+        if (posEl) posEl.value = prefill.newPositionId;
+      }
+      updateSalaryHint();
     }
 
     function clearErrors() {
@@ -396,13 +413,15 @@
         }
       } else if (type === 'MERITO') {
         var emp2 = employeePicker && employeePicker.getSelected();
-        var percentage = v('percentage');
+        var meritoNewSalary = v('newSalary');
         if (!emp2) errors.employee = 'Selecione o colaborador.';
-        if (!percentage) errors.percentage = 'Informe o percentual de aumento.';
-        else if (Number(percentage) <= 0) errors.percentage = 'O percentual deve ser maior que zero.';
+        if (!meritoNewSalary) errors.newSalary = 'Informe o novo salário.';
+        if (emp2 && meritoNewSalary && Number(meritoNewSalary) <= Number(emp2.currentSalary)) {
+          errors.newSalary = 'O novo salário precisa ser maior que o salário atual (' + fmt.currency(emp2.currentSalary) + ').';
+        }
         if (emp2) {
           payload.employeeId = emp2.id;
-          payload.percentage = Number(percentage);
+          payload.newSalary = Number(meritoNewSalary);
         }
       } else if (type === 'AUMENTO_QUADRO') {
         var positionId = v('positionId');
@@ -631,10 +650,16 @@
       renderTypeFields();
     }
 
+    function updateSimSalaryHint() {
+      var hint = document.getElementById('sim-hint-newSalary');
+      if (!hint) return;
+      var emp = employeePicker && employeePicker.getSelected();
+      var salEl = document.getElementById('sim-newSalary');
+      hint.textContent = reajusteHintText_(emp, salEl ? salEl.value : '');
+    }
+
     function renderTypeFields() {
       var el = document.getElementById('sim-type-fields');
-      var emp = employeePicker && employeePicker.getSelected();
-      var salaryHint = emp ? '<p class="field-hint">Salário atual: ' + fmt.currency(emp.currentSalary) + '</p>' : '';
       if (type === 'PROMOCAO') {
         el.innerHTML =
           '<div class="form-grid">' +
@@ -642,15 +667,16 @@
           optionsHtml(org.positions, { placeholder: 'Selecione' }) +
           '</select><p class="field-error" id="sim-err-newPositionId" style="display:none;"></p></div>' +
           '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="sim-newSalary">' +
-          salaryHint +
-          '<p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>' +
+          '<p class="field-hint" id="sim-hint-newSalary"></p><p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>' +
           '</div>';
       } else {
         el.innerHTML =
-          '<div class="field"><label>Percentual de Aumento (%) <span class="req">*</span></label><input type="number" step="0.01" id="sim-percentage">' +
-          salaryHint +
-          '<p class="field-error" id="sim-err-percentage" style="display:none;"></p></div>';
+          '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="sim-newSalary">' +
+          '<p class="field-hint" id="sim-hint-newSalary"></p><p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>';
       }
+      var salEl = document.getElementById('sim-newSalary');
+      if (salEl) salEl.addEventListener('input', updateSimSalaryHint);
+      updateSimSalaryHint();
     }
 
     function clearErrors() {
@@ -676,9 +702,9 @@
       if (!effectiveDate) errors.effectiveDate = 'Informe a data efetiva.';
 
       var input = { type: type, employeeId: emp ? emp.id : null, effectiveDate: effectiveDate };
+      var newSalary = document.getElementById('sim-newSalary').value;
       if (type === 'PROMOCAO') {
         var newPositionId = document.getElementById('sim-newPositionId').value;
-        var newSalary = document.getElementById('sim-newSalary').value;
         if (!newPositionId) errors.newPositionId = 'Selecione o novo cargo.';
         if (!newSalary) errors.newSalary = 'Informe o novo salário.';
         if (emp && newSalary && Number(newSalary) < Number(emp.currentSalary)) {
@@ -687,9 +713,11 @@
         input.newPositionId = newPositionId;
         input.newSalary = Number(newSalary);
       } else {
-        var percentage = document.getElementById('sim-percentage').value;
-        if (!percentage || Number(percentage) <= 0) errors.percentage = 'Informe um percentual maior que zero.';
-        input.percentage = Number(percentage);
+        if (!newSalary) errors.newSalary = 'Informe o novo salário.';
+        if (emp && newSalary && Number(newSalary) <= Number(emp.currentSalary)) {
+          errors.newSalary = 'O novo salário precisa ser maior que o salário atual (' + fmt.currency(emp.currentSalary) + ').';
+        }
+        input.newSalary = Number(newSalary);
       }
 
       if (Object.keys(errors).length > 0) {

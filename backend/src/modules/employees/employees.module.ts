@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Employee } from './entities/employee.entity';
+import { PayrollSnapshot } from './entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { OrgModule } from '../org/org.module';
 import { ImportsModule } from '../imports/imports.module';
@@ -8,7 +9,7 @@ import { EmployeesService } from './employees.service';
 import { EmployeesController } from './employees.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Employee, BudgetEntry]), OrgModule, ImportsModule],
+  imports: [TypeOrmModule.forFeature([Employee, PayrollSnapshot, BudgetEntry]), OrgModule, ImportsModule],
   providers: [EmployeesService],
   controllers: [EmployeesController],
   exports: [EmployeesService],

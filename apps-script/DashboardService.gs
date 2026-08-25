@@ -13,9 +13,7 @@ var DashboardService = {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
-    var hcCurrent = Tables.employees.where(function (e) {
-      return matchesAccessScope_(e, scope);
-    }).length;
+    var hcCurrent = resolveMonthlySalaryRows_(year, referenceMonth, scope, false).length;
 
     var approvedIncreases = Tables.movementRequests.where(function (m) {
       if (m.type !== MovementType.AUMENTO_QUADRO) return false;
@@ -51,14 +49,14 @@ var DashboardService = {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
-    var employees = Tables.employees.where(function (e) {
-      return matchesAccessScope_(e, scope);
-    });
+    var salaryRows = resolveMonthlySalaryRows_(year, referenceMonth, scope, false);
 
     var payrollBudgeted = budgetEntries.reduce(function (sum, b) {
       return sum + Number(monthValue_(b, referenceMonth) || 0);
     }, 0);
-    var payrollCurrent = sumBy_(employees, 'currentSalary');
+    var payrollCurrent = salaryRows.reduce(function (sum, row) {
+      return sum + row.salary;
+    }, 0);
 
     return {
       year: year,

@@ -13,7 +13,10 @@ export interface PromocaoPayload {
 export interface MeritoPayload {
   type: "MERITO";
   employeeId: string;
-  percentage: number;
+  // Igual à Promoção: informa-se o novo salário e o backend calcula o
+  // percentual de mérito automaticamente (meritPercentage), em vez de pedir
+  // o percentual antecipadamente.
+  newSalary: number;
   effectiveDate: string;
   justification: string;
 }

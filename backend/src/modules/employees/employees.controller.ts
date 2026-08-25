@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -76,13 +77,33 @@ export class EmployeesController {
     return this.employeesService.remove(id);
   }
 
+  /**
+   * Fechamento mensal da folha: `year`/`month` identificam o mês que está
+   * sendo fechado — além de atualizar o salário vivo de cada colaborador
+   * (`employees.current_salary`, como sempre), grava um snapshot desse mês
+   * em `payroll_snapshots` para que relatórios de meses passados usem o
+   * valor congelado daquele mês, não o salário atual re-lido depois.
+   */
   @Post('import')
   @Roles(UserRole.ADMIN, UserRole.RH_REMUNERACAO)
   @UseInterceptors(FileInterceptor('file'))
   importFromExcel(
     @UploadedFile() file: Express.Multer.File,
+    @Query('year') year: string,
+    @Query('month') month: string,
     @CurrentUser() user: AuthenticatedUser,
   ) {
-    return this.employeesService.importFromExcel(file.buffer, file.originalname, user.id);
+    const parsedYear = parseInt(year, 10);
+    const parsedMonth = parseInt(month, 10);
+    if (!parsedYear || !parsedMonth || parsedMonth < 1 || parsedMonth > 12) {
+      throw new BadRequestException('Informe o ano e o mês de referência do fechamento (year, month).');
+    }
+    return this.employeesService.importFromExcel(
+      file.buffer,
+      file.originalname,
+      user.id,
+      parsedYear,
+      parsedMonth,
+    );
   }
 }

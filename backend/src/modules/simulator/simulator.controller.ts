@@ -63,15 +63,17 @@ export class SimulatorController {
       });
     }
 
-    if (dto.percentage === undefined || dto.percentage <= 0) {
-      throw new BadRequestException('Percentual de mérito deve ser maior que zero');
+    if (dto.newSalary === undefined) throw new BadRequestException('Novo salário é obrigatório');
+    if (dto.newSalary <= employee.currentSalary) {
+      throw new BadRequestException('Mérito precisa ter novo salário maior que o salário atual do colaborador');
     }
+    const meritPercentage = ((dto.newSalary - employee.currentSalary) / employee.currentSalary) * 100;
     return this.simulatorService.simulate({
       type: MovementType.MERITO,
       directorateId: employee.directorateId,
       costCenterId: employee.costCenterId,
       currentSalary: employee.currentSalary,
-      meritPercentage: dto.percentage,
+      meritPercentage: Number(meritPercentage.toFixed(2)),
       effectiveDate: dto.effectiveDate,
     });
   }

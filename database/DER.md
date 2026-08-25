@@ -33,6 +33,9 @@ erDiagram
     IMPORT_BATCHES ||--o{ IMPORT_ERRORS : gera
     IMPORT_BATCHES ||--o{ BUDGET_ENTRIES : origina
     IMPORT_BATCHES ||--o{ EMPLOYEES : atualiza
+    EMPLOYEES ||--o{ PAYROLL_SNAPSHOTS : fecha
+    DIRECTORATES ||--o{ PAYROLL_SNAPSHOTS : lota
+    COST_CENTERS ||--o{ PAYROLL_SNAPSHOTS : lota
 
     MOVEMENT_REQUESTS ||--o{ APPROVAL_STEPS : possui
     MOVEMENT_REQUESTS ||--o{ MOVEMENT_SIMULATIONS : possui
@@ -53,6 +56,15 @@ erDiagram
         uuid directorate_id FK
         numeric current_salary
         string status
+    }
+    PAYROLL_SNAPSHOTS {
+        uuid id PK
+        int year
+        int month
+        uuid employee_id FK
+        uuid directorate_id FK
+        uuid cost_center_id FK
+        numeric salary
     }
     BUDGET_ENTRIES {
         uuid id PK
@@ -149,6 +161,17 @@ erDiagram
   referência, não por matrícula — comparar por cargo faria um cargo
   estourado e outro com sobra no mesmo centro de custo aparecerem como dois
   problemas separados em vez de se cancelarem.
+- **`payroll_snapshots`** é o fechamento mensal da folha (`POST
+  /employees/import` com `year`/`month`): um "retrato" do salário de cada
+  colaborador no mês em que a base foi fechada. `employees.current_salary` é
+  um valor único e vivo — sem esse snapshot, um relatório de um mês passado
+  mostraria o salário mais recente (re-importado depois) em vez do que a
+  folha realmente era naquele mês. Onde existir snapshot para (year, month),
+  `DashboardService`/`EmployeesService#compareWithBudget` usam o valor
+  congelado; sem snapshot para o mês pedido (mês corrente ainda em aberto,
+  ou histórico anterior a este recurso), caem para `current_salary` ao vivo.
+  Reimportar o mesmo (year, month) substitui o snapshot anterior de cada
+  colaborador (chave única `year+month+employee_id`), nunca duplica.
 - **`movement_requests` é polimórfica por `type`**: os campos específicos de
   cada tipo (mérito, aumento de quadro) ficam nullable na mesma tabela para
   permitir consultas e workflow unificados; a validação de obrigatoriedade

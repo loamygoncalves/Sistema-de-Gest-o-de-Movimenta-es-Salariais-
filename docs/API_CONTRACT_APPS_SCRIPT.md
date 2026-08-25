@@ -98,12 +98,19 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
 - `api_createEmployee({ registration, name, positionId, directorateId, admissionDate, currentSalary, ... })`
 - `api_updateEmployee(id, patch)`
 - `api_deactivateEmployee(id)`
-- `api_importEmployees(base64Data, mimeType, filename)` → `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
+- `api_importEmployees(base64Data, mimeType, filename, year, month)` — **fechamento mensal
+  da folha**: `year`/`month` (obrigatórios) identificam o mês que está sendo fechado. Além
+  de atualizar `employees.currentSalary` de cada colaborador (como sempre), grava um
+  snapshot desse mês na aba `FechamentoFolha` — reimportar o mesmo (year, month) substitui
+  o snapshot anterior de cada colaborador, nunca duplica. Retorna
+  `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
   (o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte base64 após a vírgula)
-- `api_getEmployeesComparison(year, month?)` → compara a base atual x orçada, agregando
-  por centro de custo (nunca por cargo — sempre diretoria + centro de custo)
-  no mês de referência (`month` 1-12, padrão mês corrente) — o orçamento não
-  é vinculado a colaborador, então a comparação não casa por matrícula:
+- `api_getEmployeesComparison(year, month?)` → compara a base x orçada, agregando por
+  centro de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de
+  referência (`month` 1-12, padrão mês corrente). O lado "atual" usa o snapshot de
+  fechamento daquele mês quando existir (ver `api_importEmployees` acima); sem fechamento
+  para esse mês, cai para `employees.currentSalary` ao vivo. O orçamento não é vinculado a
+  colaborador, então a comparação não casa por matrícula:
   `{ year, month, hcBudgeted, hcCurrent, openPositions, headcountExcess, budgetSavings, budgetOverrun, movementsByType: {SEM_MOVIMENTACAO,PROMOCAO,MERITO,SUBSTITUICAO,AUMENTO_DE_QUADRO,DESLIGAMENTO}, items: [{type: 'VAGA_ABERTA'|'EXCESSO_HC', directorate, costCenter, budgetedCount, currentCount, budgetedCost, currentCost}] }`
 
 ## Orçamento — Módulo 1
@@ -129,13 +136,14 @@ não há rejeição de linha "duplicada" na importação.
 
 ## Simulador / encargos — Módulo 4
 - `api_listChargeParameters()`, `api_createChargeParameter({name,label,valueType,value,isBenefit})`, `api_updateChargeParameter(id, patch)`
-- `api_previewSimulation({ employeeId, type: 'PROMOCAO'|'MERITO', newPositionId?, newSalary?, percentage?, effectiveDate })` —
+- `api_previewSimulation({ employeeId, type: 'PROMOCAO'|'MERITO', newPositionId?, newSalary?, effectiveDate })` —
   **Simulador Rápido**: Gestor/Diretor testam o impacto de uma promoção/mérito
   para um de seus colaboradores ANTES de abrir a solicitação de fato; não
-  persiste nada (nem `Movimentacoes`, nem `Simulacoes`). `newPositionId`/`newSalary`
-  para `PROMOCAO`, `percentage` para `MERITO`. Retorna o mesmo formato de
-  `api_simulateMovement` abaixo. Lança `PERMISSAO_NEGADA` se o colaborador
-  estiver fora do escopo de acesso do usuário.
+  persiste nada (nem `Movimentacoes`, nem `Simulacoes`). `newPositionId` só
+  para `PROMOCAO`; `newSalary` é obrigatório para os dois — em `MERITO` o
+  percentual é calculado a partir dele (mesma UX da Promoção). Retorna o
+  mesmo formato de `api_simulateMovement` abaixo. Lança `PERMISSAO_NEGADA` se
+  o colaborador estiver fora do escopo de acesso do usuário.
 
 ## Movimentações — Módulo 3
 Transferência foi descontinuada (não existe mais como `type`). Toda
@@ -146,7 +154,9 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
 - `api_getMovement(id)` → inclui `simulation` (última simulação) e `approvalSteps`
 - `api_createMovement(input)` — o corpo varia por `type`, igual ao backend original:
   - `PROMOCAO`: `{ type, employeeId, newPositionId, newSalary, effectiveDate, justification }`
-  - `MERITO`: `{ type, employeeId, percentage, effectiveDate, justification }`
+  - `MERITO`: `{ type, employeeId, newSalary, effectiveDate, justification }` — igual à Promoção,
+    informa-se o novo salário; o servidor calcula e persiste `meritPercentage` automaticamente
+    (`newSalary` precisa ser maior que o salário atual do colaborador)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
 - `api_updateMovement(id, patch)` (somente RASCUNHO)
 - `api_cancelMovement(id)` (somente RASCUNHO)
@@ -203,6 +213,9 @@ durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
   vaga em aberto = linha de orçamento com `movementType = AUMENTO_DE_QUADRO` ativa no mês)
 - `api_getDashboardPayroll(year, month?, directorateId?)` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
   (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
+  `hcCurrent`/`payrollCurrent` usam o fechamento de folha daquele mês (aba
+  `FechamentoFolha`) quando existir, senão caem para `employees.currentSalary` ao vivo —
+  ver `api_importEmployees` acima.
 - `api_getDashboardMovements(year, directorateId?)` → `{ promotions, merits, headcountIncrease }`
 - `api_getDashboardFinancial(year, month?, directorateId?)` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}] }`
 
@@ -212,7 +225,7 @@ durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
 `google.script.run`. O padrão usado aqui: no cliente, ler o arquivo com
 `FileReader.readAsDataURL(file)`, extrair a string base64 (depois da
 vírgula em `data:<mime>;base64,<...>`), e chamar `api_importEmployees(base64,
-file.type, file.name)` (ou o equivalente de orçamento/estudo salarial).
+file.type, file.name, year, month)` (ou o equivalente de orçamento/estudo salarial).
 Arquivos `.xlsx` são convertidos no servidor via Google Drive (exige o
 serviço avançado Drive API habilitado — ver `apps-script/README.md`);
 arquivos `.csv` são lidos diretamente, sem precisar do Drive.

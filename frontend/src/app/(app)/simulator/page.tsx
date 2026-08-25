@@ -16,6 +16,22 @@ import { Employee, MovementSimulation } from "@/types";
 
 type QuickType = "PROMOCAO" | "MERITO";
 
+// Mostra o salário atual e, assim que um novo salário válido é digitado, o
+// % de reajuste que ele representa — usado por Promoção e Mérito (ambos
+// partem do novo salário; o % de mérito é calculado a partir dele).
+function reajusteHint(employee: Employee | null, newSalaryStr: string): string | undefined {
+  if (!employee) return undefined;
+  const current = employee.currentSalary;
+  const currentFormatted = current.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const newSalary = Number(newSalaryStr);
+  if (newSalaryStr && !Number.isNaN(newSalary) && current > 0) {
+    const percent = ((newSalary - current) / current) * 100;
+    const sign = percent >= 0 ? "+" : "";
+    return `Salário atual: ${currentFormatted} (${sign}${percent.toFixed(2)}% de reajuste)`;
+  }
+  return `Salário atual: ${currentFormatted}`;
+}
+
 export default function SimulatorPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -25,7 +41,6 @@ export default function SimulatorPage() {
   const [type, setType] = useState<QuickType>("PROMOCAO");
   const [newPositionId, setNewPositionId] = useState("");
   const [newSalary, setNewSalary] = useState("");
-  const [percentage, setPercentage] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -47,8 +62,13 @@ export default function SimulatorPage() {
         )}).`;
       }
     } else {
-      if (!percentage) next.percentage = "Informe o percentual de aumento.";
-      if (percentage && Number(percentage) <= 0) next.percentage = "O percentual deve ser maior que zero.";
+      if (!newSalary) next.newSalary = "Informe o novo salário.";
+      if (employee && newSalary && Number(newSalary) <= employee.currentSalary) {
+        next.newSalary = `O novo salário precisa ser maior que o salário atual (${employee.currentSalary.toLocaleString(
+          "pt-BR",
+          { style: "currency", currency: "BRL" }
+        )}).`;
+      }
     }
 
     setErrors(next);
@@ -72,7 +92,7 @@ export default function SimulatorPage() {
           : {
               employeeId: employee!.id,
               type,
-              percentage: Number(percentage),
+              newSalary: Number(newSalary),
               effectiveDate,
             };
       const res = await api.post<MovementSimulation>("/simulator/preview", payload);
@@ -87,12 +107,8 @@ export default function SimulatorPage() {
   function handleOpenRequest() {
     if (!employee) return;
     const params = new URLSearchParams({ employeeId: employee.id, type });
-    if (type === "PROMOCAO") {
-      if (newPositionId) params.set("newPositionId", newPositionId);
-      if (newSalary) params.set("newSalary", newSalary);
-    } else {
-      if (percentage) params.set("percentage", percentage);
-    }
+    if (newSalary) params.set("newSalary", newSalary);
+    if (type === "PROMOCAO" && newPositionId) params.set("newPositionId", newPositionId);
     if (effectiveDate) params.set("effectiveDate", effectiveDate);
     router.push(`/movements/new?${params.toString()}`);
   }
@@ -141,20 +157,21 @@ export default function SimulatorPage() {
                 value={newSalary}
                 onChange={(e) => setNewSalary(e.target.value)}
                 error={errors.newSalary}
-                hint={employee ? `Salário atual: ${employee.currentSalary.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}` : undefined}
+                hint={reajusteHint(employee, newSalary)}
               />
             </div>
           )}
 
           {type === "MERITO" && (
             <Input
-              label="Percentual de aumento (%)"
+              label="Novo salário"
               type="number"
               step="0.01"
               required
-              value={percentage}
-              onChange={(e) => setPercentage(e.target.value)}
-              error={errors.percentage}
+              value={newSalary}
+              onChange={(e) => setNewSalary(e.target.value)}
+              error={errors.newSalary}
+              hint={reajusteHint(employee, newSalary) ?? "O percentual de mérito é calculado automaticamente a partir do novo salário."}
             />
           )}
 

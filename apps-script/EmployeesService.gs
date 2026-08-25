@@ -2,6 +2,50 @@
  * Base atual de colaboradores — espelha backend/src/modules/employees.
  */
 
+/**
+ * Folha "daquele mês": se existir ao menos um snapshot de fechamento na aba
+ * FechamentoFolha para year+month (dentro do escopo), usa os salários
+ * congelados de lá — não o salário atual re-lido depois (ver
+ * EmployeesService#importFromFile). Sem fechamento para esse mês (mês
+ * corrente em aberto, ou histórico anterior a este recurso), cai para
+ * employees.currentSalary ao vivo. Devolve linhas
+ * {directorateId, directorateName, costCenterId, salary}.
+ */
+function resolveMonthlySalaryRows_(year, month, scope, filterActiveOnly) {
+  scope = scope || {};
+  var directorateNames = indexById_(Tables.directorates.all());
+
+  var snapshots = Tables.payrollSnapshots.where(function (s) {
+    if (Number(s.year) !== Number(year) || Number(s.month) !== Number(month)) return false;
+    if (!matchesAccessScope_(s, scope)) return false;
+    return true;
+  });
+  if (snapshots.length > 0) {
+    return snapshots.map(function (s) {
+      return {
+        directorateId: s.directorateId,
+        directorateName: directorateNames[s.directorateId] ? directorateNames[s.directorateId].name : null,
+        costCenterId: s.costCenterId || '',
+        salary: Number(s.salary || 0),
+      };
+    });
+  }
+
+  var employees = Tables.employees.where(function (e) {
+    if (filterActiveOnly && e.status !== EmployeeStatus.ATIVO) return false;
+    if (!matchesAccessScope_(e, scope)) return false;
+    return true;
+  });
+  return employees.map(function (e) {
+    return {
+      directorateId: e.directorateId,
+      directorateName: directorateNames[e.directorateId] ? directorateNames[e.directorateId].name : null,
+      costCenterId: e.costCenterId || '',
+      salary: Number(e.currentSalary || 0),
+    };
+  });
+}
+
 var EmployeesService = {
   list: function (filters, scope) {
     filters = filters || {};
@@ -78,11 +122,17 @@ var EmployeesService = {
   },
 
   /**
-   * Importa a base atual de colaboradores. Colunas esperadas (normalizadas):
+   * Importa a base atual de colaboradores — o fechamento mensal da folha
+   * (ver Db.gs#payrollSnapshots). Colunas esperadas (normalizadas):
    * matricula, nome, cargo, diretoria, cidade, estado, tipo_contrato,
-   * data_admissao, salario_atual, status.
+   * data_admissao, salario_atual, status. `year`/`month` identificam o mês
+   * que está sendo fechado: além de atualizar employees.currentSalary (como
+   * sempre), grava um snapshot na aba FechamentoFolha para esse mês —
+   * reimportar o mesmo (year, month) substitui o snapshot anterior daquele
+   * colaborador (idempotente), nunca duplica.
    */
-  importFromFile: function (base64Data, mimeType, filename, importedByEmail) {
+  importFromFile: function (base64Data, mimeType, filename, importedByEmail, year, month) {
+    if (!year || !month) throw new Error('Informe o ano e o mês de referência do fechamento.');
     var records = parseUploadedSpreadsheet_(base64Data, mimeType, filename);
     var errors = [];
     var successRows = 0;
@@ -134,12 +184,39 @@ var EmployeesService = {
         updatedAt: nowIso_(),
       };
 
+      var employeeId;
       if (existing) {
         Tables.employees.update(existing.id, payload);
+        employeeId = existing.id;
       } else {
         payload.createdAt = nowIso_();
-        Tables.employees.insert(payload);
+        employeeId = Tables.employees.insert(payload).id;
       }
+
+      var existingSnapshot = Tables.payrollSnapshots.findOne(function (s) {
+        return (
+          Number(s.year) === Number(year) &&
+          Number(s.month) === Number(month) &&
+          s.employeeId === employeeId
+        );
+      });
+      var snapshotPayload = {
+        year: year,
+        month: month,
+        employeeId: employeeId,
+        directorateId: directorate.id,
+        costCenterId: existing ? existing.costCenterId || '' : '',
+        positionId: position.id,
+        salary: currentSalary,
+        importBatchId: '',
+      };
+      if (existingSnapshot) {
+        Tables.payrollSnapshots.update(existingSnapshot.id, snapshotPayload);
+      } else {
+        snapshotPayload.createdAt = nowIso_();
+        Tables.payrollSnapshots.insert(snapshotPayload);
+      }
+
       successRows += 1;
     });
 
@@ -170,11 +247,7 @@ var EmployeesService = {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
-    var employees = Tables.employees.where(function (e) {
-      if (e.status !== EmployeeStatus.ATIVO) return false;
-      if (!matchesAccessScope_(e, scope)) return false;
-      return true;
-    });
+    var salaryRows = resolveMonthlySalaryRows_(year, referenceMonth, scope, true);
 
     var directorateNames = indexById_(Tables.directorates.all());
     var costCenterNames = indexById_(Tables.costCenters.all());
@@ -206,11 +279,11 @@ var EmployeesService = {
       bucket.budgetedCost += Number(monthValue_(entry, referenceMonth) || 0);
     });
 
-    employees.forEach(function (employee) {
-      if (!employee.costCenterId) return;
-      var bucket = getBucket(employee.directorateId, employee.costCenterId);
+    salaryRows.forEach(function (row) {
+      if (!row.costCenterId) return;
+      var bucket = getBucket(row.directorateId, row.costCenterId);
       bucket.currentCount += 1;
-      bucket.currentCost += Number(employee.currentSalary || 0);
+      bucket.currentCost += row.salary;
     });
 
     var openPositions = 0;
@@ -254,7 +327,7 @@ var EmployeesService = {
       year: year,
       month: referenceMonth,
       hcBudgeted: budgetEntries.length,
-      hcCurrent: employees.length,
+      hcCurrent: salaryRows.length,
       openPositions: openPositions,
       headcountExcess: headcountExcess,
       budgetSavings: budgetSavings,

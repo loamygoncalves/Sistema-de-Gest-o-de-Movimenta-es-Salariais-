@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Employee } from '../employees/entities/employee.entity';
+import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { Directorate } from '../org/entities/directorate.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
@@ -13,6 +14,7 @@ import { DashboardController } from './dashboard.controller';
   imports: [
     TypeOrmModule.forFeature([
       Employee,
+      PayrollSnapshot,
       BudgetEntry,
       Directorate,
       MovementRequest,
