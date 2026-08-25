@@ -150,9 +150,12 @@ var EmployeesService = {
   /**
    * Compara a base atual de colaboradores com o orçamento de um mês do ano
    * informado. O orçamento não é vinculado a colaborador — a comparação é
-   * feita por "bucket" (diretoria + centro de custo + cargo): quantas vagas
-   * orçadas existem naquele mês para o bucket x quantos colaboradores
-   * ativos ocupam esse mesmo bucket hoje.
+   * sempre feita por centro de custo (nunca por cargo): quantas vagas
+   * orçadas existem naquele mês para o centro de custo x quantos
+   * colaboradores ativos ocupam esse mesmo centro de custo hoje. Bucketar
+   * por cargo faria um cargo estourado e outro com sobra no mesmo centro de
+   * custo aparecerem como dois problemas separados (excesso de HC aqui,
+   * vaga aberta ali) em vez de simplesmente se cancelarem.
    */
   compareWithBudget: function (year, month, scope) {
     var referenceMonth = month || new Date().getMonth() + 1;
@@ -175,22 +178,19 @@ var EmployeesService = {
 
     var directorateNames = indexById_(Tables.directorates.all());
     var costCenterNames = indexById_(Tables.costCenters.all());
-    var positionNames = indexById_(Tables.positions.all());
 
     var buckets = {};
-    function bucketKey(directorateId, costCenterId, positionId) {
-      return directorateId + '|' + costCenterId + '|' + positionId;
+    function bucketKey(directorateId, costCenterId) {
+      return directorateId + '|' + costCenterId;
     }
-    function getBucket(directorateId, costCenterId, positionId) {
-      var key = bucketKey(directorateId, costCenterId, positionId);
+    function getBucket(directorateId, costCenterId) {
+      var key = bucketKey(directorateId, costCenterId);
       if (!buckets[key]) {
         buckets[key] = {
           directorateId: directorateId,
           directorateName: directorateNames[directorateId] ? directorateNames[directorateId].name : null,
           costCenterId: costCenterId,
           costCenterName: costCenterNames[costCenterId] ? costCenterNames[costCenterId].name : null,
-          positionId: positionId,
-          positionName: positionNames[positionId] ? positionNames[positionId].name : null,
           budgetedCount: 0,
           budgetedCost: 0,
           currentCount: 0,
@@ -201,14 +201,14 @@ var EmployeesService = {
     }
 
     budgetEntries.forEach(function (entry) {
-      var bucket = getBucket(entry.directorateId, entry.costCenterId, entry.positionId);
+      var bucket = getBucket(entry.directorateId, entry.costCenterId);
       bucket.budgetedCount += 1;
       bucket.budgetedCost += Number(monthValue_(entry, referenceMonth) || 0);
     });
 
     employees.forEach(function (employee) {
       if (!employee.costCenterId) return;
-      var bucket = getBucket(employee.directorateId, employee.costCenterId, employee.positionId);
+      var bucket = getBucket(employee.directorateId, employee.costCenterId);
       bucket.currentCount += 1;
       bucket.currentCost += Number(employee.currentSalary || 0);
     });
@@ -234,7 +234,6 @@ var EmployeesService = {
           type: countDiff > 0 ? 'VAGA_ABERTA' : 'EXCESSO_HC',
           directorate: bucket.directorateName,
           costCenter: bucket.costCenterName,
-          position: bucket.positionName,
           budgetedCount: bucket.budgetedCount,
           currentCount: bucket.currentCount,
           budgetedCost: bucket.budgetedCost,

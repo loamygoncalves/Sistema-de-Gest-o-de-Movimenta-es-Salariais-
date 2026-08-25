@@ -50,9 +50,9 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
   com `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
 - `GET /employees/import/:batchId`
 - `GET /employees/comparison?year=&month=` → compara base atual x orçada, agregando
-  por bucket (diretoria + centro de custo + cargo) no mês de referência
-  (`month` 1-12, padrão mês corrente) — o orçamento não é vinculado a
-  colaborador, então a comparação não casa por matrícula:
+  por centro de custo (nunca por cargo — sempre diretoria + centro de custo)
+  no mês de referência (`month` 1-12, padrão mês corrente) — o orçamento não é
+  vinculado a colaborador, então a comparação não casa por matrícula:
   ```json
   {
     "year": 2026, "month": 1,
@@ -60,7 +60,7 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
     "openPositions": 8, "headcountExcess": 3,
     "budgetSavings": 12000, "budgetOverrun": 4000,
     "movementsByType": { "SEM_MOVIMENTACAO": 73, "PROMOCAO": 2, "MERITO": 1, "SUBSTITUICAO": 1, "AUMENTO_DE_QUADRO": 4, "DESLIGAMENTO": 4 },
-    "items": [{ "type": "VAGA_ABERTA", "directorate": "...", "costCenter": "...", "position": "...", "budgetedCount": 2, "currentCount": 1, "budgetedCost": 8400, "currentCost": 4200 }]
+    "items": [{ "type": "VAGA_ABERTA", "directorate": "...", "costCenter": "...", "budgetedCount": 2, "currentCount": 1, "budgetedCost": 8400, "currentCost": 4200 }]
   }
   ```
 
@@ -122,8 +122,9 @@ já que não há colaborador para derivar).
 }
 ```
   Apesar do nome dos campos (herdado do modelo original), a comparação é
-  sempre feita pelo **bucket exato** (diretoria + centro de custo + cargo) da
-  movimentação — nunca pelo orçamento da diretoria inteira.
+  sempre feita pelo **centro de custo exato** (diretoria + centro de custo)
+  da movimentação — nunca pelo orçamento da diretoria inteira, e nunca
+  restrita ao cargo específico da movimentação.
 - `POST /simulator/preview` — Simulador Rápido (Gestor/Diretor testam o
   impacto de uma promoção/mérito para um colaborador ANTES de abrir a
   solicitação de fato; não persiste nada). Body:
@@ -175,10 +176,10 @@ conta Google do deploy.
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).
 2. Alerta quando o aumento percentual ultrapassar o parâmetro configurável
    `MAX_INCREASE_PERCENT_ALERT` (não bloqueia, apenas sinaliza `alertMessage`).
-3. Se `totalAnnualImpact` fizer a folha do bucket (diretoria + centro de custo
-   + cargo) ultrapassar o orçamento desse mesmo bucket, `exceedsBudget = true`
-   e a movimentação pode ser submetida mesmo assim (decisão fica com o
-   workflow), mas o alerta é exibido em todas as telas.
+3. Se `totalAnnualImpact` fizer a folha do centro de custo (nunca do cargo
+   específico) ultrapassar o orçamento desse mesmo centro de custo,
+   `exceedsBudget = true` e a movimentação pode ser submetida mesmo assim
+   (decisão fica com o workflow), mas o alerta é exibido em todas as telas.
 4. Impacto acumulado do ano = soma de `movement_history.annual_impact` da
    diretoria/ano.
 5. Projeção 12 meses = soma de impactos mensais de movimentações aprovadas e

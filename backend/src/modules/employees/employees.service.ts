@@ -179,9 +179,12 @@ export class EmployeesService {
   /**
    * Compara a base atual de colaboradores com o orçamento de um mês do ano
    * informado. O orçamento não é vinculado a colaborador — a comparação é
-   * feita por "bucket" (diretoria + centro de custo + cargo): quantas vagas
-   * orçadas existem naquele mês para o bucket x quantos colaboradores ativos
-   * ocupam esse mesmo bucket hoje.
+   * sempre feita por centro de custo (nunca por cargo): quantas vagas
+   * orçadas existem naquele mês para o centro de custo x quantos
+   * colaboradores ativos ocupam esse mesmo centro de custo hoje. Bucketar
+   * por cargo faria um cargo estourado e outro com sobra no mesmo centro de
+   * custo aparecerem como dois problemas separados (excesso de HC aqui,
+   * vaga aberta ali) em vez de simplesmente se cancelarem.
    */
   async compareWithBudget(year: number, month: number | undefined, scope: AccessScope) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
@@ -208,26 +211,21 @@ export class EmployeesService {
       directorateName?: string;
       costCenterId: string;
       costCenterName?: string;
-      positionId: string;
-      positionName?: string;
       budgetedCount: number;
       budgetedCost: number;
       currentCount: number;
       currentCost: number;
     };
     const buckets = new Map<string, Bucket>();
-    const bucketKey = (directorateId: string, costCenterId: string, positionId: string) =>
-      `${directorateId}|${costCenterId}|${positionId}`;
+    const bucketKey = (directorateId: string, costCenterId: string) => `${directorateId}|${costCenterId}`;
 
     for (const entry of budgetEntries) {
-      const key = bucketKey(entry.directorateId, entry.costCenterId, entry.positionId);
+      const key = bucketKey(entry.directorateId, entry.costCenterId);
       const bucket = buckets.get(key) ?? {
         directorateId: entry.directorateId,
         directorateName: entry.directorate?.name,
         costCenterId: entry.costCenterId,
         costCenterName: entry.costCenter?.name,
-        positionId: entry.positionId,
-        positionName: entry.position?.name,
         budgetedCount: 0,
         budgetedCost: 0,
         currentCount: 0,
@@ -240,13 +238,11 @@ export class EmployeesService {
 
     for (const employee of employees) {
       if (!employee.costCenterId) continue;
-      const key = bucketKey(employee.directorateId, employee.costCenterId, employee.positionId);
+      const key = bucketKey(employee.directorateId, employee.costCenterId);
       const bucket = buckets.get(key) ?? {
         directorateId: employee.directorateId,
         directorateName: employee.directorate?.name,
         costCenterId: employee.costCenterId,
-        positionId: employee.positionId,
-        positionName: employee.position?.name,
         budgetedCount: 0,
         budgetedCost: 0,
         currentCount: 0,
@@ -277,7 +273,6 @@ export class EmployeesService {
           type: countDiff > 0 ? 'VAGA_ABERTA' : 'EXCESSO_HC',
           directorate: bucket.directorateName,
           costCenter: bucket.costCenterName,
-          position: bucket.positionName,
           budgetedCount: bucket.budgetedCount,
           currentCount: bucket.currentCount,
           budgetedCost: bucket.budgetedCost,

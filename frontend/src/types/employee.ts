@@ -37,15 +37,16 @@ export interface UpdateEmployeePayload {
 export type EmployeeComparisonItemType = "VAGA_ABERTA" | "EXCESSO_HC";
 
 // GET /employees/comparison?year=&month= — compares the current base against
-// the budget, aggregated by bucket (diretoria + centro de custo + cargo) for
-// the reference month. The budget isn't linked to an employee, so this isn't
-// a per-matrícula match — no registration/name/currentSalary/plannedSalary
-// on either the items or the summary.
+// the budget, aggregated by cost center (diretoria + centro de custo) for
+// the reference month — never by cargo, so a shortfall in one position and a
+// surplus in another within the same cost center net out instead of showing
+// as two separate problems. The budget isn't linked to an employee, so this
+// isn't a per-matrícula match — no registration/name/currentSalary/
+// plannedSalary on either the items or the summary.
 export interface EmployeeComparisonItem {
   type: EmployeeComparisonItemType;
   directorate: string;
   costCenter: string;
-  position: string;
   budgetedCount: number;
   currentCount: number;
   budgetedCost: number;

@@ -56,40 +56,37 @@ var SimulatorService = {
   },
 
   /**
-   * Orçamento anual do bucket (diretoria + centro de custo + cargo) exato
-   * em que a movimentação recai — a mesma unidade usada em toda comparação
-   * orçamento x realizado do sistema (BudgetService.getDashboard,
-   * EmployeesService.compareWithBudget). Sem centro de custo/cargo não há
-   * como localizar uma linha orçamentária: o orçamento do bucket é zero.
+   * Orçamento anual do centro de custo (diretoria + centro de custo) exato
+   * em que a movimentação recai — nunca por cargo: o orçamento é sempre
+   * olhado no nível do centro de custo (e da diretoria), a mesma unidade
+   * usada em toda comparação orçamento x realizado do sistema
+   * (BudgetService.getDashboard, EmployeesService.compareWithBudget). Sem
+   * centro de custo não há como localizar uma linha orçamentária: o
+   * orçamento é zero.
    */
-  bucketBudgetAnnual_: function (directorateId, costCenterId, positionId) {
-    if (!costCenterId || !positionId) return 0;
+  bucketBudgetAnnual_: function (directorateId, costCenterId) {
+    if (!costCenterId) return 0;
     var entries = Tables.budgetEntries.where(function (b) {
-      return b.directorateId === directorateId && b.costCenterId === costCenterId && b.positionId === positionId;
+      return b.directorateId === directorateId && b.costCenterId === costCenterId;
     });
     return entries.reduce(function (sum, entry) {
       return sum + sumAllMonths_(entry);
     }, 0);
   },
 
-  /** Folha anualizada (salário mensal x12) dos colaboradores ativos hoje nesse mesmo bucket. */
-  bucketCurrentAnnualPayroll_: function (directorateId, costCenterId, positionId) {
-    if (!costCenterId || !positionId) return 0;
+  /** Folha anualizada (salário mensal x12) dos colaboradores ativos hoje nesse mesmo centro de custo. */
+  bucketCurrentAnnualPayroll_: function (directorateId, costCenterId) {
+    if (!costCenterId) return 0;
     var employees = Tables.employees.where(function (e) {
-      return (
-        e.status === EmployeeStatus.ATIVO &&
-        e.directorateId === directorateId &&
-        e.costCenterId === costCenterId &&
-        e.positionId === positionId
-      );
+      return e.status === EmployeeStatus.ATIVO && e.directorateId === directorateId && e.costCenterId === costCenterId;
     });
     return sumBy_(employees, 'currentSalary') * 12;
   },
 
   /**
    * Executa a simulação e retorna o resultado (sem persistir). `input`:
-   * {type, directorateId, costCenterId, bucketPositionId, currentSalary,
-   * newSalary, meritPercentage, plannedSalary, quantity, effectiveDate}.
+   * {type, directorateId, costCenterId, currentSalary, newSalary,
+   * meritPercentage, plannedSalary, quantity, effectiveDate}.
    */
   simulate: function (input) {
     var monthsRemaining = this.monthsRemaining_(input.effectiveDate);
@@ -111,12 +108,8 @@ var SimulatorService = {
     var totalMonthlyImpact = monthlySalaryImpact + chargesTotal + benefitsTotal;
     var totalAnnualImpact = totalMonthlyImpact * monthsRemaining;
 
-    var budgetedDirectoratePayroll = this.bucketBudgetAnnual_(input.directorateId, input.costCenterId, input.bucketPositionId);
-    var currentDirectoratePayroll = this.bucketCurrentAnnualPayroll_(
-      input.directorateId,
-      input.costCenterId,
-      input.bucketPositionId,
-    );
+    var budgetedDirectoratePayroll = this.bucketBudgetAnnual_(input.directorateId, input.costCenterId);
+    var currentDirectoratePayroll = this.bucketCurrentAnnualPayroll_(input.directorateId, input.costCenterId);
 
     var payrollAfterApproval = currentDirectoratePayroll + totalAnnualImpact;
     var difference = budgetedDirectoratePayroll - payrollAfterApproval;
@@ -124,14 +117,14 @@ var SimulatorService = {
     var exceedsBudget = payrollAfterApproval > budgetedDirectoratePayroll;
 
     var alertMessage;
-    if (!input.costCenterId || !input.bucketPositionId) {
-      alertMessage = 'Não foi possível localizar o centro de custo/cargo para comparar com o orçamento.';
+    if (!input.costCenterId) {
+      alertMessage = 'Não foi possível localizar o centro de custo para comparar com o orçamento.';
     } else if (exceedsBudget) {
       var excessPercent =
         budgetedDirectoratePayroll > 0
           ? ((payrollAfterApproval - budgetedDirectoratePayroll) / budgetedDirectoratePayroll) * 100
           : 100;
-      alertMessage = 'Movimentação excede o orçamento do bucket (diretoria + centro de custo + cargo) em ' + excessPercent.toFixed(1) + '%.';
+      alertMessage = 'Movimentação excede o orçamento do centro de custo em ' + excessPercent.toFixed(1) + '%.';
     } else {
       alertMessage = 'Movimentação aderente ao orçamento.';
     }
@@ -168,12 +161,10 @@ var SimulatorService = {
 
   /** Adapta um MovementRequest persistido (aba Movimentacoes) para SimulationInput. */
   simulationInputFromMovement_: function (movement) {
-    var bucketPositionId = movement.type === MovementType.MERITO ? movement.currentPositionId : movement.newPositionId;
     return {
       type: movement.type,
       directorateId: movement.directorateId,
       costCenterId: movement.costCenterId,
-      bucketPositionId: bucketPositionId,
       currentSalary: movement.currentSalary,
       newSalary: movement.newSalary,
       meritPercentage: movement.meritPercentage,

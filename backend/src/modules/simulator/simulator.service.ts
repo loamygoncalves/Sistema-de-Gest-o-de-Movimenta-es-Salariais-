@@ -32,8 +32,6 @@ export interface SimulationInput {
   type: MovementType;
   directorateId: string;
   costCenterId?: string | null;
-  /** Cargo do bucket orçamentário a comparar: novo cargo (promoção/aumento de quadro) ou atual (mérito). */
-  bucketPositionId?: string | null;
   currentSalary?: number | null;
   newSalary?: number | null;
   meritPercentage?: number | null;
@@ -77,34 +75,32 @@ export class SimulatorService {
   }
 
   /**
-   * Orçamento anual do bucket (diretoria + centro de custo + cargo) exato em
-   * que a movimentação recai — mesma unidade usada em toda a comparação
-   * orçamento x realizado do sistema (BudgetService.getDashboard,
-   * EmployeesService.compareWithBudget). Se o bucket não tiver centro de
-   * custo (colaborador sem cadastro) ou cargo, não há como localizar uma
-   * linha orçamentária e o orçamento do bucket é considerado zero.
+   * Orçamento anual do centro de custo (diretoria + centro de custo) em que
+   * a movimentação recai — nunca por cargo: o orçamento é sempre olhado no
+   * nível do centro de custo (e da diretoria), a mesma unidade usada em toda
+   * comparação orçamento x realizado do sistema (BudgetService.getDashboard,
+   * EmployeesService.compareWithBudget). Sem centro de custo não há como
+   * localizar uma linha orçamentária e o orçamento é considerado zero.
    */
   private async bucketBudgetAnnual(
     directorateId: string,
     costCenterId: string | null | undefined,
-    positionId: string | null | undefined,
   ): Promise<number> {
-    if (!costCenterId || !positionId) return 0;
+    if (!costCenterId) return 0;
     const entries = await this.budgetRepo.find({
-      where: { directorateId, costCenterId, positionId } as any,
+      where: { directorateId, costCenterId } as any,
     });
     return entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0);
   }
 
-  /** Folha anualizada (salário mensal x12) dos colaboradores ativos hoje nesse mesmo bucket. */
+  /** Folha anualizada (salário mensal x12) dos colaboradores ativos hoje nesse mesmo centro de custo. */
   private async bucketCurrentAnnualPayroll(
     directorateId: string,
     costCenterId: string | null | undefined,
-    positionId: string | null | undefined,
   ): Promise<number> {
-    if (!costCenterId || !positionId) return 0;
+    if (!costCenterId) return 0;
     const employees = await this.employeeRepo.find({
-      where: { directorateId, costCenterId, positionId, status: EmployeeStatus.ATIVO } as any,
+      where: { directorateId, costCenterId, status: EmployeeStatus.ATIVO } as any,
     });
     return employees.reduce((sum, e) => sum + Number(e.currentSalary || 0), 0) * 12;
   }
@@ -132,12 +128,10 @@ export class SimulatorService {
     const budgetedDirectoratePayroll = await this.bucketBudgetAnnual(
       input.directorateId,
       input.costCenterId,
-      input.bucketPositionId,
     );
     const currentDirectoratePayroll = await this.bucketCurrentAnnualPayroll(
       input.directorateId,
       input.costCenterId,
-      input.bucketPositionId,
     );
 
     const payrollAfterApproval = currentDirectoratePayroll + totalAnnualImpact;
@@ -149,15 +143,14 @@ export class SimulatorService {
     const exceedsBudget = payrollAfterApproval > budgetedDirectoratePayroll;
 
     let alertMessage: string;
-    if (!input.costCenterId || !input.bucketPositionId) {
-      alertMessage =
-        'Não foi possível localizar o centro de custo/cargo para comparar com o orçamento.';
+    if (!input.costCenterId) {
+      alertMessage = 'Não foi possível localizar o centro de custo para comparar com o orçamento.';
     } else if (exceedsBudget) {
       const excessPercent =
         budgetedDirectoratePayroll > 0
           ? ((payrollAfterApproval - budgetedDirectoratePayroll) / budgetedDirectoratePayroll) * 100
           : 100;
-      alertMessage = `Movimentação excede o orçamento do bucket (diretoria + centro de custo + cargo) em ${excessPercent.toFixed(1)}%.`;
+      alertMessage = `Movimentação excede o orçamento do centro de custo em ${excessPercent.toFixed(1)}%.`;
     } else {
       alertMessage = 'Movimentação aderente ao orçamento.';
     }
@@ -192,13 +185,10 @@ export class SimulatorService {
 
   /** Adapta um MovementRequest persistido para o formato de entrada do simulador. */
   simulateMovement(movement: MovementRequest): Promise<SimulationResult> {
-    const bucketPositionId =
-      movement.type === MovementType.MERITO ? movement.currentPositionId : movement.newPositionId;
     return this.simulate({
       type: movement.type,
       directorateId: movement.directorateId,
       costCenterId: movement.costCenterId,
-      bucketPositionId,
       currentSalary: movement.currentSalary,
       newSalary: movement.newSalary,
       meritPercentage: movement.meritPercentage,

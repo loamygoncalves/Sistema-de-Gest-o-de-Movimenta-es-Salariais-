@@ -231,7 +231,6 @@ function EmployeeComparisonTab() {
   const columns: Column<(typeof filteredItems)[number]>[] = [
     { key: "directorate", header: "Diretoria", render: (r) => r.directorate },
     { key: "costCenter", header: "Centro de Custo", render: (r) => r.costCenter },
-    { key: "position", header: "Cargo", render: (r) => r.position },
     { key: "type", header: "Tipo", render: (r) => <ComparisonItemTypeBadge type={r.type} /> },
     { key: "budgetedCount", header: "HC Orçado", render: (r) => formatNumber(r.budgetedCount), align: "right" },
     { key: "currentCount", header: "HC Atual", render: (r) => formatNumber(r.currentCount), align: "right" },
@@ -279,11 +278,11 @@ function EmployeeComparisonTab() {
         </div>
       </Card>
 
-      <Card title="Detalhamento por diretoria/centro de custo/cargo">
+      <Card title="Detalhamento por diretoria/centro de custo">
         <Table
           columns={columns}
           data={filteredItems}
-          rowKey={(r, i) => `${r.directorate}-${r.costCenter}-${r.position}-${r.type}-${i}`}
+          rowKey={(r, i) => `${r.directorate}-${r.costCenter}-${r.type}-${i}`}
           loading={loading}
         />
       </Card>

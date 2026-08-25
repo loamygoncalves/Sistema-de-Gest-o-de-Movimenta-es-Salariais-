@@ -283,8 +283,6 @@
         escapeHtml(item.directorate || '—') +
         '</td><td>' +
         escapeHtml(item.costCenter || '—') +
-        '</td><td>' +
-        escapeHtml(item.position || '—') +
         '</td><td class="cell-num">' +
         fmt.number(item.budgetedCount) +
         '</td><td class="cell-num">' +
@@ -360,9 +358,9 @@
             cardClose() +
             '</div>' +
             '<div style="margin-top:20px;">' +
-            cardOpen('Itens de Atenção', { subtitle: 'Buckets (diretoria + centro de custo + cargo) com diferença entre vagas orçadas e colaboradores ativos' }) +
+            cardOpen('Itens de Atenção', { subtitle: 'Centros de custo com diferença entre vagas orçadas e colaboradores ativos' }) +
             (d.items && d.items.length > 0
-              ? '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Diretoria</th><th>Centro de Custo</th><th>Cargo</th>' +
+              ? '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Diretoria</th><th>Centro de Custo</th>' +
                 '<th class="cell-num">Qtd. Orçada</th><th class="cell-num">Qtd. Atual</th><th class="cell-num">Custo Orçado</th><th class="cell-num">Custo Atual</th></tr></thead><tbody>' +
                 d.items.map(comparisonItemRow).join('') +
                 '</tbody></table></div>'

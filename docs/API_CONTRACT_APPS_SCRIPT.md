@@ -89,10 +89,10 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
 - `api_importEmployees(base64Data, mimeType, filename)` → `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
   (o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte base64 após a vírgula)
 - `api_getEmployeesComparison(year, month?)` → compara a base atual x orçada, agregando
-  por bucket (diretoria + centro de custo + cargo) no mês de referência
-  (`month` 1-12, padrão mês corrente) — o orçamento não é vinculado a
-  colaborador, então a comparação não casa por matrícula:
-  `{ year, month, hcBudgeted, hcCurrent, openPositions, headcountExcess, budgetSavings, budgetOverrun, movementsByType: {SEM_MOVIMENTACAO,PROMOCAO,MERITO,SUBSTITUICAO,AUMENTO_DE_QUADRO,DESLIGAMENTO}, items: [{type: 'VAGA_ABERTA'|'EXCESSO_HC', directorate, costCenter, position, budgetedCount, currentCount, budgetedCost, currentCost}] }`
+  por centro de custo (nunca por cargo — sempre diretoria + centro de custo)
+  no mês de referência (`month` 1-12, padrão mês corrente) — o orçamento não
+  é vinculado a colaborador, então a comparação não casa por matrícula:
+  `{ year, month, hcBudgeted, hcCurrent, openPositions, headcountExcess, budgetSavings, budgetOverrun, movementsByType: {SEM_MOVIMENTACAO,PROMOCAO,MERITO,SUBSTITUICAO,AUMENTO_DE_QUADRO,DESLIGAMENTO}, items: [{type: 'VAGA_ABERTA'|'EXCESSO_HC', directorate, costCenter, budgetedCount, currentCount, budgetedCost, currentCost}] }`
 
 ## Orçamento — Módulo 1
 Orçamento por **diretoria + centro de custo + cargo** — não é vinculado a
@@ -144,8 +144,9 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   budgetedDirectoratePayroll, currentDirectoratePayroll, payrollAfterApproval,
   difference, percentConsumed, exceedsBudget, alertMessage,
   salaryIncreasePercent }`. Apesar do nome dos campos (herdado do modelo
-  original), a comparação é sempre pelo **bucket exato** (diretoria + centro
-  de custo + cargo) da movimentação — nunca pelo orçamento da diretoria inteira.
+  original), a comparação é sempre pelo **centro de custo exato** (diretoria
+  + centro de custo) da movimentação — nunca pelo orçamento da diretoria
+  inteira, e nunca restrita ao cargo específico da movimentação.
 - `api_submitMovement(id)` → dispara a simulação, cria as 3 etapas de aprovação,
   muda o status para `PENDENTE_DIRETOR` e envia um e-mail de notificação (via
   `MailApp`, de verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro

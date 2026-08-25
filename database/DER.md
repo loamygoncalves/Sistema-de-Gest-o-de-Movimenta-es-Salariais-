@@ -139,8 +139,10 @@ erDiagram
   distintos daquele tipo (ex.: 24 linhas idênticas de "Analista I / Sem
   Movimentação" no mesmo centro de custo = 24 vagas orçadas para esse cargo).
   A comparação com a base atual de colaboradores (módulo 2) é feita
-  agregando por esse mesmo bucket (diretoria+centro de custo+cargo) num mês
-  de referência, não por matrícula.
+  agregando por diretoria+centro de custo (nunca por cargo) num mês de
+  referência, não por matrícula — comparar por cargo faria um cargo
+  estourado e outro com sobra no mesmo centro de custo aparecerem como dois
+  problemas separados em vez de se cancelarem.
 - **`movement_requests` é polimórfica por `type`**: os campos específicos de
   cada tipo (mérito, aumento de quadro) ficam nullable na mesma tabela para
   permitir consultas e workflow unificados; a validação de obrigatoriedade
