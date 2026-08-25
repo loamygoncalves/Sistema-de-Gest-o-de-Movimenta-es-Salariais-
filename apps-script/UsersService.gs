@@ -39,16 +39,20 @@ var UsersService = {
   },
 
   create: function (input) {
+    // Normaliza (trim + minúsculas) o e-mail salvo — evita que um espaço
+    // colado sem querer ou uma letra maiúscula ao cadastrar impeça a
+    // pessoa de entrar depois (ver Auth.gs#normalizeEmail_).
+    var email = normalizeEmail_(input.email);
     var existing = Tables.users.findOne(function (r) {
-      return r.email === input.email;
+      return normalizeEmail_(r.email) === email;
     });
-    if (existing) throw new Error('Já existe um usuário com este e-mail: ' + input.email);
+    if (existing) throw new Error('Já existe um usuário com este e-mail: ' + email);
     if (input.role === UserRole.GESTOR && (!input.costCenterIds || input.costCenterIds.length === 0)) {
       throw new Error('Selecione ao menos um centro de custo para o Gestor.');
     }
     var created = Tables.users.insert({
       name: input.name,
-      email: input.email,
+      email: email,
       role: input.role,
       directorateId: input.role === UserRole.DIRETOR ? input.directorateId || '' : '',
       costCenterIds: input.role === UserRole.GESTOR ? costCenterIdsToCsv_(input.costCenterIds) : '',
@@ -57,7 +61,7 @@ var UsersService = {
       active: true,
       createdAt: nowIso_(),
     });
-    var access = grantSpreadsheetAccess_(input.email);
+    var access = grantSpreadsheetAccess_(email);
     created.driveAccessGranted = access.granted;
     if (!access.granted) created.driveAccessError = access.error;
     return created;
@@ -72,7 +76,7 @@ var UsersService = {
   update: function (id, input) {
     var patch = {
       name: input.name,
-      email: input.email,
+      email: input.email !== undefined ? normalizeEmail_(input.email) : undefined,
       role: input.role,
       active: input.active,
     };

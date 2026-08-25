@@ -15,13 +15,24 @@
  * configurado" tratando o usuário como não identificado.
  */
 
+/**
+ * Compara e-mails ignorando maiúsculas/minúsculas e espaços nas pontas —
+ * um espaço colado sem querer ou uma letra maiúscula ao cadastrar o
+ * usuário (aba Usuarios) não pode virar "Acesso não configurado" para
+ * quem, na prática, é a mesma conta Google.
+ */
+function normalizeEmail_(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 /** Retorna {id,name,email,role,directorateId,costCenterIds,hasPassword,passwordVerified} do usuário atual, ou null se não cadastrado. */
 function getCurrentUser_() {
   var email = Session.getActiveUser().getEmail();
   if (!email) return null;
 
+  var normalizedEmail = normalizeEmail_(email);
   var record = Tables.users.findOne(function (r) {
-    return r.email === email && r.active;
+    return normalizeEmail_(r.email) === normalizedEmail && r.active;
   });
   if (!record) return null;
 
