@@ -3,13 +3,13 @@
  */
 
 var EmployeesService = {
-  list: function (filters, scopedDirectorateId) {
+  list: function (filters, scope) {
     filters = filters || {};
-    var directorateId = scopedDirectorateId || filters.directorateId;
+    scope = scope || {};
     var search = filters.search ? String(filters.search).toLowerCase() : null;
 
     var items = Tables.employees.where(function (e) {
-      if (directorateId && e.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(e, scope)) return false;
       if (filters.positionId && e.positionId !== filters.positionId) return false;
       if (filters.status && e.status !== filters.status) return false;
       if (search) {
@@ -154,12 +154,13 @@ var EmployeesService = {
    * orçadas existem naquele mês para o bucket x quantos colaboradores
    * ativos ocupam esse mesmo bucket hoje.
    */
-  compareWithBudget: function (year, month, scopedDirectorateId) {
+  compareWithBudget: function (year, month, scope) {
     var referenceMonth = month || new Date().getMonth() + 1;
+    scope = scope || {};
 
     var allBudgetEntries = Tables.budgetEntries.where(function (b) {
       if (Number(b.year) !== Number(year)) return false;
-      if (scopedDirectorateId && b.directorateId !== scopedDirectorateId) return false;
+      if (!matchesAccessScope_(b, scope)) return false;
       return true;
     });
     var budgetEntries = allBudgetEntries.filter(function (entry) {
@@ -168,7 +169,7 @@ var EmployeesService = {
 
     var employees = Tables.employees.where(function (e) {
       if (e.status !== EmployeeStatus.ATIVO) return false;
-      if (scopedDirectorateId && e.directorateId !== scopedDirectorateId) return false;
+      if (!matchesAccessScope_(e, scope)) return false;
       return true;
     });
 

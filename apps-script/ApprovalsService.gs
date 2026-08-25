@@ -144,7 +144,6 @@ var ApprovalsService = {
 
   _recordHistory: function (movement) {
     var simulation = SimulatorService.latestSimulation(movement.id);
-    var employee = movement.employeeId ? Tables.employees.get(movement.employeeId) : null;
 
     Tables.movementHistory.insert({
       movementRequestId: movement.id,
@@ -152,7 +151,7 @@ var ApprovalsService = {
       type: movement.type,
       directorateId: movement.directorateId,
       positionId: movement.newPositionId || movement.currentPositionId || '',
-      costCenterId: employee ? employee.costCenterId || '' : '',
+      costCenterId: movement.costCenterId || '',
       previousSalary: movement.currentSalary || '',
       newSalary: movement.newSalary || movement.plannedSalary || '',
       effectiveDate: movement.effectiveDate,

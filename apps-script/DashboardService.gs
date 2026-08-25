@@ -1,24 +1,27 @@
 /**
- * Dashboards executivos — espelha backend/src/modules/dashboard.
+ * Dashboards executivos — espelha backend/src/modules/dashboard. `scope` já
+ * chega mesclado com os filtros explícitos da UI (ver
+ * Auth.gs#mergeAccessScope_, chamado em Api.gs).
  */
 
 var DashboardService = {
-  getHeadcount: function (year, month, directorateId) {
+  getHeadcount: function (year, month, scope) {
+    scope = scope || {};
     var referenceMonth = month || new Date().getMonth() + 1;
-    var allBudgetEntries = BudgetService.listEntries(year, directorateId);
+    var allBudgetEntries = BudgetService.listEntries(year, scope);
     var budgetEntries = allBudgetEntries.filter(function (entry) {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
     var hcCurrent = Tables.employees.where(function (e) {
-      return !directorateId || e.directorateId === directorateId;
+      return matchesAccessScope_(e, scope);
     }).length;
 
     var approvedIncreases = Tables.movementRequests.where(function (m) {
       if (m.type !== MovementType.AUMENTO_QUADRO) return false;
       if (m.status !== MovementStatus.APROVADO) return false;
       if (String(m.effectiveDate).slice(0, 4) !== String(year)) return false;
-      if (directorateId && m.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(m, scope)) return false;
       return true;
     });
     var hcApproved = approvedIncreases.reduce(function (sum, m) {
@@ -40,15 +43,16 @@ var DashboardService = {
     };
   },
 
-  getPayroll: function (year, month, directorateId) {
+  getPayroll: function (year, month, scope) {
+    scope = scope || {};
     var referenceMonth = month || new Date().getMonth() + 1;
-    var allBudgetEntries = BudgetService.listEntries(year, directorateId);
+    var allBudgetEntries = BudgetService.listEntries(year, scope);
     var budgetEntries = allBudgetEntries.filter(function (entry) {
       return monthValue_(entry, referenceMonth) !== null;
     });
 
     var employees = Tables.employees.where(function (e) {
-      return !directorateId || e.directorateId === directorateId;
+      return matchesAccessScope_(e, scope);
     });
 
     var payrollBudgeted = budgetEntries.reduce(function (sum, b) {
@@ -65,43 +69,44 @@ var DashboardService = {
     };
   },
 
-  getMovements: function (year, directorateId) {
+  getMovements: function (year, scope) {
+    scope = scope || {};
     var movements = Tables.movementRequests.where(function (m) {
       if (String(m.effectiveDate).slice(0, 4) !== String(year)) return false;
-      if (directorateId && m.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(m, scope)) return false;
       return true;
     });
     return {
       promotions: movements.filter(function (m) { return m.type === MovementType.PROMOCAO; }).length,
       merits: movements.filter(function (m) { return m.type === MovementType.MERITO; }).length,
       headcountIncrease: movements.filter(function (m) { return m.type === MovementType.AUMENTO_QUADRO; }).length,
-      transfers: movements.filter(function (m) { return m.type === MovementType.TRANSFERENCIA; }).length,
     };
   },
 
-  getFinancial: function (year, month, directorateId) {
+  getFinancial: function (year, month, scope) {
+    scope = scope || {};
     var historyRecords = Tables.movementHistory.where(function (h) {
       if (String(h.effectiveDate).slice(0, 4) !== String(year)) return false;
-      if (directorateId && h.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(h, scope)) return false;
       return true;
     });
 
     var monthlyImpact = sumBy_(historyRecords, 'monthlyImpact');
     var annualImpact = sumBy_(historyRecords, 'annualImpact');
 
-    var payroll = this.getPayroll(year, month, directorateId);
+    var payroll = this.getPayroll(year, month, scope);
     var budgetConsumedPercent = payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
     return {
       monthlyImpact: monthlyImpact,
       annualImpact: annualImpact,
       budgetConsumedPercent: round2_(budgetConsumedPercent),
-      projection12Months: this._projection12Months(directorateId),
+      projection12Months: this._projection12Months(scope),
       directorateRanking: this._directorateRanking(),
     };
   },
 
-  _projection12Months: function (directorateId) {
+  _projection12Months: function (scope) {
     var now = new Date();
     var start = new Date(now.getFullYear(), now.getMonth(), 1);
     var end = new Date(now.getFullYear(), now.getMonth() + 12, 0);
@@ -118,7 +123,7 @@ var DashboardService = {
     var movements = Tables.movementRequests.where(function (m) {
       if (eligibleStatuses.indexOf(m.status) === -1) return false;
       if (m.effectiveDate < startIso || m.effectiveDate > endIso) return false;
-      if (directorateId && m.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(m, scope)) return false;
       return true;
     });
 

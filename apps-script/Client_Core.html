@@ -79,7 +79,6 @@
     movementType: {
       PROMOCAO: 'Promoção',
       MERITO: 'Mérito',
-      TRANSFERENCIA: 'Transferência',
       AUMENTO_QUADRO: 'Aumento de Quadro',
     },
     movementStatus: {
@@ -192,13 +191,14 @@
     {
       title: 'Orçamento & Quadro',
       items: [
-        { label: 'Orçamento', href: '#/budget', roles: ['ADMIN', 'RH_REMUNERACAO', 'FINANCEIRO', 'DIRETOR'] },
+        { label: 'Orçamento', href: '#/budget', roles: ['ADMIN', 'RH_REMUNERACAO', 'FINANCEIRO', 'DIRETOR', 'GESTOR'] },
         { label: 'Colaboradores', href: '#/employees' },
       ],
     },
     {
       title: 'Movimentações',
       items: [
+        { label: 'Simulador Rápido', href: '#/simulator' },
         { label: 'Movimentações', href: '#/movements' },
         { label: 'Aprovações', href: '#/approvals', roles: ['ADMIN', 'DIRETOR', 'FINANCEIRO', 'RH_REMUNERACAO'] },
         { label: 'Histórico', href: '#/history' },
@@ -225,6 +225,7 @@
 
   var ROUTES = [
     { segments: ['dashboard'], title: 'Dashboard Executivo', view: function (root) { Views.dashboard(root); } },
+    { segments: ['simulator'], title: 'Simulador Rápido', view: function (root) { Views.simulator(root); } },
     { segments: ['movements', 'new'], title: 'Nova Movimentação', view: function (root) { Views.movementNew(root); } },
     { segments: ['movements', ':id'], title: 'Movimentação', view: function (root, p) { Views.movementDetail(root, p.id); } },
     { segments: ['movements'], title: 'Movimentações', view: function (root) { Views.movements(root); } },
@@ -365,7 +366,8 @@
       '</aside>' +
       '<div class="main-col">' +
       '<header class="topbar"><div class="topbar-title" id="topbar-title"></div>' +
-      '<div class="topbar-user"><div class="avatar-sm">' +
+      '<div class="topbar-user"><button class="btn btn-outline btn-sm" id="change-password-btn" type="button">Alterar senha</button>' +
+      '<div class="avatar-sm">' +
       escapeHtml(initials(user.name)) +
       '</div><div class="topbar-user-meta"><div class="topbar-user-name">' +
       escapeHtml(user.name) +
@@ -375,6 +377,52 @@
       '<main class="view-root" id="view-root"></main>' +
       '</div>' +
       '</div>';
+    var changePasswordBtn = document.getElementById('change-password-btn');
+    if (changePasswordBtn) changePasswordBtn.addEventListener('click', openChangePasswordModal);
+  }
+
+  /** Modal para o usuário trocar a própria senha (pede a atual quando já existe uma). */
+  function openChangePasswordModal() {
+    var hasPassword = !!(App.user && App.user.hasPassword);
+    var html =
+      '<div class="modal-header"><h3>Alterar senha</h3><button class="modal-close" data-action="modal-close">&times;</button></div>' +
+      (hasPassword
+        ? '<div class="field"><label>Senha atual</label><input type="password" id="change-pwd-current" autocomplete="current-password" /></div>'
+        : '<p class="text-sm" style="margin-bottom:12px;color:var(--slate-600);">Você ainda não tem uma senha cadastrada — defina uma agora.</p>') +
+      '<div class="field"><label>Nova senha</label><input type="password" id="change-pwd-new" autocomplete="new-password" />' +
+      '<p class="text-xs text-faint" style="margin-top:4px;">Mínimo de 6 caracteres.</p></div>' +
+      '<div class="field"><label>Confirmar nova senha</label><input type="password" id="change-pwd-confirm" autocomplete="new-password" /></div>' +
+      '<p class="field-error" id="change-pwd-error" style="display:none;"></p>' +
+      '<div class="form-actions">' +
+      '<button class="btn btn-outline" data-action="modal-close">Cancelar</button>' +
+      '<button class="btn btn-success" id="change-pwd-confirm-btn">Salvar</button></div>';
+    var modalEl = Modal.open(html);
+    var errEl = modalEl.querySelector('#change-pwd-error');
+    modalEl.querySelector('#change-pwd-confirm-btn').addEventListener('click', function () {
+      var current = hasPassword ? modalEl.querySelector('#change-pwd-current').value : '';
+      var next = modalEl.querySelector('#change-pwd-new').value;
+      var confirm = modalEl.querySelector('#change-pwd-confirm').value;
+      if (next.length < 6) {
+        errEl.textContent = 'A nova senha precisa ter ao menos 6 caracteres.';
+        errEl.style.display = 'block';
+        return;
+      }
+      if (next !== confirm) {
+        errEl.textContent = 'A confirmação não bate com a nova senha.';
+        errEl.style.display = 'block';
+        return;
+      }
+      callApi('api_setPassword', current, next)
+        .then(function () {
+          if (App.user) App.user.hasPassword = true;
+          Modal.close();
+          toast('Senha atualizada com sucesso.', 'success');
+        })
+        .catch(function (err) {
+          errEl.textContent = apiErrorMessage(err);
+          errEl.style.display = 'block';
+        });
+    });
   }
 
   function renderNoAccessScreen() {
@@ -395,6 +443,86 @@
       '</div></div>';
     var btn = document.getElementById('retry-access-btn');
     if (btn) btn.addEventListener('click', function () { window.location.reload(); });
+  }
+
+  /**
+   * Camada extra de senha sobre a conta Google (ver PasswordAuth.gs) — exibida
+   * no lugar do shell até o usuário confirmar (ou, no primeiro acesso,
+   * cadastrar) a senha nesta sessão do navegador. `mode` é 'set' (ainda não
+   * tem senha) ou 'verify' (tem senha, mas ainda não confirmou hoje).
+   */
+  function renderPasswordGate(mode) {
+    var app = document.getElementById('app');
+    var isSet = mode === 'set';
+    app.innerHTML =
+      '<div class="full-screen-msg"><div class="card">' +
+      '<img class="sidebar-brand-logo" src="' +
+      BEEP_LOGO_DATA_URI +
+      '" alt="Beep Saúde" style="height:32px;margin-bottom:16px;" />' +
+      '<h2 style="margin-bottom:10px;">' +
+      (isSet ? 'Cadastre sua senha' : 'Confirme sua senha') +
+      '</h2>' +
+      '<p class="text-sm" style="margin-bottom:16px;color:var(--slate-600);">' +
+      (isSet
+        ? 'Por segurança, o BEEP Remunera agora pede uma senha própria, além da sua conta Google. Cadastre a sua para continuar.'
+        : 'Digite sua senha para continuar. Ela é válida por algumas horas nesta sessão do navegador.') +
+      '</p>' +
+      (isSet
+        ? '<div class="field"><label>Nova senha</label><input type="password" id="pwd-gate-new" autocomplete="new-password" />' +
+          '<p class="text-xs text-faint" style="margin-top:4px;">Mínimo de 6 caracteres.</p></div>' +
+          '<div class="field"><label>Confirmar nova senha</label><input type="password" id="pwd-gate-confirm" autocomplete="new-password" /></div>'
+        : '<div class="field"><label>Senha</label><input type="password" id="pwd-gate-password" autocomplete="current-password" /></div>') +
+      '<p class="field-error" id="pwd-gate-error" style="display:none;"></p>' +
+      '<div style="margin-top:12px;display:flex;gap:8px;">' +
+      '<button class="btn btn-success" id="pwd-gate-submit-btn">' +
+      (isSet ? 'Cadastrar e entrar' : 'Entrar') +
+      '</button>' +
+      '</div>' +
+      '<p class="text-xs text-faint" style="margin-top:14px;">Entrou com a conta Google errada? ' +
+      '<a href="https://accounts.google.com/Logout" target="_blank" rel="noopener">Saia dela aqui</a> e recarregue esta página.</p>' +
+      '</div></div>';
+
+    var errEl = document.getElementById('pwd-gate-error');
+    function showError(err) {
+      errEl.textContent = apiErrorMessage(err);
+      errEl.style.display = 'block';
+    }
+
+    function submit() {
+      errEl.style.display = 'none';
+      if (isSet) {
+        var next = document.getElementById('pwd-gate-new').value;
+        var confirm = document.getElementById('pwd-gate-confirm').value;
+        if (next.length < 6) return showError('A senha precisa ter ao menos 6 caracteres.');
+        if (next !== confirm) return showError('A confirmação não bate com a senha.');
+        callApi('api_setPassword', '', next).then(onVerified).catch(showError);
+      } else {
+        var password = document.getElementById('pwd-gate-password').value;
+        callApi('api_verifyPassword', password).then(onVerified).catch(showError);
+      }
+    }
+
+    function onVerified() {
+      App.user.hasPassword = true;
+      App.user.passwordVerified = true;
+      renderShell();
+      renderRoute();
+      window.addEventListener('hashchange', renderRoute);
+    }
+
+    document.getElementById('pwd-gate-submit-btn').addEventListener('click', submit);
+    var pwdInputs = document.querySelectorAll('#app input[type="password"]');
+    pwdInputs.forEach(function (input) {
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') submit();
+      });
+    });
+    var logoutBtn = document.getElementById('pwd-gate-logout-btn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', function () {
+        window.top.location.href = 'https://accounts.google.com/Logout?continue=' + encodeURIComponent(window.location.href);
+      });
+    }
   }
 
   function renderFatalError(err) {
@@ -420,6 +548,10 @@
         App.user = user;
         if (!user) {
           renderNoAccessScreen();
+          return;
+        }
+        if (!user.passwordVerified) {
+          renderPasswordGate(user.hasPassword ? 'verify' : 'set');
           return;
         }
         renderShell();

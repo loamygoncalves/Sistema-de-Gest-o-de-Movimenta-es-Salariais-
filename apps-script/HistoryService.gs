@@ -8,15 +8,14 @@
  */
 
 var HistoryService = {
-  _filtered: function (filters, scopedDirectorateId) {
+  _filtered: function (filters, scope) {
     filters = filters || {};
-    var directorateId = scopedDirectorateId || filters.directorateId;
+    scope = scope || {};
 
     var records = Tables.movementHistory.where(function (h) {
-      if (directorateId && h.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(h, scope)) return false;
       if (filters.positionId && h.positionId !== filters.positionId) return false;
       if (filters.type && h.type !== filters.type) return false;
-      if (filters.costCenterId && h.costCenterId !== filters.costCenterId) return false;
       if (filters.startDate && h.effectiveDate < filters.startDate) return false;
       if (filters.endDate && h.effectiveDate > filters.endDate) return false;
       return true;
@@ -28,12 +27,12 @@ var HistoryService = {
     return records;
   },
 
-  list: function (filters, scopedDirectorateId) {
+  list: function (filters, scope) {
     var employees = indexById_(Tables.employees.all());
     var directorates = indexById_(Tables.directorates.all());
     var positions = indexById_(Tables.positions.all());
 
-    return this._filtered(filters, scopedDirectorateId).map(function (h) {
+    return this._filtered(filters, scope).map(function (h) {
       var copy = shallowCopy_(h);
       copy.employeeName = h.employeeId && employees[h.employeeId] ? employees[h.employeeId].name : null;
       copy.directorateName = directorates[h.directorateId] ? directorates[h.directorateId].name : null;
@@ -42,8 +41,8 @@ var HistoryService = {
     });
   },
 
-  getIndicators: function (filters, scopedDirectorateId) {
-    var records = this._filtered(filters, scopedDirectorateId);
+  getIndicators: function (filters, scope) {
+    var records = this._filtered(filters, scope);
 
     var promotionsCount = records.filter(function (r) {
       return r.type === MovementType.PROMOCAO;
@@ -78,9 +77,6 @@ var HistoryService = {
     return {
       promotionsCount: promotionsCount,
       meritsCount: meritsCount,
-      transfersCount: records.filter(function (r) {
-        return r.type === MovementType.TRANSFERENCIA;
-      }).length,
       headcountIncreaseCount: records.filter(function (r) {
         return r.type === MovementType.AUMENTO_QUADRO;
       }).length,
@@ -91,8 +87,8 @@ var HistoryService = {
   },
 
   /** Cria uma planilha Google com os registros filtrados e devolve os links de acesso/exportação. */
-  exportToSheet: function (filters, scopedDirectorateId) {
-    var records = this.list(filters, scopedDirectorateId);
+  exportToSheet: function (filters, scope) {
+    var records = this.list(filters, scope);
     var ss = SpreadsheetApp.create('BEEP Remunera - Histórico de Movimentações - ' + Utilities.formatDate(new Date(), 'GMT-3', 'yyyy-MM-dd HHmm'));
     var sheet = ss.getSheets()[0];
     var headers = [

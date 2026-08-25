@@ -114,7 +114,7 @@
     };
 
     root.innerHTML =
-      '<div class="page-header"><div><h1>Movimentações</h1><p>Solicitações de promoção, mérito, transferência e aumento de quadro.</p></div>' +
+      '<div class="page-header"><div><h1>Movimentações</h1><p>Solicitações de promoção, mérito e aumento de quadro.</p></div>' +
       '<button class="btn" data-route="#/movements/new">+ Nova Movimentação</button></div>' +
       '<div class="filter-bar" id="mov-filters"></div>' +
       '<div id="mov-table-wrap">' +
@@ -216,8 +216,14 @@
   // -----------------------------------------------------------------------
   Views.movementNew = function (root) {
     var org, employees;
-    var type = 'PROMOCAO';
+    // Pré-preenchimento vindo do Simulador Rápido (ver Views.simulator) — a
+    // pessoa já simulou o impacto e quer abrir a solicitação real com os
+    // mesmos dados. Consumido uma única vez (não sobrevive a um refresh).
+    var prefill = App.movementPrefill || null;
+    App.movementPrefill = null;
+    var type = (prefill && prefill.type) || 'PROMOCAO';
     var employeePicker = null;
+    var prefillEmployee = null;
 
     root.innerHTML = loadingHtml();
 
@@ -225,6 +231,9 @@
       .then(function (results) {
         org = results[0];
         employees = results[1] || [];
+        if (prefill && prefill.employeeId) {
+          prefillEmployee = employees.filter(function (e) { return e.id === prefill.employeeId; })[0] || null;
+        }
         render();
       })
       .catch(function (err) {
@@ -263,28 +272,13 @@
           '<div class="field"><label>Diretoria <span class="req">*</span></label><select id="mn-directorateId">' +
           optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
           '</select><p class="field-error" id="mn-err-directorateId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Centro de Custo <span class="req">*</span></label><select id="mn-costCenterId">' +
+          optionsHtml(org.costCenters, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="mn-err-costCenterId" style="display:none;"></p></div>' +
           '<div class="field"><label>Quantidade de Vagas <span class="req">*</span></label><input type="number" min="1" step="1" id="mn-quantity" value="1">' +
           '<p class="field-error" id="mn-err-quantity" style="display:none;"></p></div>' +
           '<div class="field"><label>Salário Planejado <span class="req">*</span></label><input type="number" step="0.01" id="mn-plannedSalary">' +
           '<p class="field-error" id="mn-err-plannedSalary" style="display:none;"></p></div>' +
-          '</div>'
-        );
-      }
-      if (t === 'TRANSFERENCIA') {
-        return (
-          '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="mn-employee-picker"></div>' +
-          '<p class="field-error" id="mn-err-employee" style="display:none;"></p></div>' +
-          '<div class="form-grid">' +
-          '<div class="field"><label>Diretoria de Origem <span class="req">*</span></label><select id="mn-originDirectorateId">' +
-          optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
-          '</select><p class="field-error" id="mn-err-originDirectorateId" style="display:none;"></p></div>' +
-          '<div class="field"><label>Diretoria de Destino <span class="req">*</span></label><select id="mn-destinationDirectorateId">' +
-          optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
-          '</select><p class="field-error" id="mn-err-destinationDirectorateId" style="display:none;"></p></div>' +
-          '<div class="field"><label>Novo Cargo (opcional)</label><select id="mn-newPositionId2">' +
-          optionsHtml(org.positions, { placeholder: 'Manter cargo atual' }) +
-          '</select></div>' +
-          '<div class="field"><label>Novo Salário (opcional)</label><input type="number" step="0.01" id="mn-newSalary2"></div>' +
           '</div>'
         );
       }
@@ -315,6 +309,10 @@
       });
       document.getElementById('mn-submit-btn').addEventListener('click', handleSubmit);
       renderTypeFields();
+      if (prefill && prefill.effectiveDate) {
+        var dateEl = document.getElementById('mn-effectiveDate');
+        if (dateEl) dateEl.value = prefill.effectiveDate;
+      }
     }
 
     function renderTypeFields() {
@@ -324,12 +322,28 @@
       employeePicker = null;
       if (pickerEl) {
         employeePicker = mountEmployeePicker(pickerEl, employees, {
+          initialEmployee: prefillEmployee,
           onChange: function (emp) {
             var hint = document.getElementById('mn-hint-newSalary');
             if (hint && emp) hint.textContent = 'Salário atual: ' + fmt.currency(emp.currentSalary);
             else if (hint) hint.textContent = '';
           },
         });
+        var hint = document.getElementById('mn-hint-newSalary');
+        if (hint && prefillEmployee) hint.textContent = 'Salário atual: ' + fmt.currency(prefillEmployee.currentSalary);
+      }
+      if (prefill && type === 'PROMOCAO') {
+        if (prefill.newPositionId) {
+          var posEl = document.getElementById('mn-newPositionId');
+          if (posEl) posEl.value = prefill.newPositionId;
+        }
+        if (prefill.newSalary != null) {
+          var salEl = document.getElementById('mn-newSalary');
+          if (salEl) salEl.value = prefill.newSalary;
+        }
+      } else if (prefill && type === 'MERITO' && prefill.percentage != null) {
+        var pctEl = document.getElementById('mn-percentage');
+        if (pctEl) pctEl.value = prefill.percentage;
       }
     }
 
@@ -389,35 +403,19 @@
       } else if (type === 'AUMENTO_QUADRO') {
         var positionId = v('positionId');
         var directorateId = v('directorateId');
+        var costCenterId = v('costCenterId');
         var quantity = v('quantity');
         var plannedSalary = v('plannedSalary');
         if (!positionId) errors.positionId = 'Selecione o cargo.';
         if (!directorateId) errors.directorateId = 'Selecione a diretoria.';
+        if (!costCenterId) errors.costCenterId = 'Selecione o centro de custo.';
         if (!quantity || Number(quantity) < 1) errors.quantity = 'Informe uma quantidade válida.';
         if (plannedSalary === '' || Number(plannedSalary) < 0) errors.plannedSalary = 'Informe um salário planejado válido.';
         payload.positionId = positionId;
         payload.directorateId = directorateId;
+        payload.costCenterId = costCenterId;
         payload.quantity = Number(quantity);
         payload.plannedSalary = Number(plannedSalary);
-      } else if (type === 'TRANSFERENCIA') {
-        var emp3 = employeePicker && employeePicker.getSelected();
-        var originDirectorateId = v('originDirectorateId');
-        var destinationDirectorateId = v('destinationDirectorateId');
-        if (!emp3) errors.employee = 'Selecione o colaborador.';
-        if (!originDirectorateId) errors.originDirectorateId = 'Selecione a diretoria de origem.';
-        if (!destinationDirectorateId) errors.destinationDirectorateId = 'Selecione a diretoria de destino.';
-        if (originDirectorateId && destinationDirectorateId && originDirectorateId === destinationDirectorateId) {
-          errors.destinationDirectorateId = 'A diretoria de destino deve ser diferente da origem.';
-        }
-        if (emp3) {
-          payload.employeeId = emp3.id;
-          payload.originDirectorateId = originDirectorateId;
-          payload.destinationDirectorateId = destinationDirectorateId;
-          var newPositionId2 = v('newPositionId2');
-          var newSalary2 = v('newSalary2');
-          if (newPositionId2) payload.newPositionId = newPositionId2;
-          if (newSalary2) payload.newSalary = Number(newSalary2);
-        }
       }
 
       var hasErrors = Object.keys(errors).length > 0;
@@ -455,23 +453,13 @@
   // Detalhe de movimentação
   // -----------------------------------------------------------------------
   Views.movementDetail = function (root, id) {
-    var org;
     root.innerHTML = loadingHtml();
 
-    Promise.all([callApi('api_getMovement', id), getOrgLookups()])
-      .then(function (results) {
-        org = results[1];
-        render(results[0]);
-      })
+    callApi('api_getMovement', id)
+      .then(render)
       .catch(function (err) {
         root.innerHTML = errorStateHtml(apiErrorMessage(err));
       });
-
-    function directorateName(dirId) {
-      if (!dirId || !org) return null;
-      var found = (org.directorates || []).filter(function (d) { return d.id === dirId; })[0];
-      return found ? found.name : null;
-    }
 
     function fieldHtml(label, value) {
       if (value === null || value === undefined || value === '') return '';
@@ -504,8 +492,7 @@
         fieldHtml('Quantidade de Vagas', movement.quantity != null ? fmt.number(movement.quantity) : null) +
         fieldHtml('Salário Planejado', movement.plannedSalary != null ? fmt.currency(movement.plannedSalary) : null) +
         fieldHtml('Diretoria', movement.directorateName) +
-        fieldHtml('Diretoria de Origem', directorateName(movement.originDirectorateId)) +
-        fieldHtml('Diretoria de Destino', directorateName(movement.destinationDirectorateId)) +
+        fieldHtml('Centro de Custo', movement.costCenterName) +
         fieldHtml('Data Efetiva', fmt.date(movement.effectiveDate)) +
         fieldHtml('Solicitado por', movement.requestedByEmail) +
         fieldHtml('Criado em', fmt.dateTime(movement.createdAt)) +
@@ -576,6 +563,165 @@
           }, { danger: true, confirmLabel: 'Cancelar Movimentação' });
         });
       }
+    }
+  };
+
+  // -----------------------------------------------------------------------
+  // Simulador Rápido (Módulo 4) — Gestor/Diretor testa o impacto de uma
+  // promoção/mérito antes de abrir a solicitação de fato. Não persiste
+  // nada; "Abrir solicitação com estes dados" leva para Views.movementNew
+  // já preenchido (ver App.movementPrefill).
+  // -----------------------------------------------------------------------
+  Views.simulator = function (root) {
+    var org, employees;
+    var type = 'PROMOCAO';
+    var employeePicker = null;
+
+    root.innerHTML = loadingHtml();
+
+    Promise.all([getOrgLookups(), callApi('api_listEmployees', { status: 'ATIVO' })])
+      .then(function (results) {
+        org = results[0];
+        employees = results[1] || [];
+        render();
+      })
+      .catch(function (err) {
+        root.innerHTML = errorStateHtml(apiErrorMessage(err));
+      });
+
+    function render() {
+      root.innerHTML =
+        '<div class="page-header"><div><h1>Simulador Rápido</h1>' +
+        '<p>Simule o impacto de uma promoção ou mérito para um dos seus colaboradores antes de abrir a solicitação de fato.</p></div></div>' +
+        cardOpen() +
+        '<div class="field"><label>Tipo <span class="req">*</span></label><select id="sim-type">' +
+        optionsHtml(
+          [
+            { id: 'PROMOCAO', name: LABELS.movementType.PROMOCAO },
+            { id: 'MERITO', name: LABELS.movementType.MERITO },
+          ],
+          { selected: type }
+        ) +
+        '</select></div>' +
+        '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="sim-employee-picker"></div>' +
+        '<p class="field-error" id="sim-err-employee" style="display:none;"></p></div>' +
+        '<div id="sim-type-fields"></div>' +
+        '<div class="field" style="margin-top:14px;"><label>Data Efetiva <span class="req">*</span></label>' +
+        '<input type="date" id="sim-effectiveDate" style="max-width:220px;">' +
+        '<p class="field-error" id="sim-err-effectiveDate" style="display:none;"></p></div>' +
+        '<div class="form-actions"><button class="btn" id="sim-run-btn">Simular</button></div>' +
+        cardClose() +
+        '<div style="height:16px;"></div>' +
+        '<div id="sim-result"></div>';
+
+      document.getElementById('sim-type').addEventListener('change', function (e) {
+        type = e.target.value;
+        renderTypeFields();
+      });
+      document.getElementById('sim-run-btn').addEventListener('click', runSimulation);
+      employeePicker = mountEmployeePicker(document.getElementById('sim-employee-picker'), employees, {
+        onChange: function () {
+          renderTypeFields();
+        },
+      });
+      renderTypeFields();
+    }
+
+    function renderTypeFields() {
+      var el = document.getElementById('sim-type-fields');
+      var emp = employeePicker && employeePicker.getSelected();
+      var salaryHint = emp ? '<p class="field-hint">Salário atual: ' + fmt.currency(emp.currentSalary) + '</p>' : '';
+      if (type === 'PROMOCAO') {
+        el.innerHTML =
+          '<div class="form-grid">' +
+          '<div class="field"><label>Novo Cargo <span class="req">*</span></label><select id="sim-newPositionId">' +
+          optionsHtml(org.positions, { placeholder: 'Selecione' }) +
+          '</select><p class="field-error" id="sim-err-newPositionId" style="display:none;"></p></div>' +
+          '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="sim-newSalary">' +
+          salaryHint +
+          '<p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>' +
+          '</div>';
+      } else {
+        el.innerHTML =
+          '<div class="field"><label>Percentual de Aumento (%) <span class="req">*</span></label><input type="number" step="0.01" id="sim-percentage">' +
+          salaryHint +
+          '<p class="field-error" id="sim-err-percentage" style="display:none;"></p></div>';
+      }
+    }
+
+    function clearErrors() {
+      root.querySelectorAll('.field-error').forEach(function (e) {
+        e.style.display = 'none';
+        e.textContent = '';
+      });
+    }
+    function setError(id, message) {
+      var el = document.getElementById('sim-err-' + id);
+      if (el) {
+        el.textContent = message;
+        el.style.display = 'block';
+      }
+    }
+
+    function runSimulation() {
+      clearErrors();
+      var emp = employeePicker && employeePicker.getSelected();
+      var effectiveDate = document.getElementById('sim-effectiveDate').value;
+      var errors = {};
+      if (!emp) errors.employee = 'Selecione o colaborador.';
+      if (!effectiveDate) errors.effectiveDate = 'Informe a data efetiva.';
+
+      var input = { type: type, employeeId: emp ? emp.id : null, effectiveDate: effectiveDate };
+      if (type === 'PROMOCAO') {
+        var newPositionId = document.getElementById('sim-newPositionId').value;
+        var newSalary = document.getElementById('sim-newSalary').value;
+        if (!newPositionId) errors.newPositionId = 'Selecione o novo cargo.';
+        if (!newSalary) errors.newSalary = 'Informe o novo salário.';
+        if (emp && newSalary && Number(newSalary) < Number(emp.currentSalary)) {
+          errors.newSalary = 'O novo salário não pode ser menor que o salário atual (' + fmt.currency(emp.currentSalary) + ').';
+        }
+        input.newPositionId = newPositionId;
+        input.newSalary = Number(newSalary);
+      } else {
+        var percentage = document.getElementById('sim-percentage').value;
+        if (!percentage || Number(percentage) <= 0) errors.percentage = 'Informe um percentual maior que zero.';
+        input.percentage = Number(percentage);
+      }
+
+      if (Object.keys(errors).length > 0) {
+        Object.keys(errors).forEach(function (key) {
+          setError(key, errors[key]);
+        });
+        return;
+      }
+
+      var btn = document.getElementById('sim-run-btn');
+      btn.disabled = true;
+      btn.classList.add('is-loading');
+      callApi('api_previewSimulation', input)
+        .then(function (result) {
+          renderResult(result, input);
+        })
+        .catch(toastError)
+        .finally(function () {
+          btn.disabled = false;
+          btn.classList.remove('is-loading');
+        });
+    }
+
+    function renderResult(result, input) {
+      var wrap = document.getElementById('sim-result');
+      wrap.innerHTML =
+        cardOpen('Resultado da Simulação', {
+          actions: '<button class="btn btn-outline btn-sm" id="sim-open-movement-btn">Abrir solicitação com estes dados</button>',
+        }) +
+        simulationPanelHtml(result) +
+        cardClose();
+
+      document.getElementById('sim-open-movement-btn').addEventListener('click', function () {
+        App.movementPrefill = input;
+        goTo('#/movements/new');
+      });
     }
   };
 </script>

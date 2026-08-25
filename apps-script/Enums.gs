@@ -53,7 +53,6 @@ var MovementType = {
   PROMOCAO: 'PROMOCAO',
   MERITO: 'MERITO',
   AUMENTO_QUADRO: 'AUMENTO_QUADRO',
-  TRANSFERENCIA: 'TRANSFERENCIA',
 };
 
 var MovementStatus = {
@@ -104,9 +103,6 @@ var STATUS_AFTER_STEP = {};
 STATUS_AFTER_STEP[ApproverRole.DIRETOR] = MovementStatus.PENDENTE_RH;
 STATUS_AFTER_STEP[ApproverRole.RH_REMUNERACAO] = MovementStatus.PENDENTE_FINANCEIRO;
 STATUS_AFTER_STEP[ApproverRole.FINANCEIRO] = MovementStatus.APROVADO;
-
-/** Perfis com escopo restrito à própria diretoria. */
-var SCOPED_ROLES = [UserRole.DIRETOR, UserRole.GESTOR];
 
 /** Parametrização de regras de negócio (equivalente a backend/.env). */
 var RULES = {

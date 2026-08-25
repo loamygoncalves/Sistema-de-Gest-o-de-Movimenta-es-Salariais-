@@ -5,6 +5,7 @@ import { MovementSimulation } from './entities/movement-simulation.entity';
 import { Employee } from '../employees/entities/employee.entity';
 import { SimulatorModule } from '../simulator/simulator.module';
 import { ApprovalsModule } from '../approvals/approvals.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { MovementsService } from './movements.service';
 import { MovementsController } from './movements.controller';
 
@@ -13,6 +14,7 @@ import { MovementsController } from './movements.controller';
     TypeOrmModule.forFeature([MovementRequest, MovementSimulation, Employee]),
     SimulatorModule,
     ApprovalsModule,
+    NotificationsModule,
   ],
   providers: [MovementsService],
   controllers: [MovementsController],

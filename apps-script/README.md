@@ -9,8 +9,11 @@ para rodar inteiramente dentro do Google Workspace, sem servidor próprio:
 - **Frontend** → um Web App servido por `HtmlService` (SPA em HTML/CSS/JS
   puro, sem build step — `Index.html` + `Styles.html` + `Client_*.html`).
 - **Identidade** → a conta Google de quem acessa (`Session.getActiveUser()`),
-  casada com a aba `Usuarios` para saber o perfil (role) e a diretoria de
-  escopo. Não há tela de login nem senha.
+  casada com a aba `Usuarios` para saber o perfil (role) e o escopo de acesso
+  (diretoria inteira para DIRETOR, uma seleção de centros de custo para
+  GESTOR). Por cima disso, uma senha própria (camada extra — ver
+  `PasswordAuth.gs`) precisa ser confirmada uma vez por sessão do navegador
+  antes de liberar o resto do sistema.
 
 Esta é uma reimplementação independente do sistema em `backend/` +
 `frontend/` (NestJS + PostgreSQL + Next.js) — não compartilham dados nem
@@ -60,9 +63,10 @@ tem o seu). Depois do primeiro `clasp push`:
 
 1. Abra o projeto (`clasp open`).
 2. No editor, selecione a função `setupSpreadsheet` e clique em **Executar**
-   (autorize as permissões pedidas — Sheets, Drive, e-mail do usuário).
-   Isso cria a planilha "SGMS - Banco de Dados", grava seu ID nas
-   Propriedades do Script, e cadastra você como usuário `ADMIN`.
+   (autorize as permissões pedidas — Sheets, Drive, enviar e-mail em seu
+   nome, e-mail do usuário). Isso cria a planilha "SGMS - Banco de Dados",
+   grava seu ID nas Propriedades do Script, e cadastra você como usuário
+   `ADMIN`.
 3. Se for usar import de `.xlsx`: em **Serviços** (ícone `+` na barra
    lateral do editor), adicione o serviço avançado **Drive API**.
 4. **Implantar → Nova implantação → Aplicativo da Web**. Configure
@@ -70,11 +74,16 @@ tem o seu). Depois do primeiro `clasp push`:
    qualquer pessoa na [seu domínio Workspace]" (já é o padrão em
    `appsscript.json`, mas a UI de implantação pede para confirmar).
 5. Abra a URL do Web App gerada — você já estará logado como ADMIN.
-6. Para adicionar outras pessoas: abra a planilha criada no passo 2, vá na
-   aba **Usuarios** e adicione uma linha por pessoa: `email`, `role`
+6. Para adicionar outras pessoas: prefira a tela **Usuários** do próprio
+   sistema (Administração → Usuários), que já cuida do perfil e do escopo
+   corretamente. Editando a planilha diretamente: aba **Usuarios**, uma linha
+   por pessoa com `email`, `role`
    (`ADMIN`/`RH_REMUNERACAO`/`DIRETOR`/`FINANCEIRO`/`GESTOR`),
-   `directorateId` (obrigatório para `DIRETOR`/`GESTOR` — pegue o `id` na
-   aba **Diretorias**), `active` = `TRUE`.
+   `directorateId` (obrigatório para `DIRETOR` — pegue o `id` na aba
+   **Diretorias**) ou `costCenterIds` (obrigatório para `GESTOR` — lista de
+   ids da aba **CentrosCusto** separados por vírgula), `active` = `TRUE`.
+   `passwordSalt`/`passwordHash` ficam vazios até a pessoa cadastrar a
+   própria senha no primeiro acesso (tela exibida automaticamente).
 
 ### Opção B — copiar e colar manualmente
 
@@ -99,8 +108,10 @@ apps-script/
   Code.gs                  doGet() + helper include() para o HtmlService
   Db.gs                    SheetTable — CRUD genérico sobre uma aba
   Enums.gs                 enums do domínio (mesmos do backend NestJS)
-  Setup.gs                 setupSpreadsheet() — cria abas + seed inicial
-  Auth.gs                  identidade via conta Google + guarda de perfil
+  Setup.gs                 setupSpreadsheet() — cria abas + seed inicial + migração de layout
+  Auth.gs                  identidade via conta Google + escopo de acesso
+  PasswordAuth.gs          senha (camada extra sobre a conta Google)
+  Notifications.gs         e-mail de notificação de nova solicitação (MailApp)
   Import.gs                parsing de CSV/XLSX enviado pelo navegador
   OrgService.gs             ) 
   UsersService.gs           |

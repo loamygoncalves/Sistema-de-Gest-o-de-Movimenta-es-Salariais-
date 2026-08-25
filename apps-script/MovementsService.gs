@@ -3,12 +3,12 @@
  */
 
 var MovementsService = {
-  list: function (filters, scopedDirectorateId) {
+  list: function (filters, scope) {
     filters = filters || {};
-    var directorateId = scopedDirectorateId || filters.directorateId;
+    scope = scope || {};
 
     var items = Tables.movementRequests.where(function (m) {
-      if (directorateId && m.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(m, scope)) return false;
       if (filters.status && m.status !== filters.status) return false;
       if (filters.type && m.type !== filters.type) return false;
       return true;
@@ -37,11 +37,13 @@ var MovementsService = {
   _withRelations: function (movements) {
     var employees = indexById_(Tables.employees.all());
     var directorates = indexById_(Tables.directorates.all());
+    var costCenters = indexById_(Tables.costCenters.all());
     var positions = indexById_(Tables.positions.all());
     return movements.map(function (m) {
       var copy = shallowCopy_(m);
       copy.employeeName = m.employeeId && employees[m.employeeId] ? employees[m.employeeId].name : null;
       copy.directorateName = directorates[m.directorateId] ? directorates[m.directorateId].name : null;
+      copy.costCenterName = m.costCenterId && costCenters[m.costCenterId] ? costCenters[m.costCenterId].name : null;
       copy.currentPositionName = m.currentPositionId && positions[m.currentPositionId] ? positions[m.currentPositionId].name : null;
       copy.newPositionName = m.newPositionId && positions[m.newPositionId] ? positions[m.newPositionId].name : null;
       return copy;
@@ -71,6 +73,7 @@ var MovementsService = {
       }
       base.employeeId = employee.id;
       base.directorateId = employee.directorateId;
+      base.costCenterId = employee.costCenterId || '';
       base.currentPositionId = employee.positionId;
       base.newPositionId = input.newPositionId;
       base.currentSalary = Number(employee.currentSalary);
@@ -82,29 +85,21 @@ var MovementsService = {
       }
       base.employeeId = employee.id;
       base.directorateId = employee.directorateId;
+      base.costCenterId = employee.costCenterId || '';
       base.currentPositionId = employee.positionId;
       base.currentSalary = Number(employee.currentSalary);
       base.newSalary = round2_(Number(employee.currentSalary) * (1 + Number(input.percentage) / 100));
       base.meritPercentage = Number(input.percentage);
-    } else if (input.type === MovementType.TRANSFERENCIA) {
-      if (!employee) throw new Error('Colaborador é obrigatório para transferência');
-      if (!input.destinationDirectorateId) throw new Error('Diretoria de destino é obrigatória');
-      base.employeeId = employee.id;
-      base.directorateId = input.destinationDirectorateId;
-      base.originDirectorateId = input.originDirectorateId || employee.directorateId;
-      base.destinationDirectorateId = input.destinationDirectorateId;
-      base.currentPositionId = employee.positionId;
-      base.newPositionId = input.newPositionId || employee.positionId;
-      base.currentSalary = Number(employee.currentSalary);
-      base.newSalary = input.newSalary !== undefined ? Number(input.newSalary) : Number(employee.currentSalary);
     } else if (input.type === MovementType.AUMENTO_QUADRO) {
       if (!input.directorateId) throw new Error('Diretoria é obrigatória');
+      if (!input.costCenterId) throw new Error('Centro de custo é obrigatório');
       if (!input.positionId) throw new Error('Cargo é obrigatório');
       if (!input.quantity || Number(input.quantity) < 1) throw new Error('Quantidade de vagas deve ser maior que zero');
       if (input.plannedSalary === undefined || Number(input.plannedSalary) < 0) {
         throw new Error('Salário previsto é obrigatório');
       }
       base.directorateId = input.directorateId;
+      base.costCenterId = input.costCenterId;
       base.newPositionId = input.positionId;
       base.quantity = Number(input.quantity);
       base.plannedSalary = Number(input.plannedSalary);
@@ -113,7 +108,8 @@ var MovementsService = {
       throw new Error('Tipo de movimentação inválido: ' + input.type);
     }
 
-    return Tables.movementRequests.insert(base);
+    var created = Tables.movementRequests.insert(base);
+    return created;
   },
 
   update: function (id, input) {
@@ -152,6 +148,8 @@ var MovementsService = {
     this.simulate(id);
     ApprovalsService.createStepsForMovement(id);
     Tables.movementRequests.update(id, { status: MovementStatus.PENDENTE_DIRETOR, updatedAt: nowIso_() });
-    return this.get(id);
+    var submitted = this.get(id);
+    notifyMovementSubmitted_(submitted);
+    return submitted;
   },
 };

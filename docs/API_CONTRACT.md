@@ -5,11 +5,17 @@ exigem header `Authorization: Bearer <jwt>`. Respostas de erro seguem o formato
 padrão do Nest: `{ statusCode, message, error }`.
 
 Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `FINANCEIRO`, `GESTOR`.
-Usuários `DIRETOR` e `GESTOR` têm `directorateId` e só enxergam dados dessa
-diretoria (o backend filtra automaticamente pelo escopo do token).
+`DIRETOR` tem `directorateId` e enxerga toda a diretoria; `GESTOR` tem
+`costCenterIds` (multi-seleção) e enxerga só os colaboradores/orçamento
+desses centros de custo (lista vazia = não vê nada — nunca "vê tudo" por
+omissão). `ADMIN`/`RH_REMUNERACAO`/`FINANCEIRO` não têm escopo restrito. O
+backend resolve esse escopo a partir do token
+(`resolveAccessScope`/`applyAccessScope`) e aplica automaticamente em toda
+consulta filtrável por diretoria/centro de custo — filtros de query string
+(`directorateId`/`costCenterId`) só valem para quem não tem escopo restrito.
 
 ## Auth
-- `POST /auth/login` `{ email, password }` → `{ accessToken, user: { id, name, email, role, directorateId } }`
+- `POST /auth/login` `{ email, password }` → `{ accessToken, user: { id, name, email, role, directorateId, costCenterIds } }`
 - `GET /auth/me` → usuário autenticado
 
 ## Organização (ADMIN, RH_REMUNERACAO: escrita; demais: leitura)
@@ -31,7 +37,10 @@ diretoria (o backend filtra automaticamente pelo escopo do token).
   Cada id é processado individualmente: ids referenciados no orçamento falham
   sem impedir a exclusão dos demais. Retorna
   `{ removed: number, removedIds: string[], failed: [{ id, message }] }`.
-- `GET/POST /users` (ADMIN only), `PATCH /users/:id`, `PATCH /users/:id/password`
+- `GET/POST /users` (ADMIN only), `PATCH /users/:id`, `PATCH /users/:id/password`.
+  `POST`/`PATCH` body: `{ name, email, role, directorateId? }` (DIRETOR) ou
+  `{ name, email, role, costCenterIds: string[] }` (GESTOR — obrigatório ao
+  menos 1 id); demais perfis não enviam nenhum dos dois.
 
 ## Employees (base atual) — módulo 2
 - `GET /employees?directorateId=&positionId=&status=&search=&page=&limit=`
@@ -76,15 +85,21 @@ orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
   linhas (visão do ano inteiro).
 
 ## Movements (solicitações) — módulo 3
-- `GET /movements?status=&type=&directorateId=&page=&limit=`
+Transferência foi descontinuada (não existe mais como `type`). Toda
+movimentação tem um `costCenterId`: em `PROMOCAO`/`MERITO` é herdado do
+colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório,
+já que não há colaborador para derivar).
+
+- `GET /movements?status=&type=&directorateId=&costCenterId=&page=&limit=`
 - `GET /movements/:id` (inclui `simulation` mais recente e `approvalSteps`)
 - `POST /movements` body varia por `type`:
   - `PROMOCAO`: `{ type, employeeId, newPositionId, newSalary, effectiveDate, justification }`
   - `MERITO`: `{ type, employeeId, percentage, effectiveDate, justification }` (valor calculado no backend)
-  - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, effectiveDate, justification }`
-  - `TRANSFERENCIA`: `{ type, employeeId, originDirectorateId, destinationDirectorateId, newPositionId?, newSalary?, effectiveDate, justification }`
+  - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
 - `PATCH /movements/:id` (somente RASCUNHO)
-- `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` + muda status para `PENDENTE_DIRETOR`
+- `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` + muda status para
+  `PENDENTE_DIRETOR` + envia e-mail de notificação para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es)
+  do centro de custo e o DIRETOR da diretoria (ver seção Notificações abaixo)
 - `DELETE /movements/:id` (somente RASCUNHO, cancela)
 
 ## Simulador — módulo 4
@@ -97,12 +112,36 @@ orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
   "benefitsTotal": 0,
   "totalMonthlyImpact": 0,
   "totalAnnualImpact": 0,
-  "budget": { "budgeted": 0, "current": 0, "afterApproval": 0, "difference": 0, "percentConsumed": 0 },
+  "budgetedDirectoratePayroll": 0,
+  "currentDirectoratePayroll": 0,
+  "payrollAfterApproval": 0,
+  "difference": 0,
+  "percentConsumed": 0,
   "exceedsBudget": false,
   "alertMessage": "Movimentação aderente ao orçamento."
 }
 ```
+  Apesar do nome dos campos (herdado do modelo original), a comparação é
+  sempre feita pelo **bucket exato** (diretoria + centro de custo + cargo) da
+  movimentação — nunca pelo orçamento da diretoria inteira.
+- `POST /simulator/preview` — Simulador Rápido (Gestor/Diretor testam o
+  impacto de uma promoção/mérito para um colaborador ANTES de abrir a
+  solicitação de fato; não persiste nada). Body:
+  `{ employeeId, type: 'PROMOCAO'|'MERITO', newPositionId?, newSalary?, percentage?, effectiveDate }`
+  (`newPositionId`/`newSalary` para `PROMOCAO`, `percentage` para `MERITO`).
+  Retorna o mesmo formato de `POST /movements/:id/simulate` acima. 403 se o
+  colaborador estiver fora do escopo de acesso do usuário.
 - `GET /charge-parameters` / `POST` / `PATCH /:id` (ADMIN, RH_REMUNERACAO) — encargos/benefícios parametrizáveis
+
+## Notificações
+Ao submeter uma movimentação (`POST /movements/:id/submit`), o backend
+resolve os destinatários (ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) cujo escopo
+inclui o `costCenterId` da movimentação, e o DIRETOR da diretoria) e monta um
+e-mail de resumo. Neste ambiente não há credenciais SMTP configuradas — o
+envio real ainda não está implementado (o corpo/destinatários são resolvidos
+e registrados via log, prontos para plugar um provedor real). A versão Apps
+Script do sistema envia o e-mail de verdade via `MailApp`, usando a própria
+conta Google do deploy.
 
 ## Aprovações — módulo 5
 - `GET /approvals/pending` (filtra pela role do usuário logado: DIRETOR só vê steps `DIRETOR` da própria diretoria etc.)
@@ -129,16 +168,17 @@ orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
   (`hcBudgeted` é o HC orçado no mês de referência; `month` 1-12, padrão mês corrente)
 - `GET /dashboard/payroll?year=&month=&directorateId=` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
   (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
-- `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease, transfers }`
+- `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
 - `GET /dashboard/financial?year=&month=&directorateId=` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}] }`
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).
 2. Alerta quando o aumento percentual ultrapassar o parâmetro configurável
    `MAX_INCREASE_PERCENT_ALERT` (não bloqueia, apenas sinaliza `alertMessage`).
-3. Se `totalAnnualImpact` fizer a folha da diretoria ultrapassar `annual_budget`,
-   `exceedsBudget = true` e a movimentação pode ser submetida mesmo assim
-   (decisão fica com o workflow), mas o alerta é exibido em todas as telas.
+3. Se `totalAnnualImpact` fizer a folha do bucket (diretoria + centro de custo
+   + cargo) ultrapassar o orçamento desse mesmo bucket, `exceedsBudget = true`
+   e a movimentação pode ser submetida mesmo assim (decisão fica com o
+   workflow), mas o alerta é exibido em todas as telas.
 4. Impacto acumulado do ano = soma de `movement_history.annual_impact` da
    diretoria/ano.
 5. Projeção 12 meses = soma de impactos mensais de movimentações aprovadas e

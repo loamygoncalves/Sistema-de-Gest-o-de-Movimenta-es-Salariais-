@@ -85,11 +85,11 @@ function sumAllMonths_(record) {
 }
 
 var BudgetService = {
-  listEntries: function (year, scopedDirectorateId, costCenterId, positionId) {
+  listEntries: function (year, scope, positionId) {
+    scope = scope || {};
     return Tables.budgetEntries.where(function (b) {
       if (Number(b.year) !== Number(year)) return false;
-      if (scopedDirectorateId && b.directorateId !== scopedDirectorateId) return false;
-      if (costCenterId && b.costCenterId !== costCenterId) return false;
+      if (!matchesAccessScope_(b, scope)) return false;
       if (positionId && b.positionId !== positionId) return false;
       return true;
     });
@@ -101,9 +101,9 @@ var BudgetService = {
    * nulo) no mês, e soma esse custo para a folha orçada. `annualBudgeted` é
    * a soma de todas as 12 colunas de todas as linhas (visão do ano inteiro).
    */
-  getDashboard: function (year, month, scopedDirectorateId, costCenterId) {
+  getDashboard: function (year, month, scope) {
     var referenceMonth = month || new Date().getMonth() + 1;
-    var entries = this.listEntries(year, scopedDirectorateId, costCenterId);
+    var entries = this.listEntries(year, scope);
 
     var activeEntries = entries.filter(function (entry) {
       return monthValue_(entry, referenceMonth) !== null;

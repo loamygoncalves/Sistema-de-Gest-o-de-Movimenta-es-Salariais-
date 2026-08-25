@@ -14,16 +14,40 @@ google.script.run
 devolve uma Promise — use-o em vez de chamar `google.script.run` direto nas
 views.
 
-Não existe login: `api_getCurrentUser()` devolve `null` se a conta Google de
-quem abriu o Web App não estiver cadastrada na aba **Usuarios**; nesse caso a
-tela deve mostrar um aviso de "acesso não configurado" (ver Auth.gs). Perfis
-(`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `FINANCEIRO`, `GESTOR`. Um
-usuário `DIRETOR`/`GESTOR` tem `directorateId` e o backend já filtra por essa
-diretoria automaticamente — o cliente não precisa (nem deve) reenviar esse
-filtro para essas roles.
+A identidade primária continua sendo a conta Google de quem abriu o Web App:
+`api_getCurrentUser()` devolve `null` se ela não estiver cadastrada na aba
+**Usuarios**; nesse caso a tela deve mostrar um aviso de "acesso não
+configurado" (ver Auth.gs). Por cima disso, quem tem uma senha cadastrada
+(coluna `passwordHash` da aba Usuarios) precisa também confirmá-la nesta
+sessão do navegador antes de usar o resto da API — ver seção **Senha
+(camada extra)** abaixo; toda função `api_*` (exceto as listadas ali) lança
+`SENHA_NAO_VERIFICADA` até isso acontecer.
+
+Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `FINANCEIRO`,
+`GESTOR`. `DIRETOR` tem `directorateId` e enxerga toda a diretoria; `GESTOR`
+tem `costCenterIds` (multi-seleção) e enxerga só os colaboradores/orçamento
+desses centros de custo (lista vazia = não vê nada — nunca "vê tudo" por
+omissão). O servidor resolve esse escopo a partir do usuário identificado
+(`resolveAccessScope_`/`mergeAccessScope_`/`matchesAccessScope_` em Auth.gs)
+e aplica automaticamente — filtros `directorateId`/`costCenterId` enviados
+pelo cliente só valem para quem não tem escopo restrito.
 
 ## Sessão / identidade
-- `api_getCurrentUser()` → `{ id, name, email, role, directorateId } | null`
+- `api_getCurrentUser()` → `{ id, name, email, role, directorateId, costCenterIds, hasPassword, passwordVerified } | null`
+
+## Senha (camada extra)
+Sem credenciais SMTP ou provedor de identidade próprio, a senha aqui é só
+uma camada extra sobre a conta Google — ver `apps-script/PasswordAuth.gs`.
+Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
+(são elas que liberam o resto da API):
+- `api_setPassword(currentPassword, newPassword)` → `{ ok: true }` — cadastra
+  (primeiro acesso, `currentPassword` ignorado) ou troca a própria senha
+  (mínimo 6 caracteres); já marca a sessão como verificada.
+- `api_verifyPassword(password)` → `{ ok: true }` — confirma a senha
+  cadastrada para liberar o acesso nesta sessão do navegador (~6h). Limitado
+  a 5 tentativas incorretas por 5 minutos (`MUITAS_TENTATIVAS`).
+- `api_adminSetUserPassword(targetUserId, newPassword)` (ADMIN) → `{ ok: true }` —
+  redefine a senha de outro usuário (ex.: esqueceu a senha).
 
 ## Organização
 - `api_getOrgLookups()` → `{ directorates[], positions[], costCenters[], managements[], coordinations[] }`
@@ -46,9 +70,15 @@ filtro para essas roles.
   então um id em uso no orçamento não impede a exclusão dos demais.
 
 ## Usuários (ADMIN)
-- `api_listUsers()` → `[{ id, name, email, role, directorateId, active }]`
-- `api_createUser({ name, email, role, directorateId })`
-- `api_updateUser(id, patch)`
+- `api_listUsers()` → `[{ id, name, email, role, directorateId, costCenterIds, active }]`
+  (`costCenterIds` é uma string CSV de ids, ex. `"cc-1,cc-2"`; senha nunca é devolvida)
+- `api_createUser({ name, email, role, directorateId? })` (DIRETOR) ou
+  `api_createUser({ name, email, role, costCenterIds: string[] })` (GESTOR —
+  obrigatório ao menos 1 id); demais perfis não enviam nenhum dos dois.
+- `api_updateUser(id, patch)` — mesmas regras de `directorateId`/`costCenterIds`
+  acima quando `patch.role` é enviado; um patch parcial sem `role` (ex.: o
+  botão Ativar/Desativar manda só `{ active }`) preserva o escopo já
+  cadastrado. Redefinir senha é uma chamada separada, `api_adminSetUserPassword`.
 
 ## Colaboradores — Módulo 2
 - `api_listEmployees({ directorateId?, positionId?, status?, search? })`
@@ -87,19 +117,39 @@ não há rejeição de linha "duplicada" na importação.
 
 ## Simulador / encargos — Módulo 4
 - `api_listChargeParameters()`, `api_createChargeParameter({name,label,valueType,value,isBenefit})`, `api_updateChargeParameter(id, patch)`
+- `api_previewSimulation({ employeeId, type: 'PROMOCAO'|'MERITO', newPositionId?, newSalary?, percentage?, effectiveDate })` —
+  **Simulador Rápido**: Gestor/Diretor testam o impacto de uma promoção/mérito
+  para um de seus colaboradores ANTES de abrir a solicitação de fato; não
+  persiste nada (nem `Movimentacoes`, nem `Simulacoes`). `newPositionId`/`newSalary`
+  para `PROMOCAO`, `percentage` para `MERITO`. Retorna o mesmo formato de
+  `api_simulateMovement` abaixo. Lança `PERMISSAO_NEGADA` se o colaborador
+  estiver fora do escopo de acesso do usuário.
 
 ## Movimentações — Módulo 3
-- `api_listMovements({ status?, type?, directorateId? })`
+Transferência foi descontinuada (não existe mais como `type`). Toda
+movimentação tem um `costCenterId`: em `PROMOCAO`/`MERITO` é herdado do
+colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
+
+- `api_listMovements({ status?, type?, directorateId?, costCenterId? })`
 - `api_getMovement(id)` → inclui `simulation` (última simulação) e `approvalSteps`
 - `api_createMovement(input)` — o corpo varia por `type`, igual ao backend original:
   - `PROMOCAO`: `{ type, employeeId, newPositionId, newSalary, effectiveDate, justification }`
   - `MERITO`: `{ type, employeeId, percentage, effectiveDate, justification }`
-  - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, effectiveDate, justification }`
-  - `TRANSFERENCIA`: `{ type, employeeId, originDirectorateId, destinationDirectorateId, newPositionId?, newSalary?, effectiveDate, justification }`
+  - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
 - `api_updateMovement(id, patch)` (somente RASCUNHO)
 - `api_cancelMovement(id)` (somente RASCUNHO)
-- `api_simulateMovement(id)` → mesmo formato do simulador do backend (`monthlySalaryImpact`, `totalAnnualImpact`, `percentConsumed`, `exceedsBudget`, `alertMessage`, ...)
-- `api_submitMovement(id)` → dispara a simulação, cria as 3 etapas de aprovação e muda o status para `PENDENTE_DIRETOR`
+- `api_simulateMovement(id)` → recalcula e persiste a simulação; retorna
+  `{ monthsRemaining, monthlySalaryImpact, annualSalaryImpact, chargesTotal,
+  benefitsTotal, totalMonthlyImpact, totalAnnualImpact,
+  budgetedDirectoratePayroll, currentDirectoratePayroll, payrollAfterApproval,
+  difference, percentConsumed, exceedsBudget, alertMessage,
+  salaryIncreasePercent }`. Apesar do nome dos campos (herdado do modelo
+  original), a comparação é sempre pelo **bucket exato** (diretoria + centro
+  de custo + cargo) da movimentação — nunca pelo orçamento da diretoria inteira.
+- `api_submitMovement(id)` → dispara a simulação, cria as 3 etapas de aprovação,
+  muda o status para `PENDENTE_DIRETOR` e envia um e-mail de notificação (via
+  `MailApp`, de verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro
+  de custo e o DIRETOR da diretoria — ver `apps-script/Notifications.gs`.
 
 ## Aprovações — Módulo 5
 - `api_getPendingApprovals()` → etapas pendentes que o usuário atual pode decidir, cada uma com `.movement` embutido
@@ -108,7 +158,7 @@ não há rejeição de linha "duplicada" na importação.
 
 ## Histórico — Módulo 6
 - `api_listHistory({ directorateId?, positionId?, type?, costCenterId?, startDate?, endDate? })`
-- `api_getHistoryIndicators(mesmos filtros)` → `{ promotionsCount, meritsCount, transfersCount, headcountIncreaseCount, salaryGrowthPercent, accumulatedImpact, headcountEvolution: [{month,hc}] }`
+- `api_getHistoryIndicators(mesmos filtros)` → `{ promotionsCount, meritsCount, headcountIncreaseCount, salaryGrowthPercent, accumulatedImpact, headcountEvolution: [{month,hc}] }`
 - `api_exportHistory(mesmos filtros)` → `{ spreadsheetUrl, xlsxExportUrl, pdfExportUrl }` — cria uma Google Sheet nova com os dados filtrados; o cliente deve **abrir** (`window.open`) uma dessas URLs, nunca tentar baixar via fetch (exige a sessão logada do navegador)
 
 ## Estudos salariais — Módulo 7
@@ -123,7 +173,7 @@ não há rejeição de linha "duplicada" na importação.
   vaga em aberto = linha de orçamento com `movementType = AUMENTO_DE_QUADRO` ativa no mês)
 - `api_getDashboardPayroll(year, month?, directorateId?)` → `{ year, month, payrollCurrent, payrollBudgeted, difference }`
   (ambos valores mensais — `payrollBudgeted` soma as linhas de orçamento ativas naquele mês)
-- `api_getDashboardMovements(year, directorateId?)` → `{ promotions, merits, headcountIncrease, transfers }`
+- `api_getDashboardMovements(year, directorateId?)` → `{ promotions, merits, headcountIncrease }`
 - `api_getDashboardFinancial(year, month?, directorateId?)` → `{ monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}] }`
 
 ## Upload de arquivo (import)

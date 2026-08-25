@@ -11,6 +11,10 @@ erDiagram
     DIRECTORATES ||--o{ EMPLOYEES : lota
     DIRECTORATES ||--o{ BUDGET_ENTRIES : orca
     DIRECTORATES ||--o{ MOVEMENT_REQUESTS : origina
+    COST_CENTERS ||--o{ MOVEMENT_REQUESTS : referencia
+
+    USERS ||--o{ USER_COST_CENTERS : escopo
+    COST_CENTERS ||--o{ USER_COST_CENTERS : escopo
 
     POSITIONS ||--o{ EMPLOYEES : ocupa
     POSITIONS ||--o{ BUDGET_ENTRIES : referencia
@@ -68,6 +72,7 @@ erDiagram
         string status
         uuid employee_id FK
         uuid directorate_id FK
+        uuid cost_center_id FK
         numeric current_salary
         numeric new_salary
         date effective_date
@@ -114,6 +119,10 @@ erDiagram
         string role
         uuid directorate_id FK
     }
+    USER_COST_CENTERS {
+        uuid user_id PK,FK
+        uuid cost_center_id PK,FK
+    }
 ```
 
 ## Notas de modelagem
@@ -132,11 +141,18 @@ erDiagram
   A comparação com a base atual de colaboradores (módulo 2) é feita
   agregando por esse mesmo bucket (diretoria+centro de custo+cargo) num mês
   de referência, não por matrícula.
-- **`movement_requests` é polimórfica por `type`**: os campos específicos de cada
-  tipo (mérito, transferência, aumento de quadro) ficam nullable na mesma
-  tabela para permitir consultas e workflow unificados; a validação de
-  obrigatoriedade por tipo é feita na camada de aplicação (DTOs) e reforçada
-  por um CHECK básico (promoção não pode reduzir salário).
+- **`movement_requests` é polimórfica por `type`**: os campos específicos de
+  cada tipo (mérito, aumento de quadro) ficam nullable na mesma tabela para
+  permitir consultas e workflow unificados; a validação de obrigatoriedade
+  por tipo é feita na camada de aplicação (DTOs) e reforçada por um CHECK
+  básico (promoção não pode reduzir salário). Toda linha tem um
+  `cost_center_id`: herdado do colaborador em promoção/mérito, informado na
+  solicitação em aumento de quadro (obrigatório, já que não há colaborador
+  para derivar).
+- **`user_cost_centers`**: escopo de um usuário `GESTOR` — uma seleção de
+  centros de custo (em vez de uma diretoria inteira, como o `DIRETOR`, que
+  usa `users.directorate_id`). Ausência de linhas = o Gestor não vê nada
+  (nunca "vê tudo" por omissão).
 - **`approval_steps`** materializa o workflow Diretor → RH Remuneração →
   Financeiro como linhas ordenadas por `step_order`, permitindo auditoria de
   quem aprovou, quando e com qual comentário, além de paralelizar consultas de

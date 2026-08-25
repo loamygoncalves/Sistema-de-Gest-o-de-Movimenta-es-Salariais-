@@ -3,12 +3,15 @@
  * aos controllers REST do backend NestJS original (ver
  * docs/API_CONTRACT_APPS_SCRIPT.md para o contrato completo). Toda função
  * aqui é responsável por: (1) resolver/exigir o usuário atual, (2) checar
- * o perfil quando a ação é restrita, e (3) devolver dados já "limpos"
- * (sem o campo interno `_row`) para o cliente.
+ * o perfil quando a ação é restrita, (3) mesclar o escopo de acesso do
+ * usuário com os filtros explícitos vindos da UI (ver
+ * Auth.gs#resolveAccessScope_/mergeAccessScope_) e (4) devolver dados já
+ * "limpos" (sem o campo interno `_row`) para o cliente.
  *
  * Convenção: em caso de erro, a função lança (throw); o cliente sempre
  * chama via .withFailureHandler(...) para tratar isso (ver
- * Client_Core.html).
+ * Client_Core.html). Funções de senha (api_setPassword, api_verifyPassword,
+ * api_adminSetUserPassword) ficam em PasswordAuth.gs, não aqui.
  */
 
 /**
@@ -29,6 +32,8 @@ function stripRow_(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   var copy = shallowCopy_(obj);
   delete copy._row;
+  delete copy.passwordSalt;
+  delete copy.passwordHash;
   return copy;
 }
 
@@ -149,8 +154,9 @@ function api_updateUser(id, input) {
 
 function api_listEmployees(filters) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return stripRows_(EmployeesService.list(filters || {}, scoped));
+  filters = filters || {};
+  var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
+  return stripRows_(EmployeesService.list(filters, scope));
 }
 
 function api_getEmployee(id) {
@@ -186,8 +192,8 @@ function api_importEmployees(base64Data, mimeType, filename) {
 
 function api_getEmployeesComparison(year, month) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return EmployeesService.compareWithBudget(year, month, scoped);
+  var scope = resolveAccessScope_(user);
+  return EmployeesService.compareWithBudget(year, month, scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -196,14 +202,14 @@ function api_getEmployeesComparison(year, month) {
 
 function api_listBudgetEntries(year, directorateId, costCenterId, positionId) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return stripRows_(BudgetService.listEntries(year, scoped, costCenterId, positionId));
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
+  return stripRows_(BudgetService.listEntries(year, scope, positionId));
 }
 
 function api_getBudgetDashboard(year, month, directorateId, costCenterId) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return BudgetService.getDashboard(year, month, scoped, costCenterId);
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
+  return BudgetService.getDashboard(year, month, scope);
 }
 
 function api_importBudget(base64Data, mimeType, filename, year) {
@@ -233,14 +239,69 @@ function api_updateChargeParameter(id, input) {
   return stripRow_(ChargeParametersService.update(id, input));
 }
 
+/**
+ * Simulador rápido (Módulo 4) — Gestor/Diretor testa o impacto de uma
+ * promoção/mérito para um de seus colaboradores antes de abrir a
+ * solicitação de fato. Não persiste nada (nem Movimentacoes, nem
+ * Simulacoes) — é só uma prévia. Espelha
+ * backend/src/modules/simulator/simulator.controller.ts#preview.
+ */
+function api_previewSimulation(input) {
+  var user = requireUser_();
+  input = input || {};
+
+  if (input.type !== MovementType.PROMOCAO && input.type !== MovementType.MERITO) {
+    throw new Error('Simulação rápida só está disponível para promoção ou mérito');
+  }
+
+  var employee = Tables.employees.get(input.employeeId);
+  if (!employee) throw new Error('Colaborador não encontrado');
+
+  var scope = resolveAccessScope_(user);
+  if (!matchesAccessScope_(employee, scope)) {
+    throw new Error('PERMISSAO_NEGADA: colaborador fora do seu escopo de acesso.');
+  }
+
+  if (input.type === MovementType.PROMOCAO) {
+    if (!input.newPositionId) throw new Error('Novo cargo é obrigatório');
+    if (input.newSalary === undefined || input.newSalary === null) throw new Error('Novo salário é obrigatório');
+    if (Number(input.newSalary) < Number(employee.currentSalary)) {
+      throw new Error('Promoção não pode ter novo salário inferior ao salário atual do colaborador');
+    }
+    return SimulatorService.simulate({
+      type: MovementType.PROMOCAO,
+      directorateId: employee.directorateId,
+      costCenterId: employee.costCenterId,
+      bucketPositionId: input.newPositionId,
+      currentSalary: Number(employee.currentSalary),
+      newSalary: Number(input.newSalary),
+      effectiveDate: input.effectiveDate,
+    });
+  }
+
+  if (!input.percentage || Number(input.percentage) <= 0) {
+    throw new Error('Percentual de mérito deve ser maior que zero');
+  }
+  return SimulatorService.simulate({
+    type: MovementType.MERITO,
+    directorateId: employee.directorateId,
+    costCenterId: employee.costCenterId,
+    bucketPositionId: employee.positionId,
+    currentSalary: Number(employee.currentSalary),
+    meritPercentage: Number(input.percentage),
+    effectiveDate: input.effectiveDate,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Movimentações (Módulo 3) + Simulador (Módulo 4)
 // ---------------------------------------------------------------------------
 
 function api_listMovements(filters) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return stripRows_(MovementsService.list(filters || {}, scoped));
+  filters = filters || {};
+  var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
+  return stripRows_(MovementsService.list(filters, scope));
 }
 
 function api_getMovement(id) {
@@ -316,20 +377,23 @@ function api_rejectStep(stepId, comment) {
 
 function api_listHistory(filters) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return stripRows_(HistoryService.list(filters || {}, scoped));
+  filters = filters || {};
+  var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
+  return stripRows_(HistoryService.list(filters, scope));
 }
 
 function api_getHistoryIndicators(filters) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return HistoryService.getIndicators(filters || {}, scoped);
+  filters = filters || {};
+  var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
+  return HistoryService.getIndicators(filters, scope);
 }
 
 function api_exportHistory(filters) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return HistoryService.exportToSheet(filters || {}, scoped);
+  filters = filters || {};
+  var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
+  return HistoryService.exportToSheet(filters, scope);
 }
 
 // ---------------------------------------------------------------------------
@@ -356,34 +420,35 @@ function api_importSalaryStudy(base64Data, mimeType, filename, meta) {
 
 function api_getSalaryPositioning(filters) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : null;
-  return SalaryStudiesService.getPositioning(filters || {}, scoped);
+  filters = filters || {};
+  var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
+  return SalaryStudiesService.getPositioning(filters, scope);
 }
 
 // ---------------------------------------------------------------------------
 // Dashboards executivos (Módulo 8)
 // ---------------------------------------------------------------------------
 
-function api_getDashboardHeadcount(year, month, directorateId) {
+function api_getDashboardHeadcount(year, month, directorateId, costCenterId) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getHeadcount(year, month, scoped);
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
+  return DashboardService.getHeadcount(year, month, scope);
 }
 
-function api_getDashboardPayroll(year, month, directorateId) {
+function api_getDashboardPayroll(year, month, directorateId, costCenterId) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getPayroll(year, month, scoped);
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
+  return DashboardService.getPayroll(year, month, scope);
 }
 
-function api_getDashboardMovements(year, directorateId) {
+function api_getDashboardMovements(year, directorateId, costCenterId) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getMovements(year, scoped);
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
+  return DashboardService.getMovements(year, scope);
 }
 
-function api_getDashboardFinancial(year, month, directorateId) {
+function api_getDashboardFinancial(year, month, directorateId, costCenterId) {
   var user = requireUser_();
-  var scoped = isScopedToOwnDirectorate_(user) ? user.directorateId : directorateId;
-  return DashboardService.getFinancial(year, month, scoped);
+  var scope = mergeAccessScope_(resolveAccessScope_(user), directorateId, costCenterId);
+  return DashboardService.getFinancial(year, month, scope);
 }

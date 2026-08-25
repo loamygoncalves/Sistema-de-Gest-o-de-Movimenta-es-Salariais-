@@ -545,7 +545,7 @@
     }
 
     root.innerHTML =
-      '<div class="page-header"><div><h1>Usuários</h1><p>Contas Google autorizadas a acessar o sistema, com perfil e escopo de diretoria.</p></div>' +
+      '<div class="page-header"><div><h1>Usuários</h1><p>Contas Google autorizadas a acessar o sistema, com perfil e escopo de acesso.</p></div>' +
       '<button class="btn" id="users-new-btn">+ Novo Usuário</button></div>' +
       '<div id="users-body">' +
       loadingHtml() +
@@ -565,12 +565,22 @@
       callApi('api_listUsers')
         .then(function (users) {
           var directorates = idNameMap(App.orgLookups.directorates);
+          var costCenters = idNameMap(App.orgLookups.costCenters);
           if (!users || users.length === 0) {
             body.innerHTML = emptyStateHtml('Nenhum usuário cadastrado ainda.');
             return;
           }
+          function scopeLabel(u) {
+            if (u.role === 'DIRETOR') return directorates[u.directorateId] || '—';
+            if (u.role === 'GESTOR') {
+              var ids = u.costCenterIds ? String(u.costCenterIds).split(',').filter(Boolean) : [];
+              if (ids.length === 0) return '—';
+              return ids.map(function (id) { return costCenters[id] || id; }).join(', ');
+            }
+            return '—';
+          }
           body.innerHTML =
-            '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Diretoria</th><th>Status</th><th></th></tr></thead><tbody>' +
+            '<div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Escopo</th><th>Status</th><th></th></tr></thead><tbody>' +
             users
               .map(function (u) {
                 return (
@@ -581,7 +591,7 @@
                   '</td><td>' +
                   escapeHtml(labelFor('role', u.role)) +
                   '</td><td>' +
-                  escapeHtml(directorates[u.directorateId] || '—') +
+                  escapeHtml(scopeLabel(u)) +
                   '</td><td>' +
                   activePill(u.active) +
                   '</td><td><div class="row"><button class="btn btn-outline btn-sm" data-edit="' +
@@ -621,46 +631,139 @@
         });
     }
 
+    /**
+     * Modal de usuário — não usa openEntityModal (que só suporta campos
+     * fixos): o escopo depende do perfil escolhido (Diretor = diretoria
+     * única; Gestor = multi-seleção de centros de custo; demais perfis não
+     * têm escopo restrito), então os campos precisam trocar dinamicamente
+     * ao alterar o <select> de Perfil. Editar também permite redefinir a
+     * senha do usuário (ver PasswordAuth.gs#api_adminSetUserPassword) —
+     * uso pontual para "esqueci minha senha"; o próprio usuário troca a
+     * senha a qualquer momento pelo botão "Alterar senha" no topo.
+     */
     function openUserModal(existing) {
       var org = App.orgLookups;
-      openEntityModal({
-        title: existing ? 'Editar Usuário' : 'Novo Usuário',
-        fields: [
-          { id: 'name', label: 'Nome', required: true, value: existing ? existing.name : '' },
-          { id: 'email', label: 'E-mail (conta Google)', type: 'email', required: true, value: existing ? existing.email : '' },
-          {
-            id: 'role',
-            label: 'Perfil',
-            type: 'select',
-            required: true,
-            value: existing ? existing.role : '',
-            placeholder: 'Selecione',
-            options: Object.keys(LABELS.role).map(function (k) { return { id: k, name: LABELS.role[k] }; }),
-          },
-          {
-            id: 'directorateId',
-            label: 'Diretoria (escopo — apenas para Diretor/Gestor)',
-            type: 'select',
-            value: existing ? existing.directorateId : '',
-            placeholder: 'Nenhuma',
-            options: org.directorates,
-          },
-        ],
-        validate: function (v) {
-          if (!v.name) return 'Informe o nome.';
-          if (!v.email) return 'Informe o e-mail da conta Google.';
-          if (!v.role) return 'Selecione o perfil.';
-          return null;
-        },
-        onSubmit: function (v) {
-          var payload = { name: v.name, email: v.email, role: v.role, directorateId: v.directorateId || '' };
-          if (existing) return callApi('api_updateUser', existing.id, payload);
-          return callApi('api_createUser', payload);
-        },
-        onSuccess: function () {
-          toast(existing ? 'Usuário atualizado.' : 'Usuário criado.', 'success');
-          renderBody();
-        },
+      var initialCostCenterIds = existing && existing.costCenterIds ? String(existing.costCenterIds).split(',').filter(Boolean) : [];
+
+      var html =
+        '<div class="modal-header"><h3>' +
+        (existing ? 'Editar Usuário' : 'Novo Usuário') +
+        '</h3><button class="modal-close" data-action="modal-close">&times;</button></div>' +
+        '<div class="field"><label>Nome <span class="req">*</span></label><input type="text" id="um-name" value="' +
+        escapeHtml(existing ? existing.name : '') +
+        '"></div>' +
+        '<div class="field"><label>E-mail (conta Google) <span class="req">*</span></label><input type="email" id="um-email" value="' +
+        escapeHtml(existing ? existing.email : '') +
+        '"></div>' +
+        '<div class="field"><label>Perfil <span class="req">*</span></label><select id="um-role">' +
+        optionsHtml(
+          Object.keys(LABELS.role).map(function (k) { return { id: k, name: LABELS.role[k] }; }),
+          { placeholder: 'Selecione', selected: existing ? existing.role : '' }
+        ) +
+        '</select></div>' +
+        '<div id="um-scope-fields"></div>' +
+        (existing
+          ? '<div class="field" style="margin-top:8px;"><label>Redefinir senha (opcional)</label>' +
+            '<input type="password" id="um-reset-password" autocomplete="new-password" placeholder="Deixe em branco para não alterar">' +
+            '<p class="text-xs text-faint" style="margin-top:4px;">Mínimo de 6 caracteres. Use apenas em caso de esquecimento — o próprio usuário também pode trocar a senha a qualquer momento.</p></div>'
+          : '') +
+        '<p class="field-error" id="um-error" style="display:none;"></p>' +
+        '<div class="form-actions"><button class="btn btn-outline" data-action="modal-close">Cancelar</button>' +
+        '<button class="btn" id="um-save-btn">Salvar</button></div>';
+
+      var modalEl = Modal.open(html);
+      var errEl = modalEl.querySelector('#um-error');
+      var roleSelect = modalEl.querySelector('#um-role');
+
+      function renderScopeFields() {
+        var el = modalEl.querySelector('#um-scope-fields');
+        var role = roleSelect.value;
+        if (role === 'DIRETOR') {
+          el.innerHTML =
+            '<div class="field"><label>Diretoria <span class="req">*</span></label><select id="um-directorateId">' +
+            optionsHtml(org.directorates, { placeholder: 'Selecione', selected: existing ? existing.directorateId : '' }) +
+            '</select></div>';
+        } else if (role === 'GESTOR') {
+          el.innerHTML =
+            '<div class="field"><label>Centros de Custo <span class="req">*</span></label>' +
+            '<p class="text-xs text-faint" style="margin-bottom:4px;">O Gestor enxerga apenas os colaboradores e o orçamento dos centros de custo marcados abaixo.</p>' +
+            '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--slate-200);border-radius:8px;padding:8px;">' +
+            (org.costCenters || [])
+              .map(function (cc) {
+                var checked = initialCostCenterIds.indexOf(cc.id) !== -1 ? ' checked' : '';
+                return (
+                  '<label class="checkbox-row" style="display:flex;gap:6px;align-items:center;padding:2px 0;">' +
+                  '<input type="checkbox" class="um-cc-checkbox" value="' +
+                  escapeHtml(cc.id) +
+                  '"' +
+                  checked +
+                  '><span>' +
+                  escapeHtml(cc.name) +
+                  '</span></label>'
+                );
+              })
+              .join('') +
+            '</div></div>';
+        } else {
+          el.innerHTML = '';
+        }
+      }
+      renderScopeFields();
+      roleSelect.addEventListener('change', renderScopeFields);
+
+      function showError(message) {
+        errEl.textContent = message;
+        errEl.style.display = 'block';
+      }
+
+      modalEl.querySelector('#um-save-btn').addEventListener('click', function () {
+        errEl.style.display = 'none';
+        var name = modalEl.querySelector('#um-name').value.trim();
+        var email = modalEl.querySelector('#um-email').value.trim();
+        var role = roleSelect.value;
+        if (!name) return showError('Informe o nome.');
+        if (!email) return showError('Informe o e-mail da conta Google.');
+        if (!role) return showError('Selecione o perfil.');
+
+        var payload = { name: name, email: email, role: role };
+        if (role === 'DIRETOR') {
+          var directorateId = modalEl.querySelector('#um-directorateId').value;
+          if (!directorateId) return showError('Selecione a diretoria.');
+          payload.directorateId = directorateId;
+        } else if (role === 'GESTOR') {
+          var checkedIds = Array.prototype.slice
+            .call(modalEl.querySelectorAll('.um-cc-checkbox:checked'))
+            .map(function (cb) { return cb.value; });
+          if (checkedIds.length === 0) return showError('Selecione ao menos um centro de custo.');
+          payload.costCenterIds = checkedIds;
+        }
+
+        var resetPasswordEl = modalEl.querySelector('#um-reset-password');
+        var newPassword = resetPasswordEl ? resetPasswordEl.value : '';
+        if (newPassword && newPassword.length < 6) return showError('A nova senha precisa ter ao menos 6 caracteres.');
+
+        var btn = this;
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        var savePromise = existing ? callApi('api_updateUser', existing.id, payload) : callApi('api_createUser', payload);
+        savePromise
+          .then(function (saved) {
+            if (!newPassword) return null;
+            var targetId = existing ? existing.id : saved.id;
+            return callApi('api_adminSetUserPassword', targetId, newPassword);
+          })
+          .then(function () {
+            Modal.close();
+            toast(existing ? 'Usuário atualizado.' : 'Usuário criado.', 'success');
+            renderBody();
+          })
+          .catch(function (err) {
+            showError(apiErrorMessage(err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
+          });
       });
     }
   };

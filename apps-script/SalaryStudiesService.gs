@@ -77,12 +77,12 @@ var SalaryStudiesService = {
    * faixa de percentil: abaixo do P25 = abaixo do mercado; acima do P75 =
    * acima do mercado; caso contrário, dentro do mercado.
    */
-  getPositioning: function (filters, scopedDirectorateId) {
+  getPositioning: function (filters, scope) {
     filters = filters || {};
-    var directorateId = scopedDirectorateId || filters.directorateId;
+    scope = scope || {};
 
     var employees = Tables.employees.where(function (e) {
-      if (directorateId && e.directorateId !== directorateId) return false;
+      if (!matchesAccessScope_(e, scope)) return false;
       if (filters.positionId && e.positionId !== filters.positionId) return false;
       return true;
     });

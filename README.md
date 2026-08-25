@@ -1,10 +1,11 @@
 # Sistema de Gestão de Movimentações Salariais, Estudos Salariais e Controle Orçamentário
 
 Plataforma corporativa para controle de orçamento anual de pessoal, headcount
-(HC) orçado x realizado, movimentações salariais (promoção, mérito,
-transferência, aumento de quadro), simulação de impacto financeiro, workflow
-de aprovação (Diretor → RH Remuneração → Financeiro), histórico de
-movimentações e estudos salariais de mercado.
+(HC) orçado x realizado, movimentações salariais (promoção, mérito, aumento
+de quadro), simulação de impacto financeiro (com um Simulador Rápido para
+pré-visualizar o impacto antes de abrir a solicitação), workflow de aprovação
+(Diretor → RH Remuneração → Financeiro) com notificação por e-mail, histórico
+de movimentações e estudos salariais de mercado.
 
 ## Arquitetura
 
@@ -45,9 +46,10 @@ movimentações e estudos salariais de mercado.
 2. **Base Atual de Colaboradores** — importação mensal da base ativa;
    comparação automática base atual x orçada (promoções realizadas/pendentes,
    vagas abertas, excesso de HC, economia/estouro de orçamento).
-3. **Solicitação de Movimentação** — promoção, mérito, transferência e
-   aumento de quadro, com regras de negócio (ex.: promoção não pode reduzir
-   salário).
+3. **Solicitação de Movimentação** — promoção, mérito e aumento de quadro,
+   com regras de negócio (ex.: promoção não pode reduzir salário) e um
+   Simulador Rápido para pré-visualizar o impacto antes de abrir a
+   solicitação de fato.
 4. **Simulador de Impacto** — impacto mensal/anual, encargos e benefícios
    parametrizáveis, comparação orçamentária (orçado/atual/após
    aprovação/diferença/% consumido) e alertas automáticos.
@@ -61,9 +63,11 @@ movimentações e estudos salariais de mercado.
 8. **Dashboards Executivos** — HC, folha, movimentações e financeiro
    (projeção de 12 meses e ranking de diretorias por consumo de orçamento).
 
-Perfis de acesso, com escopo por diretoria para DIRETOR/GESTOR, são
-aplicados via guards (`JwtAuthGuard` + `RolesGuard`) em todos os
-endpoints — ver `docs/API_CONTRACT.md` para o contrato completo.
+Perfis de acesso são aplicados via guards (`JwtAuthGuard` + `RolesGuard`) em
+todos os endpoints — DIRETOR enxerga a própria diretoria inteira, GESTOR
+enxerga apenas os centros de custo aos quais foi atribuído (multi-seleção,
+configurada no cadastro do usuário); ver `docs/API_CONTRACT.md` para o
+contrato completo.
 
 ## Como rodar
 

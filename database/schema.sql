@@ -50,8 +50,7 @@ CREATE TYPE planned_situation AS ENUM (
 CREATE TYPE movement_type AS ENUM (
   'PROMOCAO',
   'MERITO',
-  'AUMENTO_QUADRO',
-  'TRANSFERENCIA'
+  'AUMENTO_QUADRO'
 );
 
 CREATE TYPE movement_status AS ENUM (
@@ -160,11 +159,23 @@ CREATE TABLE users (
   email VARCHAR(200) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
   role user_role NOT NULL,
-  directorate_id UUID REFERENCES directorates(id) ON DELETE SET NULL, -- escopo do DIRETOR/GESTOR
+  directorate_id UUID REFERENCES directorates(id) ON DELETE SET NULL, -- escopo do DIRETOR (diretoria inteira)
   active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Escopo do GESTOR: multi-seleção de centros de custo (em vez de uma
+-- diretoria inteira, como o Diretor) — ele só enxerga colaboradores e
+-- orçamento dos centros de custo aqui listados. Ausência de linhas = não
+-- vê nada (nunca "vê tudo" por omissão).
+CREATE TABLE user_cost_centers (
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  cost_center_id UUID NOT NULL REFERENCES cost_centers(id) ON DELETE CASCADE,
+  PRIMARY KEY (user_id, cost_center_id)
+);
+
+CREATE INDEX idx_user_cost_centers_cost_center ON user_cost_centers(cost_center_id);
 
 -- ============================================================================
 -- IMPORTAÇÕES (rastreabilidade de cargas em massa)
@@ -288,20 +299,18 @@ CREATE TABLE movement_requests (
 
   employee_id UUID REFERENCES employees(id) ON DELETE RESTRICT, -- nulo em AUMENTO_QUADRO
   directorate_id UUID NOT NULL REFERENCES directorates(id) ON DELETE RESTRICT,
+  cost_center_id UUID REFERENCES cost_centers(id) ON DELETE RESTRICT, -- promoção/mérito: do colaborador; aumento de quadro: obrigatório na solicitação
 
   current_position_id UUID REFERENCES positions(id) ON DELETE RESTRICT,
   new_position_id UUID REFERENCES positions(id) ON DELETE RESTRICT,
 
-  current_salary NUMERIC(14,2), -- promoção/mérito/transferência
-  new_salary NUMERIC(14,2),     -- promoção/mérito/transferência
+  current_salary NUMERIC(14,2), -- promoção/mérito
+  new_salary NUMERIC(14,2),     -- promoção/mérito
 
   merit_percentage NUMERIC(6,3), -- mérito (%)
 
   quantity INT, -- aumento de quadro (qtde de vagas)
   planned_salary NUMERIC(14,2), -- aumento de quadro (salário previsto)
-
-  origin_directorate_id UUID REFERENCES directorates(id), -- transferência
-  destination_directorate_id UUID REFERENCES directorates(id), -- transferência
 
   effective_date DATE NOT NULL,
   justification TEXT NOT NULL,
@@ -317,6 +326,7 @@ CREATE TABLE movement_requests (
 
 CREATE INDEX idx_movement_requests_status ON movement_requests(status);
 CREATE INDEX idx_movement_requests_directorate ON movement_requests(directorate_id);
+CREATE INDEX idx_movement_requests_cost_center ON movement_requests(cost_center_id);
 CREATE INDEX idx_movement_requests_employee ON movement_requests(employee_id);
 CREATE INDEX idx_movement_requests_type ON movement_requests(type);
 

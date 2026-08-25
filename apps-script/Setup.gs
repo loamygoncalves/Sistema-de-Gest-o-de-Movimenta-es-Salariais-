@@ -20,6 +20,8 @@ function setupSpreadsheet() {
   }
 
   migrateLegacyBudgetSheet_(ss);
+  migrateUsersSheet_(ss);
+  migrateMovementRequestsSheet_(ss);
 
   Object.keys(TABLES_CONFIG).forEach(function (key) {
     var cfg = TABLES_CONFIG[key];
@@ -80,6 +82,106 @@ function migrateLegacyBudgetSheet_(ss) {
       cfg.sheet +
       '" nova, com o layout atual (diretoria+centro de custo+cargo+tipo de movimentação+jan..dez), será criada em seguida.',
   );
+}
+
+/**
+ * Migração genérica de layout: quando o cabeçalho atual de uma aba não bate
+ * com TABLES_CONFIG (colunas novas adicionadas/removidas), reescreve a aba
+ * preservando os dados por NOME de coluna — colunas que deixaram de existir
+ * são descartadas, colunas novas ficam vazias. `transformRow` (opcional)
+ * recebe cada registro (objeto por nome de coluna antigo) e pode ajustá-lo
+ * ou devolver null para descartar a linha inteira. Diferente de
+ * migrateLegacyBudgetSheet_ (que apenas renomeia a aba antiga para o lado),
+ * usada quando o remapeamento por nome é suficiente para não perder dados.
+ */
+function migrateSheetColumns_(ss, tableKey, transformRow) {
+  var cfg = TABLES_CONFIG[tableKey];
+  var sheet = ss.getSheetByName(cfg.sheet);
+  if (!sheet || sheet.getLastRow() === 0) return;
+
+  var currentHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var matches =
+    currentHeaders.length === cfg.columns.length &&
+    cfg.columns.every(function (col, i) {
+      return currentHeaders[i] === col;
+    });
+  if (matches) return;
+
+  var lastRow = sheet.getLastRow();
+  var oldRows = lastRow >= 2 ? sheet.getRange(2, 1, lastRow - 1, currentHeaders.length).getValues() : [];
+
+  var records = [];
+  oldRows.forEach(function (row) {
+    if (row[0] === '' || row[0] === null) return;
+    var obj = {};
+    currentHeaders.forEach(function (header, i) {
+      obj[header] = row[i];
+    });
+    if (transformRow) obj = transformRow(obj);
+    if (obj) records.push(obj);
+  });
+
+  sheet.clear();
+  sheet.getRange(1, 1, 1, cfg.columns.length).setValues([cfg.columns]);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, cfg.columns.length).setFontWeight('bold');
+
+  if (records.length > 0) {
+    var newRows = records.map(function (obj) {
+      return cfg.columns.map(function (col) {
+        var value = obj[col];
+        return value === undefined || value === null ? '' : value;
+      });
+    });
+    sheet.getRange(2, 1, newRows.length, cfg.columns.length).setValues(newRows);
+  }
+
+  Logger.log('Aba "' + cfg.sheet + '" migrada para o novo layout (' + records.length + ' registro(s) preservado(s)).');
+}
+
+/** Usuarios ganhou costCenterIds/passwordSalt/passwordHash — dados existentes são preservados como estão. */
+function migrateUsersSheet_(ss) {
+  migrateSheetColumns_(ss, 'users', function (obj) {
+    return obj;
+  });
+}
+
+/**
+ * Movimentacoes perdeu originDirectorateId/destinationDirectorateId (fim da
+ * Transferência) e ganhou costCenterId. Solicitações de transferência são
+ * descartadas (junto com simulações/etapas de aprovação/histórico
+ * dependentes) — equivalente à migration TypeORM
+ * RemoveTransferAddMovementCostCenter no backend NestJS. Para as demais,
+ * tenta recuperar o centro de custo a partir do colaborador vinculado.
+ */
+function migrateMovementRequestsSheet_(ss) {
+  var removedIds = {};
+  migrateSheetColumns_(ss, 'movementRequests', function (obj) {
+    if (obj.type === 'TRANSFERENCIA') {
+      removedIds[obj.id] = true;
+      return null;
+    }
+    if (!obj.costCenterId && obj.employeeId) {
+      var employee = Tables.employees.get(obj.employeeId);
+      obj.costCenterId = employee ? employee.costCenterId || '' : '';
+    }
+    return obj;
+  });
+
+  var removedIdList = Object.keys(removedIds);
+  if (removedIdList.length === 0) return;
+
+  ['movementSimulations', 'approvalSteps', 'movementHistory'].forEach(function (tableKey) {
+    var table = Tables[tableKey];
+    var toRemove = table.where(function (r) {
+      return removedIds.hasOwnProperty(r.movementRequestId);
+    });
+    toRemove.forEach(function (r) {
+      table.remove(r.id);
+    });
+  });
+
+  Logger.log(removedIdList.length + ' solicitação(ões) de Transferência removida(s) (funcionalidade descontinuada).');
 }
 
 function seedReferenceData_() {

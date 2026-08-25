@@ -13,6 +13,7 @@ import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { Employee } from '../employees/entities/employee.entity';
 import { ApprovalsService } from '../approvals/approvals.service';
 import { SimulatorService } from '../simulator/simulator.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { MovementRequest } from './entities/movement-request.entity';
 import { MovementSimulation } from './entities/movement-simulation.entity';
 import { CreateMovementDto, MovementQueryDto, UpdateMovementDto } from './dto/movement.dto';
@@ -28,6 +29,7 @@ export class MovementsService {
     private readonly employeeRepo: Repository<Employee>,
     private readonly simulatorService: SimulatorService,
     private readonly approvalsService: ApprovalsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async findAll(query: MovementQueryDto, scope: AccessScope) {
@@ -213,6 +215,8 @@ export class MovementsService {
     await this.approvalsService.createStepsForMovement(id);
     await this.movementRepo.update(id, { status: MovementStatus.PENDENTE_DIRETOR });
 
-    return this.loadMovementOrFail(id);
+    const submitted = await this.loadMovementOrFail(id);
+    await this.notificationsService.notifyMovementSubmitted(submitted);
+    return submitted;
   }
 }

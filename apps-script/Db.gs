@@ -194,7 +194,14 @@ var TABLES_CONFIG = {
   },
   users: {
     sheet: 'Usuarios',
-    columns: ['id', 'name', 'email', 'role', 'directorateId', 'active', 'createdAt'],
+    // costCenterIds: lista de ids de centro de custo separados por vírgula —
+    // escopo de um GESTOR (ver Auth.gs#resolveAccessScope_/parseCostCenterIds_).
+    // passwordSalt/passwordHash: camada extra de senha sobre a conta Google
+    // (ver PasswordAuth.gs); vazios = usuário ainda não cadastrou senha.
+    columns: [
+      'id', 'name', 'email', 'role', 'directorateId', 'costCenterIds',
+      'passwordSalt', 'passwordHash', 'active', 'createdAt',
+    ],
   },
   employees: {
     sheet: 'Colaboradores',
@@ -224,9 +231,9 @@ var TABLES_CONFIG = {
   movementRequests: {
     sheet: 'Movimentacoes',
     columns: [
-      'id', 'type', 'status', 'employeeId', 'directorateId', 'currentPositionId', 'newPositionId',
+      'id', 'type', 'status', 'employeeId', 'directorateId', 'costCenterId', 'currentPositionId', 'newPositionId',
       'currentSalary', 'newSalary', 'meritPercentage', 'quantity', 'plannedSalary',
-      'originDirectorateId', 'destinationDirectorateId', 'effectiveDate', 'justification',
+      'effectiveDate', 'justification',
       'requestedByEmail', 'createdAt', 'updatedAt',
     ],
   },
