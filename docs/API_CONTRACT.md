@@ -19,13 +19,18 @@ diretoria (o backend filtra automaticamente pelo escopo do token).
 - `GET/POST /positions`, `GET/PATCH/DELETE /positions/:id`
 - `GET/POST /cost-centers`
 - `POST /cost-centers/import` (multipart `file`) — importação em massa a partir de uma
-  planilha contendo **apenas os nomes** dos centros de custo (uma coluna; aceita
-  cabeçalho `NOME`/`CENTRO DE CUSTO` ou nenhum cabeçalho — nesse caso a primeira
-  linha já é tratada como dado). O `code` (exigido pelo cadastro) é gerado
-  automaticamente a partir do nome, com sufixo numérico em caso de colisão.
-  Rejeita nome vazio, duplicado na planilha ou já cadastrado. Retorna `ImportBatch`
-  (mesmo formato abaixo).
+  planilha com as colunas **CÓDIGO, CENTRO DE CUSTO e DIRETORIA** (diretoria é
+  opcional; quando informada, é resolvida por nome exato). Rejeita código/nome
+  vazio ou duplicado (na planilha ou já cadastrado) e diretoria informada mas
+  inexistente. Retorna `ImportBatch` (mesmo formato abaixo).
 - `GET /cost-centers/import/:batchId`
+- `DELETE /cost-centers/:id` — exclusão definitiva (não há reativação; `code` é
+  único). Centros de custo referenciados no orçamento não podem ser excluídos
+  (FK RESTRICT em `budget_entries.cost_center_id`) — retorna 400 nesse caso.
+- `DELETE /cost-centers` `{ ids: string[] }` — exclusão em massa (multi-seleção).
+  Cada id é processado individualmente: ids referenciados no orçamento falham
+  sem impedir a exclusão dos demais. Retorna
+  `{ removed: number, removedIds: string[], failed: [{ id, message }] }`.
 - `GET/POST /users` (ADMIN only), `PATCH /users/:id`, `PATCH /users/:id/password`
 
 ## Employees (base atual) — módulo 2

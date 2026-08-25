@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { ImportType } from '../../common/enums';
 import { parseExcelSheetRaw } from '../../common/utils/excel.util';
 import { ImportBatchService, RowError } from '../imports/import-batch.service';
@@ -19,8 +19,12 @@ import {
   UpdatePositionDto,
 } from './dto/org.dto';
 
-/** Cabeçalhos aceitos (normalizados) para a coluna de nome na planilha de import. */
-const NAME_HEADER_ALIASES = ['NOME', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'CENTROS DE CUSTO'];
+/** Cabeçalhos aceitos (normalizados) para cada coluna fixa da planilha de import. */
+const COST_CENTER_HEADER_ALIASES = {
+  code: ['CODIGO', 'CÓDIGO'],
+  name: ['CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'NOME'],
+  directorate: ['DIRETORIA'],
+};
 
 function normalizeLabel(value: unknown): string {
   return String(value ?? '')
@@ -30,24 +34,12 @@ function normalizeLabel(value: unknown): string {
     .replace(/[̀-ͯ]/g, '');
 }
 
-/**
- * Gera um código único a partir do nome (planilha traz só o nome, mas o
- * cadastro exige um `code` único) — normaliza para ASCII maiúsculo,
- * substitui não-alfanuméricos por "_" e desambigua com sufixo numérico
- * contra os códigos já usados (existentes + já gerados nesta importação).
- */
-function generateCostCenterCode(name: string, usedCodes: Set<string>): string {
-  const base = normalizeLabel(name)
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 45) || 'CC';
-  let code = base;
-  let suffix = 2;
-  while (usedCodes.has(code)) {
-    code = `${base}_${suffix}`.slice(0, 50);
-    suffix += 1;
-  }
-  return code;
+function matchesAlias(header: unknown, aliases: string[]): boolean {
+  return aliases.includes(normalizeLabel(header));
+}
+
+function findHeaderIndex(headers: unknown[], aliases: string[]): number {
+  return headers.findIndex((h) => matchesAlias(h, aliases));
 }
 
 @Injectable()
@@ -147,6 +139,45 @@ export class OrgService {
     return this.costCenterRepo.save(this.costCenterRepo.create(dto));
   }
 
+  /**
+   * Exclusão definitiva (não há tela de reativação para centro de custo,
+   * e `code` é único — soft delete deixaria o código "preso" para sempre).
+   * Colaboradores vinculados ficam com `costCenterId` nulo (SET NULL);
+   * centros de custo referenciados no orçamento (FK RESTRICT) não podem
+   * ser excluídos — o erro do banco é convertido em mensagem amigável.
+   */
+  async removeCostCenter(id: string) {
+    let result;
+    try {
+      result = await this.costCenterRepo.delete(id);
+    } catch (err) {
+      throw new BadRequestException(this.costCenterDeleteErrorMessage(err));
+    }
+    if (!result.affected) throw new NotFoundException('Centro de custo não encontrado');
+  }
+
+  async removeCostCenters(ids: string[]) {
+    const removedIds: string[] = [];
+    const failed: { id: string; message: string }[] = [];
+    for (const id of ids) {
+      try {
+        const result = await this.costCenterRepo.delete(id);
+        if (result.affected) removedIds.push(id);
+        else failed.push({ id, message: 'Centro de custo não encontrado' });
+      } catch (err) {
+        failed.push({ id, message: this.costCenterDeleteErrorMessage(err) });
+      }
+    }
+    return { removed: removedIds.length, removedIds, failed };
+  }
+
+  private costCenterDeleteErrorMessage(err: unknown): string {
+    if (err instanceof QueryFailedError && (err as unknown as { code?: string }).code === '23503') {
+      return 'Centro de custo em uso no orçamento — não pode ser excluído.';
+    }
+    return 'Erro ao excluir centro de custo';
+  }
+
   findDirectorateByName(name: string) {
     return this.directorateRepo.findOne({ where: { name } });
   }
@@ -156,50 +187,89 @@ export class OrgService {
   }
 
   /**
-   * Cadastro de centros de custo em massa a partir de uma planilha contendo
-   * apenas os nomes (uma coluna). Aceita um cabeçalho reconhecido (NOME,
-   * CENTRO DE CUSTO, ...) na primeira linha; se a primeira linha não bater
-   * com nenhum alias conhecido, ela é tratada como já sendo a primeira linha
-   * de dados (planilha sem cabeçalho). O `code` — exigido pelo cadastro mas
-   * ausente na planilha — é gerado a partir do nome.
+   * Cadastro de centros de custo em massa a partir de uma planilha com as
+   * colunas CÓDIGO, CENTRO DE CUSTO e DIRETORIA (a diretoria é opcional —
+   * quando informada, é resolvida por nome exato). Rejeita código/nome
+   * vazio ou duplicado (na planilha ou já cadastrado) e diretoria
+   * informada mas inexistente.
    */
   async importCostCentersFromExcel(buffer: Buffer, filename: string, importedById: string) {
     const batch = await this.importBatchService.create(ImportType.CENTRO_CUSTO, filename, importedById);
 
     const sheet = await parseExcelSheetRaw(buffer);
-    const firstColumnHeader = sheet.headers[1];
-    const hasRecognizedHeader = NAME_HEADER_ALIASES.includes(normalizeLabel(firstColumnHeader));
-    const dataRows = hasRecognizedHeader
-      ? sheet.rows
-      : [{ rowNumber: 1, values: sheet.headers }, ...sheet.rows];
+    const headers = sheet.headers;
+
+    const colIndex = {
+      code: findHeaderIndex(headers, COST_CENTER_HEADER_ALIASES.code),
+      name: findHeaderIndex(headers, COST_CENTER_HEADER_ALIASES.name),
+      directorate: findHeaderIndex(headers, COST_CENTER_HEADER_ALIASES.directorate),
+    };
+
+    if (colIndex.code === -1 || colIndex.name === -1) {
+      const missing = [
+        colIndex.code === -1 ? 'código' : null,
+        colIndex.name === -1 ? 'centro de custo' : null,
+      ].filter(Boolean);
+      throw new BadRequestException(
+        `Planilha inválida: coluna(s) não encontrada(s): ${missing.join(', ')}. Esperado: CÓDIGO, CENTRO DE CUSTO, DIRETORIA (opcional).`,
+      );
+    }
 
     const existing = await this.findAllCostCenters();
     const existingNames = new Set(existing.map((c) => normalizeLabel(c.name)));
-    const usedCodes = new Set(existing.map((c) => c.code));
-    const seenInFile = new Set<string>();
+    const existingCodes = new Set(existing.map((c) => normalizeLabel(c.code)));
+    const seenNames = new Set<string>();
+    const seenCodes = new Set<string>();
 
     const errors: RowError[] = [];
     const toInsert: Partial<CostCenter>[] = [];
 
-    for (const row of dataRows) {
-      const name = String(row.values[1] ?? '').trim();
+    for (const row of sheet.rows) {
+      const code = String(row.values[colIndex.code] ?? '').trim();
+      const name = String(row.values[colIndex.name] ?? '').trim();
+      const directorateName =
+        colIndex.directorate === -1 ? '' : String(row.values[colIndex.directorate] ?? '').trim();
+
+      if (!code) {
+        errors.push({ rowNumber: row.rowNumber, field: 'codigo', message: 'Código é obrigatório' });
+        continue;
+      }
       if (!name) {
         errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Nome é obrigatório' });
         continue;
       }
-      const key = normalizeLabel(name);
-      if (seenInFile.has(key)) {
+      const codeKey = normalizeLabel(code);
+      const nameKey = normalizeLabel(name);
+      if (seenCodes.has(codeKey)) {
+        errors.push({ rowNumber: row.rowNumber, field: 'codigo', message: `Código duplicado na planilha: ${code}` });
+        continue;
+      }
+      if (existingCodes.has(codeKey)) {
+        errors.push({ rowNumber: row.rowNumber, field: 'codigo', message: `Código já cadastrado: ${code}` });
+        continue;
+      }
+      if (seenNames.has(nameKey)) {
         errors.push({ rowNumber: row.rowNumber, field: 'nome', message: `Nome duplicado na planilha: ${name}` });
         continue;
       }
-      if (existingNames.has(key)) {
+      if (existingNames.has(nameKey)) {
         errors.push({ rowNumber: row.rowNumber, field: 'nome', message: `Centro de custo já cadastrado: ${name}` });
         continue;
       }
-      seenInFile.add(key);
-      const code = generateCostCenterCode(name, usedCodes);
-      usedCodes.add(code);
-      toInsert.push({ code, name });
+
+      let directorateId: string | undefined;
+      if (directorateName) {
+        const directorate = await this.findDirectorateByName(directorateName);
+        if (!directorate) {
+          errors.push({ rowNumber: row.rowNumber, field: 'diretoria', message: `Diretoria inexistente: ${directorateName}` });
+          continue;
+        }
+        directorateId = directorate.id;
+      }
+
+      seenCodes.add(codeKey);
+      seenNames.add(nameKey);
+      toInsert.push({ code, name, directorateId });
     }
 
     if (toInsert.length > 0) {
@@ -208,7 +278,7 @@ export class OrgService {
 
     const finished = await this.importBatchService.finish(
       batch.id,
-      dataRows.length,
+      sheet.rows.length,
       toInsert.length,
       errors,
     );

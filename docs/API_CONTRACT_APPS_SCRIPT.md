@@ -34,11 +34,16 @@ filtro para essas roles.
 - `api_createPosition({ name, careerLevel })`, `api_updatePosition(id, patch)`
 - `api_createCostCenter({ code, name, directorateId })`
 - `api_importCostCenters(base64Data, mimeType, filename)` → `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }` —
-  importação em massa a partir de uma planilha contendo **apenas os nomes**
-  dos centros de custo (uma coluna; aceita cabeçalho `NOME`/`CENTRO DE
-  CUSTO` ou nenhum cabeçalho). O `code` é gerado automaticamente a partir
-  do nome, com sufixo numérico em caso de colisão. Rejeita nome vazio,
-  duplicado na planilha ou já cadastrado.
+  importação em massa a partir de uma planilha com as colunas **CÓDIGO,
+  CENTRO DE CUSTO e DIRETORIA** (diretoria é opcional; quando informada, é
+  resolvida por nome exato). Rejeita código/nome vazio ou duplicado (na
+  planilha ou já cadastrado) e diretoria informada mas inexistente.
+- `api_removeCostCenter(id)` → `{ ok: true }` — exclusão definitiva (não há
+  reativação; `code` é único). Lança erro se o centro de custo estiver
+  referenciado no orçamento.
+- `api_removeCostCenters(ids)` → `{ removed, removedIds, failed: [{id, message}] }` —
+  exclusão em massa (multi-seleção); cada id é processado individualmente,
+  então um id em uso no orçamento não impede a exclusão dos demais.
 
 ## Usuários (ADMIN)
 - `api_listUsers()` → `[{ id, name, email, role, directorateId, active }]`

@@ -358,33 +358,122 @@
 
     function renderCostCenters(org) {
       var directorates = idNameMap(org.directorates);
-      var rows = (org.costCenters || [])
-        .map(function (c) {
-          return (
-            '<tr><td>' +
-            escapeHtml(c.code) +
-            '</td><td>' +
-            escapeHtml(c.name) +
-            '</td><td>' +
-            escapeHtml(directorates[c.directorateId] || '—') +
-            '</td><td>' +
-            activePill(c.active) +
-            '</td></tr>'
-          );
-        })
-        .join('');
-      tableShell('Centros de Custo', '+ Novo Centro de Custo', function () { openCostCenterModal(org); }, rows, ['Código', 'Nome', 'Diretoria', 'Status']);
-      renderCostCenterImportCard();
+      var costCenters = org.costCenters || [];
+      var selected = {};
+
+      function selectedIds() {
+        return Object.keys(selected);
+      }
+
+      function renderTable() {
+        var body = document.getElementById('org-body');
+        var allChecked = costCenters.length > 0 && costCenters.every(function (c) { return selected[c.id]; });
+        var rowsHtml = costCenters
+          .map(function (c) {
+            return (
+              '<tr><td><input type="checkbox" class="cc-row-check" data-id="' +
+              c.id +
+              '"' +
+              (selected[c.id] ? ' checked' : '') +
+              '></td><td>' +
+              escapeHtml(c.code) +
+              '</td><td>' +
+              escapeHtml(c.name) +
+              '</td><td>' +
+              escapeHtml(directorates[c.directorateId] || '—') +
+              '</td><td><button class="btn btn-danger btn-sm" data-delete="' +
+              c.id +
+              '">Excluir</button></td></tr>'
+            );
+          })
+          .join('');
+
+        var bulkBtnHtml =
+          selectedIds().length > 0
+            ? '<button class="btn btn-danger btn-sm" id="cc-bulk-delete-btn">Excluir selecionados (' + selectedIds().length + ')</button> '
+            : '';
+
+        body.innerHTML =
+          cardOpen('Centros de Custo', {
+            actions: bulkBtnHtml + '<button class="btn btn-sm" id="org-new-btn">+ Novo Centro de Custo</button>',
+          }) +
+          '<div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="cc-select-all"' +
+          (allChecked ? ' checked' : '') +
+          '></th><th>Código</th><th>Nome</th><th>Diretoria</th><th></th></tr></thead><tbody>' +
+          (rowsHtml || '<tr><td colspan="5" class="table-empty">Nenhum registro cadastrado.</td></tr>') +
+          '</tbody></table></div>' +
+          cardClose();
+
+        document.getElementById('org-new-btn').addEventListener('click', function () { openCostCenterModal(org); });
+
+        var selectAllEl = document.getElementById('cc-select-all');
+        if (selectAllEl) {
+          selectAllEl.addEventListener('change', function () {
+            selected = {};
+            if (selectAllEl.checked) {
+              costCenters.forEach(function (c) { selected[c.id] = true; });
+            }
+            renderTable();
+          });
+        }
+
+        document.querySelectorAll('.cc-row-check').forEach(function (cb) {
+          cb.addEventListener('change', function () {
+            var id = cb.getAttribute('data-id');
+            if (cb.checked) selected[id] = true;
+            else delete selected[id];
+            renderTable();
+          });
+        });
+
+        document.querySelectorAll('[data-delete]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var id = btn.getAttribute('data-delete');
+            if (!window.confirm('Excluir este centro de custo? Esta ação não pode ser desfeita.')) return;
+            callApi('api_removeCostCenter', id)
+              .then(function () {
+                toast('Centro de custo excluído.', 'success');
+                renderBody();
+              })
+              .catch(toastError);
+          });
+        });
+
+        var bulkBtn = document.getElementById('cc-bulk-delete-btn');
+        if (bulkBtn) {
+          bulkBtn.addEventListener('click', function () {
+            var ids = selectedIds();
+            if (!window.confirm('Excluir ' + ids.length + ' centro(s) de custo selecionado(s)? Esta ação não pode ser desfeita.')) return;
+            callApi('api_removeCostCenters', ids)
+              .then(function (result) {
+                if (result.failed && result.failed.length > 0) {
+                  toast(
+                    result.removed + ' excluído(s). ' + result.failed.length + ' não puderam ser excluídos (em uso no orçamento).',
+                    'error',
+                  );
+                } else {
+                  toast(result.removed + ' centro(s) de custo excluído(s).', 'success');
+                }
+                renderBody();
+              })
+              .catch(toastError);
+          });
+        }
+
+        renderCostCenterImportCard();
+      }
+
+      renderTable();
     }
 
     function renderCostCenterImportCard() {
       // Anexa um novo nó (em vez de concatenar em body.innerHTML) para não
-      // recriar os elementos já renderizados por tableShell — reatribuir
-      // innerHTML destruiria o botão "+ Novo Centro de Custo" e seu listener.
+      // recriar os elementos já renderizados por renderTable() — reatribuir
+      // innerHTML destruiria os checkboxes/botões da tabela e seus listeners.
       var wrapper = document.createElement('div');
       wrapper.innerHTML =
         cardOpen('Importar centros de custo', {
-          subtitle: 'Envie uma planilha (.csv ou .xlsx) com apenas os nomes dos centros de custo — o código é gerado automaticamente.',
+          subtitle: 'Envie uma planilha (.csv ou .xlsx) com as colunas Código, Centro de Custo e Diretoria (opcional).',
         }) +
         '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="cc-import-file" accept=".csv,.xlsx"></div>' +
         '<div class="form-actions"><button class="btn" id="cc-import-btn">Importar</button></div>' +

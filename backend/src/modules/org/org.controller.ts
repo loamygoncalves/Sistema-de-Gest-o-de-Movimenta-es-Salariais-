@@ -22,6 +22,7 @@ import {
 import { UserRole } from '../../common/enums';
 import { OrgService } from './org.service';
 import {
+  BulkDeleteCostCentersDto,
   CreateCoordinationDto,
   CreateCostCenterDto,
   CreateDirectorateDto,
@@ -136,5 +137,17 @@ export class OrgController {
   @Roles(...MANAGE_ROLES)
   getCostCenterImportBatch(@Param('batchId') batchId: string) {
     return this.orgService.getCostCenterImportBatch(batchId);
+  }
+
+  @Delete('cost-centers')
+  @Roles(...MANAGE_ROLES)
+  removeCostCenters(@Body() dto: BulkDeleteCostCentersDto) {
+    return this.orgService.removeCostCenters(dto.ids);
+  }
+
+  @Delete('cost-centers/:id')
+  @Roles(...MANAGE_ROLES)
+  removeCostCenter(@Param('id') id: string) {
+    return this.orgService.removeCostCenter(id);
   }
 }

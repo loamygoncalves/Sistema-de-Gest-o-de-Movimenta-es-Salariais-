@@ -104,6 +104,19 @@ function api_importCostCenters(base64Data, mimeType, filename) {
   return OrgService.importCostCentersFromFile(base64Data, mimeType, filename, user.email);
 }
 
+function api_removeCostCenter(id) {
+  var user = requireUser_();
+  requireRole_(user, manageRoles_());
+  OrgService.removeCostCenter(id);
+  return { ok: true };
+}
+
+function api_removeCostCenters(ids) {
+  var user = requireUser_();
+  requireRole_(user, manageRoles_());
+  return OrgService.removeCostCenters(ids);
+}
+
 // ---------------------------------------------------------------------------
 // Usuários
 // ---------------------------------------------------------------------------

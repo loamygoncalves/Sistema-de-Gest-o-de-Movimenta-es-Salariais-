@@ -3,7 +3,7 @@ import clsx from "@/lib/clsx";
 
 export interface Column<T> {
   key: string;
-  header: string;
+  header: React.ReactNode;
   render: (row: T) => React.ReactNode;
   className?: string;
   align?: "left" | "right" | "center";

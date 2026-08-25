@@ -119,67 +119,131 @@ var OrgService = {
   },
 
   /**
-   * Cadastro de centros de custo em massa a partir de uma planilha contendo
-   * apenas os nomes (uma coluna) — equivalente a
+   * Exclusão definitiva (não há tela de reativação para centro de custo, e
+   * `code` é único — mantê-lo "preso" para sempre não ajudaria ninguém).
+   * Centros de custo referenciados no orçamento não podem ser excluídos —
+   * equivalente ao FK RESTRICT do backend NestJS.
+   */
+  removeCostCenter: function (id) {
+    var inUse = Tables.budgetEntries.findOne(function (b) {
+      return b.costCenterId === id;
+    });
+    if (inUse) throw new Error('Centro de custo em uso no orçamento — não pode ser excluído.');
+    var removed = Tables.costCenters.remove(id);
+    if (!removed) throw new Error('Centro de custo não encontrado');
+  },
+
+  removeCostCenters: function (ids) {
+    var removedIds = [];
+    var failed = [];
+    ids.forEach(function (id) {
+      var inUse = Tables.budgetEntries.findOne(function (b) {
+        return b.costCenterId === id;
+      });
+      if (inUse) {
+        failed.push({ id: id, message: 'Centro de custo em uso no orçamento — não pode ser excluído.' });
+        return;
+      }
+      var removed = Tables.costCenters.remove(id);
+      if (removed) removedIds.push(id);
+      else failed.push({ id: id, message: 'Centro de custo não encontrado' });
+    });
+    return { removed: removedIds.length, removedIds: removedIds, failed: failed };
+  },
+
+  /**
+   * Cadastro de centros de custo em massa a partir de uma planilha com as
+   * colunas CÓDIGO, CENTRO DE CUSTO e DIRETORIA (opcional — quando
+   * informada, é resolvida por nome exato) — equivalente a
    * backend/src/modules/org/org.service.ts#importCostCentersFromExcel.
-   * Aceita um cabeçalho reconhecido (NOME, CENTRO DE CUSTO, ...) na primeira
-   * linha; se não bater com nenhum alias conhecido, a própria primeira linha
-   * é tratada como dado (planilha sem cabeçalho). O `code` — exigido pelo
-   * cadastro mas ausente na planilha — é gerado a partir do nome.
+   * Rejeita código/nome vazio ou duplicado (na planilha ou já cadastrado) e
+   * diretoria informada mas inexistente.
    */
   importCostCentersFromFile: function (base64Data, mimeType, filename, importedByEmail) {
     var sheet = parseUploadedSpreadsheetRaw_(base64Data, mimeType, filename);
     var headers = sheet.headers;
     var rows = sheet.rows;
 
-    var nameAliases = ['NOME', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'CENTROS DE CUSTO'];
-    var hasRecognizedHeader = nameAliases.indexOf(normalizeCostCenterLabel_(headers[0])) !== -1;
-    var dataRows = hasRecognizedHeader ? rows : [{ rowNumber: 1, values: headers }].concat(rows);
+    var codeAliases = ['CODIGO', 'CÓDIGO'];
+    var nameAliases = ['CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'NOME'];
+    var directorateAliases = ['DIRETORIA'];
+
+    function findHeaderIndex(aliases) {
+      for (var i = 0; i < headers.length; i++) {
+        if (aliases.indexOf(normalizeCostCenterLabel_(headers[i])) !== -1) return i;
+      }
+      return -1;
+    }
+
+    var codeIdx = findHeaderIndex(codeAliases);
+    var nameIdx = findHeaderIndex(nameAliases);
+    var directorateIdx = findHeaderIndex(directorateAliases);
+
+    if (codeIdx === -1 || nameIdx === -1) {
+      var missing = [];
+      if (codeIdx === -1) missing.push('código');
+      if (nameIdx === -1) missing.push('centro de custo');
+      throw new Error(
+        'Planilha inválida: coluna(s) não encontrada(s): ' +
+          missing.join(', ') +
+          '. Esperado: CÓDIGO, CENTRO DE CUSTO, DIRETORIA (opcional).',
+      );
+    }
 
     var existing = this.listCostCenters();
     var existingNames = {};
+    var existingCodes = {};
     existing.forEach(function (c) {
       existingNames[normalizeCostCenterLabel_(c.name)] = true;
+      existingCodes[normalizeCostCenterLabel_(c.code)] = true;
     });
-    var usedCodes = {};
-    existing.forEach(function (c) {
-      usedCodes[c.code] = true;
-    });
-    var seenInFile = {};
+    var seenNames = {};
+    var seenCodes = {};
 
     var errors = [];
     var successRows = 0;
+    var orgService = this;
 
-    dataRows.forEach(function (row) {
-      var name = String(row.values[0] || '').trim();
-      if (!name) {
-        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Nome é obrigatório' });
-        return;
+    rows.forEach(function (row) {
+      var code = String(row.values[codeIdx] || '').trim();
+      var name = String(row.values[nameIdx] || '').trim();
+      var directorateName = directorateIdx === -1 ? '' : String(row.values[directorateIdx] || '').trim();
+
+      function fail(field, message) {
+        errors.push({ rowNumber: row.rowNumber, field: field, message: message });
       }
-      var key = normalizeCostCenterLabel_(name);
-      if (seenInFile[key]) {
-        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Nome duplicado na planilha: ' + name });
-        return;
+
+      if (!code) return fail('codigo', 'Código é obrigatório');
+      if (!name) return fail('nome', 'Nome é obrigatório');
+
+      var codeKey = normalizeCostCenterLabel_(code);
+      var nameKey = normalizeCostCenterLabel_(name);
+      if (seenCodes[codeKey]) return fail('codigo', 'Código duplicado na planilha: ' + code);
+      if (existingCodes[codeKey]) return fail('codigo', 'Código já cadastrado: ' + code);
+      if (seenNames[nameKey]) return fail('nome', 'Nome duplicado na planilha: ' + name);
+      if (existingNames[nameKey]) return fail('nome', 'Centro de custo já cadastrado: ' + name);
+
+      var directorateId = '';
+      if (directorateName) {
+        var directorate = orgService.findDirectorateByName(directorateName);
+        if (!directorate) return fail('diretoria', 'Diretoria inexistente: ' + directorateName);
+        directorateId = directorate.id;
       }
-      if (existingNames[key]) {
-        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: 'Centro de custo já cadastrado: ' + name });
-        return;
-      }
-      seenInFile[key] = true;
-      var code = generateCostCenterCode_(name, usedCodes);
-      usedCodes[code] = true;
+
+      seenCodes[codeKey] = true;
+      seenNames[nameKey] = true;
       Tables.costCenters.insert({
         code: code,
         name: name,
-        directorateId: '',
+        directorateId: directorateId,
         active: true,
         createdAt: nowIso_(),
       });
       successRows += 1;
     });
 
-    var batch = logImportBatch_('CENTRO_CUSTO', null, importedByEmail, dataRows.length, successRows, errors);
-    return { batch: batch, totalRows: dataRows.length, successRows: successRows, errors: errors };
+    var batch = logImportBatch_('CENTRO_CUSTO', null, importedByEmail, rows.length, successRows, errors);
+    return { batch: batch, totalRows: rows.length, successRows: successRows, errors: errors };
   },
 };
 
@@ -189,24 +253,4 @@ function normalizeCostCenterLabel_(value) {
     .toUpperCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
-}
-
-/**
- * Gera um código único a partir do nome (planilha traz só o nome, mas o
- * cadastro exige um `code` único) — desambigua com sufixo numérico contra os
- * códigos já usados (existentes + já gerados nesta importação).
- */
-function generateCostCenterCode_(name, usedCodes) {
-  var base = normalizeCostCenterLabel_(name)
-    .replace(/[^A-Z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .slice(0, 45);
-  if (!base) base = 'CC';
-  var code = base;
-  var suffix = 2;
-  while (usedCodes[code]) {
-    code = (base + '_' + suffix).slice(0, 50);
-    suffix += 1;
-  }
-  return code;
 }

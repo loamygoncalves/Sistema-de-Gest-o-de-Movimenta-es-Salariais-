@@ -370,6 +370,10 @@ function CostCentersTab() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importBatch, setImportBatch] = useState<ImportBatch | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
+
+  const directorateNames = Object.fromEntries(directorates.map((d) => [d.id, d.name]));
 
   async function handleImport() {
     if (!importFile) {
@@ -393,17 +397,98 @@ function CostCentersTab() {
     }
   }
 
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]));
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => (prev.length === items.length ? [] : items.map((i) => i.id)));
+  }
+
+  async function handleDeleteOne(id: string) {
+    if (!window.confirm("Excluir este centro de custo? Esta ação não pode ser desfeita.")) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/cost-centers/${id}`);
+      showToast("Centro de custo excluído.", "success");
+      setSelectedIds((prev) => prev.filter((i) => i !== id));
+      await reload();
+    } catch (err) {
+      showToast(getErrorMessage(err), "error");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  async function handleDeleteSelected() {
+    if (selectedIds.length === 0) return;
+    if (
+      !window.confirm(
+        `Excluir ${selectedIds.length} centro(s) de custo selecionado(s)? Esta ação não pode ser desfeita.`
+      )
+    )
+      return;
+    setDeleting(true);
+    try {
+      const res = await api.delete<{ removed: number; removedIds: string[]; failed: { id: string; message: string }[] }>(
+        "/cost-centers",
+        undefined,
+        { ids: selectedIds }
+      );
+      if (res.failed.length > 0) {
+        showToast(
+          `${res.removed} excluído(s). ${res.failed.length} não puderam ser excluídos (em uso no orçamento).`,
+          "error"
+        );
+      } else {
+        showToast(`${res.removed} centro(s) de custo excluído(s).`, "success");
+      }
+      setSelectedIds([]);
+      await reload();
+    } catch (err) {
+      showToast(getErrorMessage(err), "error");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   const columns: Column<CostCenter>[] = [
+    {
+      key: "select",
+      header: (
+        <input
+          type="checkbox"
+          checked={items.length > 0 && selectedIds.length === items.length}
+          onChange={toggleSelectAll}
+          aria-label="Selecionar todos"
+        />
+      ),
+      render: (r) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(r.id)}
+          onChange={() => toggleSelected(r.id)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Selecionar ${r.name}`}
+        />
+      ),
+    },
     { key: "code", header: "Código", render: (r) => r.code },
     { key: "name", header: "Nome", render: (r) => r.name },
+    { key: "directorate", header: "Diretoria", render: (r) => directorateNames[r.directorateId ?? ""] ?? "—" },
     {
       key: "actions",
       header: "",
       align: "right",
       render: (r) => (
-        <Button size="sm" variant="outline" onClick={() => setModalItem(r)}>
-          Editar
-        </Button>
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => setModalItem(r)}>
+            Editar
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => handleDeleteOne(r.id)} disabled={deleting}>
+            Excluir
+          </Button>
+        </div>
       ),
     },
   ];
@@ -433,7 +518,7 @@ function CostCentersTab() {
     <div className="flex flex-col gap-6">
       <Card
         title="Importar centros de custo"
-        subtitle="Envie uma planilha (.xlsx) com apenas os nomes dos centros de custo — o código é gerado automaticamente."
+        subtitle="Envie uma planilha (.xlsx) com as colunas Código, Centro de Custo e Diretoria (opcional)."
       >
         <div className="flex flex-col gap-4">
           <FileDropzone file={importFile} onFileSelected={setImportFile} accept=".xlsx,.xls" />
@@ -446,7 +531,19 @@ function CostCentersTab() {
       </Card>
       {importBatch && <ImportResultCard batch={importBatch} />}
 
-      <Card title="Centros de Custo" actions={<Button size="sm" onClick={() => setModalItem({})}>Novo centro de custo</Button>}>
+      <Card
+        title="Centros de Custo"
+        actions={
+          <div className="flex gap-2">
+            {selectedIds.length > 0 && (
+              <Button size="sm" variant="danger" onClick={handleDeleteSelected} loading={deleting}>
+                Excluir selecionados ({selectedIds.length})
+              </Button>
+            )}
+            <Button size="sm" onClick={() => setModalItem({})}>Novo centro de custo</Button>
+          </div>
+        }
+      >
         <Table columns={columns} data={items} rowKey={(r) => r.id} loading={loading} />
         <Modal
           open={!!modalItem}

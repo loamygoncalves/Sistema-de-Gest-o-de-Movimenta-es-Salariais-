@@ -128,8 +128,12 @@ export const api = {
       body: data !== undefined ? JSON.stringify(data) : undefined,
     });
   },
-  delete<T>(path: string, params?: Record<string, unknown>): Promise<T> {
-    return request<T>(path, { method: "DELETE", params });
+  delete<T>(path: string, params?: Record<string, unknown>, data?: unknown): Promise<T> {
+    return request<T>(path, {
+      method: "DELETE",
+      params,
+      body: data !== undefined ? JSON.stringify(data) : undefined,
+    });
   },
   upload<T>(path: string, formData: FormData, params?: Record<string, unknown>): Promise<T> {
     return request<T>(path, {

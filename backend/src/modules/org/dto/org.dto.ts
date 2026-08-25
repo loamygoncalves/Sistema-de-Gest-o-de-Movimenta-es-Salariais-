@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsNumber,
   IsOptional,
@@ -84,4 +86,11 @@ export class CreateCostCenterDto {
   @IsOptional()
   @IsUUID()
   directorateId?: string;
+}
+
+export class BulkDeleteCostCentersDto {
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsUUID('4', { each: true })
+  ids: string[];
 }
