@@ -31,6 +31,11 @@ import {
   PayrollDashboard,
 } from "@/types";
 
+/** Diferença de HC (atual − orçado) com sinal explícito — negativo (abaixo do orçado) é OK, positivo não é. */
+function formatHcDiff(diff: number): string {
+  return (diff > 0 ? "+" : "") + formatNumber(diff);
+}
+
 export default function DashboardPage() {
   const { directorates } = useDirectorates();
   const { showToast } = useToast();
@@ -85,6 +90,7 @@ export default function DashboardPage() {
 
   const isMultiMonth = (headcount?.months ?? months).length > 1;
   const openMonths = headcount?.openMonths ?? [];
+  const hcDiff = (headcount?.hcCurrent ?? 0) - (headcount?.hcBudgeted ?? 0);
 
   const costCenterChartData = useMemo(
     () =>
@@ -131,11 +137,14 @@ export default function DashboardPage() {
                 {isMultiMonth && " (média entre os meses)"}
               </span>
             </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <KpiCard label="HC Orçado" value={formatNumber(headcount?.hcBudgeted)} hint={periodLabel} />
               <KpiCard label="HC Atual" value={formatNumber(headcount?.hcCurrent)} />
-              <KpiCard label="HC Aprovado" value={formatNumber(headcount?.hcApproved)} />
-              <KpiCard label="Vagas em Aberto" value={formatNumber(headcount?.hcOpen)} />
+              <KpiCard
+                label="Diferença de HC (Atual − Orçado)"
+                value={formatHcDiff(hcDiff)}
+                tone={hcDiff > 0 ? "danger" : "success"}
+              />
             </div>
           </section>
 

@@ -8,6 +8,16 @@
 
   var DASHBOARD_MONTH_LABELS_ = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+  /**
+   * Diferença de HC (atual − orçado) com sinal explícito: negativo (abaixo
+   * do orçado) é OK, positivo (acima do orçado) não é — a cor do kpiTile é
+   * decidida separadamente por quem chama, com o mesmo sinal.
+   */
+  function hcDiffLabel_(diff) {
+    var n = Number(diff) || 0;
+    return (n > 0 ? '+' : '') + fmt.number(n);
+  }
+
   Views.dashboard = function (root) {
     var user = App.user;
     var now = new Date();
@@ -244,22 +254,24 @@
       body.innerHTML =
         '<div class="stack">' +
         monthClosedWarning +
-        '<div class="grid grid-4">' +
+        '<div class="grid grid-3">' +
         kpiTile('Headcount Orçado' + (isMulti ? ' (média)' : ''), fmt.number(headcount.hcBudgeted)) +
         kpiTile('Headcount Atual' + (isMulti ? ' (média)' : ''), fmt.number(headcount.hcCurrent)) +
-        kpiTile('Vagas Aprovadas (ano)', fmt.number(headcount.hcApproved), 'highlight') +
-        kpiTile('Vagas em Aberto', fmt.number(headcount.hcOpen)) +
+        kpiTile(
+          'Diferença de HC (Atual − Orçado)',
+          hcDiffLabel_(headcount.hcCurrent - headcount.hcBudgeted),
+          headcount.hcCurrent - headcount.hcBudgeted > 0 ? 'danger' : 'good'
+        ) +
         '</div>' +
         '<div class="grid grid-3">' +
         kpiTile('Folha Orçada' + (isMulti ? ' (acumulado)' : ''), fmt.currency(payroll.payrollBudgeted)) +
         kpiTile('Folha Atual' + (isMulti ? ' (acumulado)' : ''), fmt.currency(payroll.payrollCurrent)) +
         kpiTile('Diferença (Atual − Orçado)', fmt.currency(payroll.difference), payroll.difference > 0 ? 'danger' : 'good') +
         '</div>' +
-        '<div class="grid grid-4">' +
+        '<div class="grid grid-3">' +
         kpiTile('Promoções', fmt.number(movements.promotions)) +
         kpiTile('Méritos', fmt.number(movements.merits)) +
         kpiTile('Aumento de Quadro', fmt.number(movements.headcountIncrease)) +
-        kpiTile('Transferências', fmt.number(movements.transfers)) +
         '</div>' +
         '<div class="grid grid-3">' +
         kpiTile('Impacto Mensal (histórico aprovado)', fmt.currency(financial.monthlyImpact)) +
