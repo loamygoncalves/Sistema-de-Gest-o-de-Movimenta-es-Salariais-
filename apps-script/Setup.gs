@@ -456,3 +456,23 @@ function clearOrcamentoEFechamentoFolha() {
   Logger.log(summary);
   return summary;
 }
+
+/**
+ * Utilitário one-off — execute UMA VEZ manualmente (menu Executar >
+ * clearColaboradores, no editor do Apps Script) para apagar TODAS as
+ * linhas da aba Colaboradores, deixando-a vazia para reimportar do zero
+ * pelo Fechamento da Folha. NÃO mexe em Movimentações, Aprovações,
+ * Histórico nem na estrutura organizacional. Atenção: Movimentações já
+ * existentes que apontam para colaboradores apagados aqui ficam com
+ * referência quebrada (o nome do colaborador não aparece mais nas telas de
+ * Histórico/Movimentações) — não é revertido por esta função. Irreversível
+ * pelo sistema (a planilha continua recuperável pelo histórico de versões
+ * do Google Sheets — Arquivo > Ver histórico de versões — mas não por
+ * aqui). Loga um resumo em Logger.log.
+ */
+function clearColaboradores() {
+  var removed = Tables.employees.clearAll();
+  var summary = 'clearColaboradores: ' + removed + ' colaborador(es) removido(s).';
+  Logger.log(summary);
+  return summary;
+}
