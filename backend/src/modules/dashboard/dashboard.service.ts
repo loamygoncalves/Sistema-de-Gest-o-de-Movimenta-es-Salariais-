@@ -1,11 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { MovementStatus, MovementType, PlannedSituation } from '../../common/enums';
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { monthValue } from '../../common/utils/months.util';
-import { Employee } from '../employees/entities/employee.entity';
 import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { Directorate } from '../org/entities/directorate.entity';
@@ -16,8 +15,6 @@ import { MovementHistory } from '../history/entities/movement-history.entity';
 @Injectable()
 export class DashboardService {
   constructor(
-    @InjectRepository(Employee)
-    private readonly employeeRepo: Repository<Employee>,
     @InjectRepository(PayrollSnapshot)
     private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
@@ -324,7 +321,7 @@ export class DashboardService {
       payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
     const projection12Months = await this.getProjection12Months(scope, directorateId, costCenterId);
-    const directorateRanking = await this.getDirectorateRanking();
+    const directorateRanking = await this.getDirectorateRanking(year, payroll.months);
 
     return {
       months: payroll.months,
@@ -378,15 +375,27 @@ export class DashboardService {
     return Array.from(byMonth.entries()).map(([month, impact]) => ({ month, impact }));
   }
 
-  private async getDirectorateRanking() {
+  /**
+   * Folha atual por diretoria usa exclusivamente o fechamento da folha
+   * (payroll_snapshots) dos meses selecionados — nunca employees.current_
+   * salary ao vivo, pelo mesmo motivo do resto do dashboard: o cadastro
+   * reflete o salário mais recente de cada colaborador, não o da folha
+   * fechada de um mês específico (ver resolveMonthlySalariesByMonth).
+   * Soma os meses selecionados, igual à Folha Atual da seção de Folha de
+   * Pagamento — não é mais anualizado (× 12).
+   */
+  private async getDirectorateRanking(year: number, months: number[]) {
     const directorates = await this.directorateRepo.find();
-    const employees = await this.employeeRepo.find();
+
+    const snapshots = await this.payrollSnapshotRepo.find({
+      where: { year, month: In(months) },
+    });
 
     const payrollByDirectorate = new Map<string, number>();
-    for (const employee of employees) {
+    for (const snapshot of snapshots) {
       payrollByDirectorate.set(
-        employee.directorateId,
-        (payrollByDirectorate.get(employee.directorateId) ?? 0) + Number(employee.currentSalary || 0) * 12,
+        snapshot.directorateId,
+        (payrollByDirectorate.get(snapshot.directorateId) ?? 0) + Number(snapshot.salary || 0),
       );
     }
 

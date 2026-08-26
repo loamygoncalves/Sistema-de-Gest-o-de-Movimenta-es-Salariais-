@@ -253,6 +253,11 @@ Selecionar os 12 meses dá a visão "acumulado do ano".
   `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month,impact}], directorateRanking: [{directorate,currentPayroll,annualBudget,consumedPercent}], monthClosed, openMonths }`
   (`monthClosed`/`openMonths` refletem os mesmos meses usados em `budgetConsumedPercent`,
   herdados de `api_getDashboardPayroll`)
+  `directorateRanking.currentPayroll` usa **exclusivamente** o fechamento da folha (aba
+  FechamentoFolha) dos meses selecionados, somado — nunca `employees.currentSalary` ao vivo
+  (que reflete o salário mais recente de cada colaborador, não o de um mês fechado
+  específico) e não é mais anualizado (× 12); mesma semântica de "Folha Atual" da seção de
+  Folha de Pagamento, só que quebrada por diretoria.
 
 ## Upload de arquivo (import)
 

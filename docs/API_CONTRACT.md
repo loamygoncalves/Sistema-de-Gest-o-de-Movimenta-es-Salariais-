@@ -234,9 +234,14 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
   `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
 - `GET /dashboard/financial?year=&months=&directorateId=` →
-  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, consumedPercent}], monthClosed, openMonths }`
+  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, currentPayroll, annualBudget, consumedPercent}], monthClosed, openMonths }`
   (`monthClosed`/`openMonths` refletem os mesmos meses usados em `budgetConsumedPercent`,
   herdados de `GET /dashboard/payroll`)
+  `directorateRanking.currentPayroll` usa **exclusivamente** o fechamento da folha
+  (`payroll_snapshots`) dos meses selecionados, somado — nunca `employees.current_salary` ao
+  vivo (que reflete o salário mais recente de cada colaborador, não o de um mês fechado
+  específico) e não é mais anualizado (× 12); mesma semântica de "Folha Atual" da seção de
+  Folha de Pagamento, só que quebrada por diretoria.
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).

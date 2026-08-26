@@ -222,7 +222,7 @@ var DashboardService = {
       annualImpact: annualImpact,
       budgetConsumedPercent: round2_(budgetConsumedPercent),
       projection12Months: this._projection12Months(scope),
-      directorateRanking: this._directorateRanking(),
+      directorateRanking: this._directorateRanking(year, payroll.months),
       monthClosed: payroll.monthClosed,
       openMonths: payroll.openMonths,
     };
@@ -266,13 +266,24 @@ var DashboardService = {
       });
   },
 
-  _directorateRanking: function () {
+  /**
+   * Folha atual por diretoria usa exclusivamente o fechamento da folha
+   * (aba FechamentoFolha) dos meses selecionados — nunca employees.
+   * currentSalary ao vivo, pelo mesmo motivo do resto do dashboard: o
+   * cadastro reflete o salário mais recente de cada colaborador, não o da
+   * folha fechada de um mês específico. Soma os meses selecionados, igual
+   * à Folha Atual da seção de Folha de Pagamento — não é mais anualizado
+   * (× 12).
+   */
+  _directorateRanking: function (year, months) {
     var directorates = Tables.directorates.all();
-    var employees = Tables.employees.all();
+    var snapshots = Tables.payrollSnapshots.where(function (s) {
+      return Number(s.year) === Number(year) && months.indexOf(Number(s.month)) !== -1;
+    });
 
     var payrollByDirectorate = {};
-    employees.forEach(function (e) {
-      payrollByDirectorate[e.directorateId] = (payrollByDirectorate[e.directorateId] || 0) + Number(e.currentSalary || 0) * 12;
+    snapshots.forEach(function (s) {
+      payrollByDirectorate[s.directorateId] = (payrollByDirectorate[s.directorateId] || 0) + Number(s.salary || 0);
     });
 
     return directorates

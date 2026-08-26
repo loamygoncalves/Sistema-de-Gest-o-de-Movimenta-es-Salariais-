@@ -798,6 +798,14 @@
     return '<div class="progress-track"><div class="progress-fill ' + cls + '" style="width:' + p + '%"></div></div>';
   }
 
+  // Altura útil (em px) disponível para a barra dentro de .bar-chart (140px
+  // no total — ver Styles.html) descontando o rótulo do mês e o gap abaixo
+  // dela. Alturas são calculadas em px (não %) de propósito: `height: X%`
+  // só resolve corretamente se TODOS os ancestrais tiverem altura definida,
+  // o que .bar-chart-col não garante (é um item flex sem altura própria) —
+  // em px o cálculo não depende disso e sempre renderiza certo.
+  var BAR_CHART_MAX_PX = 108;
+
   /** Mini gráfico de barras em CSS puro (sem libs) — usado nos dashboards. */
   function renderBarChart(items, opts) {
     opts = opts || {};
@@ -815,7 +823,7 @@
       items
         .map(function (i) {
           var val = Number(i.value) || 0;
-          var h = Math.max(2, Math.round((Math.abs(val) / max) * 100));
+          var h = Math.max(2, Math.round((Math.abs(val) / max) * BAR_CHART_MAX_PX));
           var neg = val < 0;
           var displayVal = opts.formatter ? opts.formatter(val) : String(val);
           return (
@@ -827,7 +835,7 @@
             (neg ? ' negative' : '') +
             '" style="height:' +
             h +
-            '%"></div><div class="bar-chart-label">' +
+            'px"></div><div class="bar-chart-label">' +
             escapeHtml(i.label) +
             '</div></div>'
           );
@@ -868,8 +876,8 @@
         .map(function (i) {
           var budgeted = Number(i.budgeted) || 0;
           var current = Number(i.current) || 0;
-          var hBudgeted = Math.max(2, Math.round((Math.abs(budgeted) / max) * 100));
-          var hCurrent = Math.max(2, Math.round((Math.abs(current) / max) * 100));
+          var hBudgeted = Math.max(2, Math.round((Math.abs(budgeted) / max) * BAR_CHART_MAX_PX));
+          var hCurrent = Math.max(2, Math.round((Math.abs(current) / max) * BAR_CHART_MAX_PX));
           var currentClass = i.status === 'ACIMA' ? ' negative' : '';
           var title =
             escapeHtml(i.label) +
@@ -883,12 +891,12 @@
             '"><div class="bar-chart-group">' +
             '<div class="bar-chart-bar muted" style="height:' +
             hBudgeted +
-            '%"></div>' +
+            'px"></div>' +
             '<div class="bar-chart-bar' +
             currentClass +
             '" style="height:' +
             hCurrent +
-            '%"></div>' +
+            'px"></div>' +
             '</div><div class="bar-chart-label">' +
             escapeHtml(i.label) +
             '</div></div>'
