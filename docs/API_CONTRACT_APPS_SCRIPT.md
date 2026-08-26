@@ -257,7 +257,10 @@ Selecionar os 12 meses dá a visão "acumulado do ano".
   FechamentoFolha) dos meses selecionados, somado — nunca `employees.currentSalary` ao vivo
   (que reflete o salário mais recente de cada colaborador, não o de um mês fechado
   específico) e não é mais anualizado (× 12); mesma semântica de "Folha Atual" da seção de
-  Folha de Pagamento, só que quebrada por diretoria.
+  Folha de Pagamento, só que quebrada por diretoria. `directorateRanking` vem **vazio (`[]`)**
+  para GESTOR (identificado por `scope.costCenterIds` presente) — esse comparativo abrange
+  todas as diretorias da empresa, então não faz parte do escopo de um gestor restrito a
+  alguns centros de custo.
 
 ## Upload de arquivo (import)
 

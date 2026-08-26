@@ -321,7 +321,10 @@ export class DashboardService {
       payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
     const projection12Months = await this.getProjection12Months(scope, directorateId, costCenterId);
-    const directorateRanking = await this.getDirectorateRanking(year, payroll.months);
+    // Ranking de Diretorias compara todas as diretorias entre si — GESTOR
+    // (identificado por ter costCenterIds no escopo) não deve ter acesso a
+    // esse comparativo cross-empresa, só à própria área.
+    const directorateRanking = scope.costCenterIds === undefined ? await this.getDirectorateRanking(year, payroll.months) : [];
 
     return {
       months: payroll.months,

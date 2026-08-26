@@ -309,19 +309,31 @@
         ) +
         cardClose() +
         '</div>' +
-        '<div class="grid grid-2">' +
-        cardOpen('Projeção de Impacto — Próximos 12 meses', { subtitle: 'Movimentações aprovadas ou em fluxo de aprovação' }) +
-        renderBarChart(
-          (financial.projection12Months || []).map(function (p) {
-            return { label: fmt.monthLabel(p.month), value: p.impact };
-          }),
-          { formatter: fmt.currency }
-        ) +
-        cardClose() +
-        cardOpen('Ranking de Diretorias por Consumo Orçamentário') +
-        rankingTableHtml(financial.directorateRanking) +
-        cardClose() +
-        '</div>' +
+        (function () {
+          var projectionCardHtml =
+            cardOpen('Projeção de Impacto — Próximos 12 meses', { subtitle: 'Movimentações aprovadas ou em fluxo de aprovação' }) +
+            renderBarChart(
+              (financial.projection12Months || []).map(function (p) {
+                return { label: fmt.monthLabel(p.month), value: p.impact };
+              }),
+              { formatter: fmt.currency }
+            ) +
+            cardClose();
+          // Ranking de Diretorias mostra dados de todas as diretorias, não
+          // só a do usuário — GESTOR não deve ver esse comparativo
+          // cross-empresa.
+          if (user && user.role === 'GESTOR') {
+            return '<div class="grid">' + projectionCardHtml + '</div>';
+          }
+          return (
+            '<div class="grid grid-2">' +
+            projectionCardHtml +
+            cardOpen('Ranking de Diretorias por Consumo Orçamentário') +
+            rankingTableHtml(financial.directorateRanking) +
+            cardClose() +
+            '</div>'
+          );
+        })() +
         '</div>';
     }
 

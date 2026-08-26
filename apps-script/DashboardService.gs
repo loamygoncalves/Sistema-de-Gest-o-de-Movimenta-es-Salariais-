@@ -216,13 +216,18 @@ var DashboardService = {
     var payroll = this.getPayroll(year, months, scope);
     var budgetConsumedPercent = payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
+    // Ranking de Diretorias compara todas as diretorias entre si — GESTOR
+    // (identificado por ter costCenterIds no escopo) não deve ter acesso a
+    // esse comparativo cross-empresa, só à própria área.
+    var directorateRanking = scope.costCenterIds ? [] : this._directorateRanking(year, payroll.months);
+
     return {
       months: payroll.months,
       monthlyImpact: monthlyImpact,
       annualImpact: annualImpact,
       budgetConsumedPercent: round2_(budgetConsumedPercent),
       projection12Months: this._projection12Months(scope),
-      directorateRanking: this._directorateRanking(year, payroll.months),
+      directorateRanking: directorateRanking,
       monthClosed: payroll.monthClosed,
       openMonths: payroll.openMonths,
     };

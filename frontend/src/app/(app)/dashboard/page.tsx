@@ -20,6 +20,7 @@ import { PageLoading } from "@/components/ui/Spinner";
 import { DirectorateSelect, MonthMultiSelect, YearSelect } from "@/components/shared/Filters";
 import { useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { formatCurrency, formatNumber, formatPercent, getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import {
@@ -39,6 +40,7 @@ function formatHcDiff(diff: number): string {
 export default function DashboardPage() {
   const { directorates } = useDirectorates();
   const { showToast } = useToast();
+  const { hasRole } = useAuth();
   const [year, setYear] = useState(new Date().getFullYear());
   const [months, setMonths] = useState<number[]>([new Date().getMonth() + 1]);
   const [directorateId, setDirectorateId] = useState("");
@@ -315,19 +317,22 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card title="Ranking de Diretorias — % Orçamento Consumido">
-              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={financial?.directorateRanking ?? []} layout="vertical" margin={{ left: 24 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis type="number" tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `${v}%`} />
-                    <YAxis type="category" dataKey="directorate" tick={{ fontSize: 12 }} stroke="#94a3b8" width={120} />
-                    <Tooltip formatter={(v: number) => formatPercent(v)} />
-                    <Bar dataKey="consumedPercent" fill="#00AFAA" radius={[0, 4, 4, 0]} name="% Consumido" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </Card>
+            {/* Compara todas as diretorias entre si — GESTOR não deve ver esse comparativo cross-empresa. */}
+            {!hasRole("GESTOR") && (
+              <Card title="Ranking de Diretorias — % Orçamento Consumido">
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={financial?.directorateRanking ?? []} layout="vertical" margin={{ left: 24 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis type="number" tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `${v}%`} />
+                      <YAxis type="category" dataKey="directorate" tick={{ fontSize: 12 }} stroke="#94a3b8" width={120} />
+                      <Tooltip formatter={(v: number) => formatPercent(v)} />
+                      <Bar dataKey="consumedPercent" fill="#00AFAA" radius={[0, 4, 4, 0]} name="% Consumido" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
 
             <Card title="Headcount Orçado x Atual — período selecionado">
               <div className="h-72">
