@@ -152,6 +152,22 @@ SheetTable.prototype.upsert = function (obj) {
   return this.insert(obj);
 };
 
+/** Apaga todas as linhas de dados da aba, mantendo o cabeçalho — uso raro (ferramentas de manutenção). */
+SheetTable.prototype.clearAll = function () {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = this.getSheet_();
+    var lastRow = sheet.getLastRow();
+    if (lastRow < 2) return 0;
+    var count = lastRow - 1;
+    sheet.getRange(2, 1, count, this.columns.length).clearContent();
+    return count;
+  } finally {
+    lock.releaseLock();
+  }
+};
+
 /** Remove fisicamente a linha (uso raro — a maioria dos fluxos prefere status/active=false). */
 SheetTable.prototype.remove = function (id) {
   var lock = LockService.getScriptLock();

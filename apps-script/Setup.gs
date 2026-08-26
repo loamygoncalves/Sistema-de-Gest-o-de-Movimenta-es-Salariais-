@@ -432,3 +432,27 @@ function cleanupDuplicateEmployees() {
   });
   return summary;
 }
+
+/**
+ * Utilitário one-off — execute UMA VEZ manualmente (menu Executar >
+ * clearOrcamentoEFechamentoFolha, no editor do Apps Script) para apagar
+ * TODAS as linhas já importadas de Orçamento (aba BudgetEntries) e de
+ * Fechamento da Folha (aba FechamentoFolha), deixando as duas abas vazias
+ * para reimportar do zero. NÃO mexe em Colaboradores, Movimentações,
+ * Aprovações, Histórico, Usuários nem na estrutura organizacional — só as
+ * duas importações. Irreversível pelo sistema (a planilha continua
+ * recuperável pelo histórico de versões do Google Sheets — Arquivo > Ver
+ * histórico de versões — mas não por aqui). Loga um resumo em Logger.log.
+ */
+function clearOrcamentoEFechamentoFolha() {
+  var budgetRemoved = Tables.budgetEntries.clearAll();
+  var snapshotsRemoved = Tables.payrollSnapshots.clearAll();
+  var summary =
+    'clearOrcamentoEFechamentoFolha: ' +
+    budgetRemoved +
+    ' linha(s) de Orçamento removida(s), ' +
+    snapshotsRemoved +
+    ' linha(s) de Fechamento da Folha removida(s).';
+  Logger.log(summary);
+  return summary;
+}
