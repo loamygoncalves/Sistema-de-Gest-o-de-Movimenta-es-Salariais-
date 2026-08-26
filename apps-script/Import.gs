@@ -110,6 +110,10 @@ function toNumber_(value) {
     .replace(/R\$\s?/gi, '')
     .replace(/\./g, '')
     .replace(',', '.');
+  // Number('') === 0 em JS — uma célula "em branco" que na verdade tem só um
+  // espaço, ou uma fórmula que resulta em string vazia, viraria 0 (orçado)
+  // em vez de ficar de fora do mês (ver monthValue_/BudgetService#importFromFile).
+  if (normalized === '') return null;
   var parsed = Number(normalized);
   return isNaN(parsed) ? null : parsed;
 }

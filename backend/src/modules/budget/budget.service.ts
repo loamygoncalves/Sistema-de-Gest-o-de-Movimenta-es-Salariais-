@@ -218,7 +218,13 @@ export class BudgetService {
       monthColumns.forEach((colNumber, i) => {
         const raw = row.values[colNumber];
         const key = MONTH_KEYS[i];
-        if (raw === undefined || raw === null || raw === '' || String(raw).trim() === '-') {
+        if (
+          raw === undefined ||
+          raw === null ||
+          raw === '' ||
+          String(raw).trim() === '' ||
+          String(raw).trim() === '-'
+        ) {
           monthValues[key] = null;
           return;
         }

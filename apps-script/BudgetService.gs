@@ -220,7 +220,13 @@ var BudgetService = {
       monthColumns.forEach(function (colNumber, idx) {
         var raw = row.values[colNumber];
         var key = MONTH_KEYS[idx];
-        if (raw === undefined || raw === null || raw === '' || String(raw).trim() === '-') {
+        if (
+          raw === undefined ||
+          raw === null ||
+          raw === '' ||
+          String(raw).trim() === '' ||
+          String(raw).trim() === '-'
+        ) {
           monthValues[key] = null;
           return;
         }
