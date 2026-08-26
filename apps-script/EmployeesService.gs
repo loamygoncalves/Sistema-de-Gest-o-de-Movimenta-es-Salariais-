@@ -56,6 +56,59 @@ function resolveMonthlySalaryRowsForMonths_(year, months, scope) {
   return byMonth;
 }
 
+/**
+ * O (year, month) mais recente que já tem fechamento salvo, e o conjunto de
+ * colaboradores presentes nele — calculado ANTES de uma nova importação
+ * processar suas linhas, para servir de "baseline" de quem estava na folha
+ * do último fechamento (ver deactivateMissingEmployees_). null se ainda não
+ * houve nenhum fechamento.
+ */
+function latestPayrollSnapshotMonth_() {
+  var snapshots = Tables.payrollSnapshots.all();
+  if (snapshots.length === 0) return null;
+
+  var year = null;
+  var month = null;
+  var keyNum = -1;
+  snapshots.forEach(function (s) {
+    var thisKeyNum = Number(s.year) * 12 + Number(s.month);
+    if (thisKeyNum > keyNum) {
+      keyNum = thisKeyNum;
+      year = Number(s.year);
+      month = Number(s.month);
+    }
+  });
+
+  var employeeIds = {};
+  snapshots.forEach(function (s) {
+    if (Number(s.year) === year && Number(s.month) === month) {
+      employeeIds[s.employeeId] = true;
+    }
+  });
+  return { year: year, month: month, keyNum: keyNum, employeeIds: employeeIds };
+}
+
+/**
+ * Inativa automaticamente quem estava ATIVO e tinha snapshot no último
+ * fechamento anterior, mas não aparece no fechamento novo — sinal de que
+ * saiu da empresa entre um mês e outro (ver EmployeesService#importFromFile).
+ * Só é chamada quando a importação está avançando o fechamento mais recente
+ * (nunca ao reimportar/corrigir um mês antigo), para não mexer no status de
+ * quem já foi substituído por um fechamento posterior mais recente.
+ */
+function deactivateMissingEmployees_(previousLatest, currentEmployeeIds) {
+  if (!previousLatest) return [];
+  var deactivated = [];
+  Object.keys(previousLatest.employeeIds).forEach(function (employeeId) {
+    if (currentEmployeeIds[employeeId]) return;
+    var employee = Tables.employees.get(employeeId);
+    if (!employee || employee.status !== EmployeeStatus.ATIVO) return;
+    Tables.employees.update(employeeId, { status: EmployeeStatus.INATIVO, updatedAt: nowIso_() });
+    deactivated.push({ id: employeeId, registration: employee.registration, name: employee.name });
+  });
+  return deactivated;
+}
+
 var EmployeesService = {
   list: function (filters, scope) {
     filters = filters || {};
@@ -142,12 +195,18 @@ var EmployeesService = {
    * colaborador (como sempre), grava um snapshot na aba FechamentoFolha para
    * o mês daquela linha — reimportar o mesmo (year, month) substitui o
    * snapshot anterior daquele colaborador (idempotente), nunca duplica.
+   * Quando este fechamento avança o mês mais recente (não é uma correção de
+   * mês antigo), quem estava ATIVO no fechamento anterior e não aparece
+   * nesta planilha é automaticamente marcado INATIVO — ver
+   * deactivateMissingEmployees_.
    */
   importFromFile: function (base64Data, mimeType, filename, importedByEmail) {
     var records = parseUploadedSpreadsheet_(base64Data, mimeType, filename);
     var errors = [];
     var successRows = 0;
     var seen = {};
+    var previousLatest = latestPayrollSnapshotMonth_();
+    var employeeIdsByMonthKey = {};
 
     records.forEach(function (record) {
       var data = record.data;
@@ -234,11 +293,32 @@ var EmployeesService = {
         Tables.payrollSnapshots.insert(snapshotPayload);
       }
 
+      var monthKey = monthYear.year + '-' + monthYear.month;
+      if (!employeeIdsByMonthKey[monthKey]) {
+        employeeIdsByMonthKey[monthKey] = {
+          year: monthYear.year,
+          month: monthYear.month,
+          keyNum: monthYear.year * 12 + monthYear.month,
+          employeeIds: {},
+        };
+      }
+      employeeIdsByMonthKey[monthKey].employeeIds[employeeId] = true;
+
       successRows += 1;
     });
 
+    var deactivated = [];
+    var newestGroup = null;
+    Object.keys(employeeIdsByMonthKey).forEach(function (key) {
+      var group = employeeIdsByMonthKey[key];
+      if (!newestGroup || group.keyNum > newestGroup.keyNum) newestGroup = group;
+    });
+    if (newestGroup && (!previousLatest || newestGroup.keyNum > previousLatest.keyNum)) {
+      deactivated = deactivateMissingEmployees_(previousLatest, newestGroup.employeeIds);
+    }
+
     var batch = logImportBatch_('BASE_COLABORADORES', null, importedByEmail, records.length, successRows, errors);
-    return { batch: batch, totalRows: records.length, successRows: successRows, errors: errors };
+    return { batch: batch, totalRows: records.length, successRows: successRows, errors: errors, deactivated: deactivated };
   },
 
   /**

@@ -107,8 +107,14 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
   de atualizar `employees.currentSalary`/`employees.costCenterId` de cada colaborador (como
   sempre), grava um snapshot do mês de cada linha na aba `FechamentoFolha` — reimportar o
   mesmo (year, month) substitui o snapshot anterior de cada colaborador, nunca duplica.
-  Retorna `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }`
-  (o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte base64 após a vírgula)
+  Quando este fechamento avança o mês mais recente da folha (não é uma correção de um mês
+  antigo), qualquer colaborador que estava `ATIVO` e tinha snapshot no fechamento anterior
+  mas não aparece nesta planilha é automaticamente marcado `INATIVO` (sinal de que saiu da
+  empresa entre um mês e outro); reimportar um mês antigo nunca dispara isso.
+  Retorna `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}], deactivated: [{id, registration, name}] }`
+  (`deactivated` lista quem foi inativado automaticamente nesta importação — vazio na
+  maioria das vezes; o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte
+  base64 após a vírgula)
 - `api_getEmployeesComparison(year, month?)` → compara a base x orçada, agregando por
   centro de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de
   referência (`month` 1-12, padrão mês corrente). O lado "atual" usa **exclusivamente** o

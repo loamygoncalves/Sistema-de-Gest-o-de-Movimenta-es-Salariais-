@@ -237,6 +237,12 @@ CREATE INDEX idx_employees_status ON employees(status);
 -- indicadores desse mês vêm zerados (monthClosed: false na API) — cair para
 -- current_salary faria um mês sem fechamento "herdar" os números do último
 -- mês fechado, como se as folhas tivessem sido somadas entre meses.
+-- Quando um fechamento avança o mês mais recente da folha, quem estava
+-- employees.status = ATIVO e tinha snapshot no fechamento anterior mas não
+-- aparece na planilha nova é automaticamente marcado INATIVO (ver
+-- EmployeesService#importFromExcel/deactivateMissingEmployees) — sinal de
+-- que saiu da empresa entre um mês e outro; reimportar um mês antigo nunca
+-- dispara isso.
 CREATE TABLE payroll_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   year SMALLINT NOT NULL,

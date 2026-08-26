@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { EmployeeStatus, ImportType, PlannedSituation } from '../../common/enums';
 import { AccessScope } from '../../common/decorators/current-user.decorator';
@@ -76,6 +76,64 @@ export class EmployeesService {
   }
 
   /**
+   * O (year, month) mais recente que já tem fechamento salvo, e o conjunto
+   * de colaboradores presentes nele — calculado ANTES de uma nova
+   * importação processar suas linhas, para servir de "baseline" de quem
+   * estava na folha do último fechamento (ver deactivateMissingEmployees).
+   * null se ainda não houve nenhum fechamento.
+   */
+  private async resolveLatestPayrollSnapshotMonth(): Promise<
+    { year: number; month: number; keyNum: number; employeeIds: Set<string> } | null
+  > {
+    const snapshots = await this.payrollSnapshotRepo.find();
+    if (snapshots.length === 0) return null;
+
+    let year = 0;
+    let month = 0;
+    let keyNum = -1;
+    for (const s of snapshots) {
+      const thisKeyNum = s.year * 12 + s.month;
+      if (thisKeyNum > keyNum) {
+        keyNum = thisKeyNum;
+        year = s.year;
+        month = s.month;
+      }
+    }
+    const employeeIds = new Set(
+      snapshots.filter((s) => s.year === year && s.month === month).map((s) => s.employeeId),
+    );
+    return { year, month, keyNum, employeeIds };
+  }
+
+  /**
+   * Inativa automaticamente quem estava ATIVO e tinha snapshot no último
+   * fechamento anterior, mas não aparece no fechamento novo — sinal de que
+   * saiu da empresa entre um mês e outro. Só é chamada quando a importação
+   * está avançando o fechamento mais recente (nunca ao reimportar/corrigir
+   * um mês antigo), para não mexer no status de quem já foi substituído por
+   * um fechamento posterior mais recente.
+   */
+  private async deactivateMissingEmployees(
+    previousLatest: { employeeIds: Set<string> } | null,
+    currentEmployeeIds: Set<string>,
+  ): Promise<{ id: string; registration: string; name: string }[]> {
+    if (!previousLatest) return [];
+    const missingIds = [...previousLatest.employeeIds].filter((id) => !currentEmployeeIds.has(id));
+    if (missingIds.length === 0) return [];
+
+    const missingEmployees = await this.employeeRepo.find({
+      where: { id: In(missingIds), status: EmployeeStatus.ATIVO },
+    });
+    if (missingEmployees.length === 0) return [];
+
+    await this.employeeRepo.update(
+      { id: In(missingEmployees.map((e) => e.id)) },
+      { status: EmployeeStatus.INATIVO },
+    );
+    return missingEmployees.map((e) => ({ id: e.id, registration: e.registration, name: e.name }));
+  }
+
+  /**
    * Importa a base de colaboradores a partir de uma planilha Excel — o
    * fechamento mensal da folha (ver payroll-snapshot.entity.ts). Colunas
    * esperadas (normalizadas): matricula, nome, cargo, centro_de_custo,
@@ -87,6 +145,10 @@ export class EmployeesService {
    * colaborador (como sempre), grava um snapshot em `payroll_snapshots` para
    * o mês daquela linha — reimportar o mesmo (year, month) substitui o
    * snapshot anterior daquele colaborador (idempotente), nunca duplica.
+   * Quando este fechamento avança o mês mais recente (não é uma correção de
+   * mês antigo), quem estava ATIVO no fechamento anterior e não aparece
+   * nesta planilha é automaticamente marcado INATIVO — ver
+   * deactivateMissingEmployees.
    */
   async importFromExcel(buffer: Buffer, filename: string, importedById: string) {
     const batch = await this.importBatchService.create(
@@ -100,6 +162,8 @@ export class EmployeesService {
     let successRows = 0;
 
     const seenRegistrations = new Set<string>();
+    const previousLatest = await this.resolveLatestPayrollSnapshotMonth();
+    const employeeIdsByMonthKey = new Map<string, { keyNum: number; employeeIds: Set<string> }>();
 
     for (const row of rows) {
       const data = row.data;
@@ -210,11 +274,28 @@ export class EmployeesService {
         await this.payrollSnapshotRepo.save(this.payrollSnapshotRepo.create(snapshotPayload));
       }
 
+      const monthKey = `${monthYear.year}-${monthYear.month}`;
+      const group = employeeIdsByMonthKey.get(monthKey) ?? {
+        keyNum: monthYear.year * 12 + monthYear.month,
+        employeeIds: new Set<string>(),
+      };
+      group.employeeIds.add(employeeId);
+      employeeIdsByMonthKey.set(monthKey, group);
+
       successRows += 1;
     }
 
+    let deactivated: { id: string; registration: string; name: string }[] = [];
+    let newestGroup: { keyNum: number; employeeIds: Set<string> } | null = null;
+    for (const group of employeeIdsByMonthKey.values()) {
+      if (!newestGroup || group.keyNum > newestGroup.keyNum) newestGroup = group;
+    }
+    if (newestGroup && (!previousLatest || newestGroup.keyNum > previousLatest.keyNum)) {
+      deactivated = await this.deactivateMissingEmployees(previousLatest, newestGroup.employeeIds);
+    }
+
     const finished = await this.importBatchService.finish(batch.id, rows.length, successRows, errors);
-    return { ...finished, errors };
+    return { ...finished, errors, deactivated };
   }
 
   async getImportBatch(batchId: string) {

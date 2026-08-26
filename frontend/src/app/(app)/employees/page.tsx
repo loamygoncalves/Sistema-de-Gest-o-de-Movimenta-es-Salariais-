@@ -21,9 +21,9 @@ import {
   BUDGET_MOVEMENT_TYPE_LABELS,
   Employee,
   EmployeeComparisonResponse,
+  EmployeeImportResult,
   EMPLOYEE_STATUS_LABELS,
   FULL_MONTH_LABELS,
-  ImportBatch,
   Paginated,
 } from "@/types";
 
@@ -162,7 +162,7 @@ function EmployeeImportTab() {
   const { showToast } = useToast();
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
-  const [batch, setBatch] = useState<ImportBatch | null>(null);
+  const [batch, setBatch] = useState<EmployeeImportResult | null>(null);
 
   async function handleImport() {
     if (!file) {
@@ -174,7 +174,7 @@ function EmployeeImportTab() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await api.upload<ImportBatch>("/employees/import", formData);
+      const res = await api.upload<EmployeeImportResult>("/employees/import", formData);
       setBatch(res);
       showToast("Fechamento da folha importado com sucesso.", "success");
     } catch (err) {
@@ -188,7 +188,7 @@ function EmployeeImportTab() {
     <div className="flex flex-col gap-6">
       <Card
         title="Fechamento mensal da folha"
-        subtitle="Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente."
+        subtitle="Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente. Ao fechar um mês mais recente que o último importado, quem estava ativo e não aparece mais na planilha é automaticamente marcado como inativo."
       >
         <div className="flex flex-col gap-4">
           <FileDropzone file={file} onFileSelected={setFile} accept=".xlsx,.xls" />
@@ -200,6 +200,13 @@ function EmployeeImportTab() {
         </div>
       </Card>
       {batch && <ImportResultCard batch={batch} />}
+      {batch && batch.deactivated.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          {batch.deactivated.length} colaborador(es) inativado(s) automaticamente por não constarem neste
+          fechamento (saíram da empresa em relação ao mês anterior):{" "}
+          {batch.deactivated.map((e) => `${e.name} (${e.registration})`).join(", ")}.
+        </div>
+      )}
     </div>
   );
 }

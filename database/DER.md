@@ -177,7 +177,12 @@ erDiagram
   sido somadas entre meses — o acumulado do ano é responsabilidade de outra
   métrica (ex.: `movement_history`/impacto acumulado), não desta.
   Reimportar o mesmo (year, month) substitui o snapshot anterior de cada
-  colaborador (chave única `year+month+employee_id`), nunca duplica.
+  colaborador (chave única `year+month+employee_id`), nunca duplica. Quando
+  um fechamento avança o mês mais recente da folha (não é uma correção de
+  mês antigo), quem estava `ATIVO` e tinha snapshot no fechamento anterior
+  mas não aparece na planilha nova é automaticamente marcado `INATIVO`
+  (`EmployeesService#deactivateMissingEmployees`) — sinal de que saiu da
+  empresa entre um mês e outro.
 - **`movement_requests` é polimórfica por `type`**: os campos específicos de
   cada tipo (mérito, aumento de quadro) ficam nullable na mesma tabela para
   permitir consultas e workflow unificados; a validação de obrigatoriedade

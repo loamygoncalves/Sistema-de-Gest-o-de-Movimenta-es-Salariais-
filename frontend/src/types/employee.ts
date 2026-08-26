@@ -1,4 +1,5 @@
 import { EmployeeStatus } from "./enums";
+import { ImportBatch } from "./common";
 
 // Employee fields beyond the filters/comparison payload explicitly named in
 // the contract (`GET /employees?directorateId=&positionId=&status=&search=`)
@@ -32,6 +33,20 @@ export interface UpdateEmployeePayload {
   costCenterId?: string;
   currentSalary?: number;
   status?: EmployeeStatus;
+}
+
+export interface DeactivatedEmployee {
+  id: string;
+  registration: string;
+  name: string;
+}
+
+// POST /employees/import — além do ImportBatch padrão, quando este
+// fechamento avança o mês mais recente (não é uma correção de mês antigo),
+// lista quem estava ATIVO no fechamento anterior e não aparece nesta
+// planilha, e por isso foi automaticamente marcado INATIVO.
+export interface EmployeeImportResult extends ImportBatch {
+  deactivated: DeactivatedEmployee[];
 }
 
 export type EmployeeComparisonItemType = "VAGA_ABERTA" | "EXCESSO_HC";

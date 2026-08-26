@@ -232,11 +232,32 @@
         });
     }
 
+    /**
+     * Aviso de colaboradores inativados automaticamente por não constarem
+     * no fechamento que acabou de ser importado (ver
+     * EmployeesService.gs#deactivateMissingEmployees_) — só aparece quando
+     * essa importação avançou o mês mais recente da folha.
+     */
+    function deactivatedHtml(deactivated) {
+      if (!deactivated || deactivated.length === 0) return '';
+      return (
+        '<div class="banner banner-warn" style="margin-top:12px;">' +
+        deactivated.length +
+        ' colaborador(es) inativado(s) automaticamente por não constarem neste fechamento (saíram da empresa em relação ao mês anterior): ' +
+        deactivated
+          .map(function (e) {
+            return escapeHtml(e.name) + ' (' + escapeHtml(e.registration) + ')';
+          })
+          .join(', ') +
+        '.</div>'
+      );
+    }
+
     function renderImportTab() {
       var body = document.getElementById('emp-body');
       body.innerHTML =
         cardOpen('Fechamento mensal da folha', {
-          subtitle: 'Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente.',
+          subtitle: 'Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente. Ao fechar um mês mais recente que o último importado, quem estava ativo e não aparece mais na planilha é automaticamente marcado como inativo.',
         }) +
         '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="emp-import-file" accept=".csv,.xlsx"></div>' +
         '<div class="form-actions"><button class="btn" id="emp-import-btn">Fechar mês</button></div>' +
@@ -258,7 +279,7 @@
             return callApi('api_importEmployees', base64, file.type || 'text/csv', file.name);
           })
           .then(function (result) {
-            document.getElementById('emp-import-result').innerHTML = renderImportResultHtml(result);
+            document.getElementById('emp-import-result').innerHTML = renderImportResultHtml(result) + deactivatedHtml(result.deactivated);
             toast('Fechamento importado: ' + result.successRows + ' de ' + result.totalRows + ' linha(s).', result.errors.length > 0 ? 'info' : 'success');
           })
           .catch(function (err) {

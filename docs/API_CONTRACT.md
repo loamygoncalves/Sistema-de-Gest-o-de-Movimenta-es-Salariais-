@@ -55,8 +55,15 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
   Processa a planilha, atualiza `employees.current_salary`/`employees.cost_center_id` de
   cada colaborador (como sempre) e além disso grava um snapshot do mês de cada linha em
   `payroll_snapshots` — reimportar o mesmo (year, month) substitui o snapshot anterior de
-  cada colaborador, nunca duplica. Retorna `ImportBatch` com
-  `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}] }`
+  cada colaborador, nunca duplica. Quando este fechamento avança o mês mais recente da folha
+  (não é uma correção de um mês antigo), qualquer colaborador que estava `ATIVO` e tinha
+  snapshot no fechamento anterior mas não aparece nesta planilha é automaticamente marcado
+  `INATIVO` (sinal de que saiu da empresa entre um mês e outro); reimportar um mês antigo
+  nunca dispara isso, para não mexer no status de quem já foi substituído por um fechamento
+  posterior mais recente. Retorna `ImportBatch` com
+  `{ id, totalRows, successRows, errorRows, errors: [{rowNumber, field, message}], deactivated: [{id, registration, name}] }`
+  (`deactivated` lista quem foi inativado automaticamente nesta importação — vazio na
+  maioria das vezes)
 - `GET /employees/import/:batchId`
 - `GET /employees/comparison?year=&month=` → compara base x orçada, agregando por centro
   de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de referência
