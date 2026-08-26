@@ -476,3 +476,33 @@ function clearColaboradores() {
   Logger.log(summary);
   return summary;
 }
+
+/**
+ * Utilitário one-off — execute UMA VEZ manualmente (menu Executar >
+ * clearMovimentacoes, no editor do Apps Script) para apagar TODAS as
+ * linhas de Movimentações, Etapas de Aprovação, Simulações e Histórico —
+ * dados de teste, sem relação com Orçamento/Fechamento da Folha/
+ * Colaboradores (limpos por clearOrcamentoEFechamentoFolha/
+ * clearColaboradores). Não mexe em Usuários nem na estrutura
+ * organizacional. Irreversível pelo sistema (a planilha continua
+ * recuperável pelo histórico de versões do Google Sheets — Arquivo > Ver
+ * histórico de versões — mas não por aqui). Loga um resumo em Logger.log.
+ */
+function clearMovimentacoes() {
+  var requestsRemoved = Tables.movementRequests.clearAll();
+  var approvalsRemoved = Tables.approvalSteps.clearAll();
+  var simulationsRemoved = Tables.movementSimulations.clearAll();
+  var historyRemoved = Tables.movementHistory.clearAll();
+  var summary =
+    'clearMovimentacoes: ' +
+    requestsRemoved +
+    ' movimentação(ões), ' +
+    approvalsRemoved +
+    ' etapa(s) de aprovação, ' +
+    simulationsRemoved +
+    ' simulação(ões), ' +
+    historyRemoved +
+    ' registro(s) de histórico removido(s).';
+  Logger.log(summary);
+  return summary;
+}
