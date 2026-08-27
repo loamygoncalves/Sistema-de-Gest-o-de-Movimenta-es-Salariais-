@@ -70,6 +70,9 @@ export class MovementSimulation {
   @Column({ length: 500, nullable: true, name: 'alert_message' })
   alertMessage?: string;
 
+  @Column('text', { array: true, nullable: true, name: 'policy_violations' })
+  policyViolations?: string[];
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 }

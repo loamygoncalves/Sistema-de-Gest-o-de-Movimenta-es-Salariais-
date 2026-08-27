@@ -23,6 +23,7 @@ function setupSpreadsheet() {
   migrateUsersSheet_(ss);
   migrateMovementRequestsSheet_(ss);
   migrateApprovalStepsSheet_(ss);
+  migrateMovementSimulationsSheet_(ss);
 
   Object.keys(TABLES_CONFIG).forEach(function (key) {
     var cfg = TABLES_CONFIG[key];
@@ -203,6 +204,16 @@ function migrateApprovalStepsSheet_(ss) {
     obj.decidedByRole = oldRole && (obj.status === 'APROVADO' || obj.status === 'REPROVADO') ? String(oldRole) : '';
     return obj;
   });
+}
+
+/**
+ * A Política de Remuneração passou a sinalizar violações na própria
+ * simulação — acrescenta a coluna `policyViolations` à aba Simulacoes sem
+ * apagar simulações já registradas (linhas antigas ficam com a coluna
+ * vazia, equivalente a "aderente"/sem violação registrada).
+ */
+function migrateMovementSimulationsSheet_(ss) {
+  migrateSheetColumns_(ss, 'movementSimulations', null);
 }
 
 /**

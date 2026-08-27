@@ -9,4 +9,5 @@ export * from "./approval";
 export * from "./history";
 export * from "./salaryStudy";
 export * from "./chargeParameter";
+export * from "./remunerationPolicy";
 export * from "./dashboard";

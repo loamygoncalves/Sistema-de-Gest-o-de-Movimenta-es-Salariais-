@@ -47,12 +47,22 @@
       return '<p class="text-sm text-muted">Nenhuma simulação executada ainda. Clique em "Executar simulação".</p>';
     }
     var bannerClass = sim.exceedsBudget ? 'banner-danger' : 'banner-success';
+    var policyViolations = sim.policyViolations || [];
+    var policyBannerHtml =
+      policyViolations.length > 0
+        ? '<div class="banner banner-warn" style="margin-bottom:16px;">' +
+          '<p style="font-weight:600;margin-bottom:4px;">Fora da Política de Remuneração</p>' +
+          '<ul style="margin:0;padding-left:18px;">' +
+          policyViolations.map(function (v) { return '<li>' + escapeHtml(v) + '</li>'; }).join('') +
+          '</ul></div>'
+        : '';
     return (
       '<div class="banner ' +
       bannerClass +
       '" style="margin-bottom:16px;">' +
       escapeHtml(sim.alertMessage || '') +
       '</div>' +
+      policyBannerHtml +
       '<div class="grid grid-3">' +
       metricTile('Meses Restantes no Ano', fmt.number(sim.monthsRemaining)) +
       metricTile('Impacto Salarial Mensal', fmt.currency(sim.monthlySalaryImpact)) +

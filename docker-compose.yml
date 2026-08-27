@@ -34,7 +34,6 @@ services:
       JWT_SECRET: change-me-in-production
       JWT_EXPIRES_IN: 8h
       CORS_ORIGIN: http://localhost:3000
-      MAX_INCREASE_PERCENT_ALERT: 20
     ports:
       - '3001:3001'
 

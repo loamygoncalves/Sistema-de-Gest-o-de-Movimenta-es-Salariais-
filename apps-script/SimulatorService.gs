@@ -34,6 +34,57 @@ var ChargeParametersService = {
   },
 };
 
+/**
+ * Junta/separa a lista de mensagens de violação em uma única célula da aba
+ * Simulacoes — usa quebra de linha (não vírgula) porque as mensagens são
+ * frases livres que podem conter vírgula.
+ */
+function serializePolicyViolations_(violations) {
+  return (violations || []).join('\n');
+}
+
+function parsePolicyViolations_(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split('\n')
+    .map(function (s) { return s.trim(); })
+    .filter(function (s) { return s; });
+}
+
+/**
+ * Política de Remuneração (tela ADMIN/RH_REMUNERACAO, aba PoliticaRemuneracao)
+ * — uma única linha (singleton). Espelha
+ * backend/src/modules/simulator/remuneration-policy.service.ts.
+ */
+var RemunerationPolicyService = {
+  get: function () {
+    var row = Tables.remunerationPolicies.all()[0];
+    return {
+      maxMeritPercent: row && row.maxMeritPercent !== '' ? Number(row.maxMeritPercent) : null,
+      maxPromotionPercent: row && row.maxPromotionPercent !== '' ? Number(row.maxPromotionPercent) : null,
+      minMonthsBetweenRaises: row && row.minMonthsBetweenRaises !== '' ? Number(row.minMonthsBetweenRaises) : null,
+    };
+  },
+
+  save: function (input) {
+    var row = Tables.remunerationPolicies.all()[0];
+    var patch = {
+      maxMeritPercent: input.maxMeritPercent === null || input.maxMeritPercent === undefined ? null : Number(input.maxMeritPercent),
+      maxPromotionPercent:
+        input.maxPromotionPercent === null || input.maxPromotionPercent === undefined ? null : Number(input.maxPromotionPercent),
+      minMonthsBetweenRaises:
+        input.minMonthsBetweenRaises === null || input.minMonthsBetweenRaises === undefined ? null : Number(input.minMonthsBetweenRaises),
+      updatedAt: nowIso_(),
+    };
+    if (row) {
+      Tables.remunerationPolicies.update(row.id, patch);
+    } else {
+      Tables.remunerationPolicies.insert(patch);
+    }
+    return this.get();
+  },
+};
+
 var SimulatorService = {
   /**
    * Extrai {year, month} de uma data `YYYY-MM-DD` direto da string, sem
@@ -120,9 +171,64 @@ var SimulatorService = {
   },
 
   /**
+   * Política de Remuneração (tela ADMIN/RH_REMUNERACAO): nunca bloqueia a
+   * simulação/submissão, só devolve mensagens de violação para sinalizar
+   * tanto quem simula quanto quem vai aprovar. Só se aplica a Mérito/
+   * Promoção (Aumento de Quadro não reajusta um colaborador existente).
+   * Limites não configurados (null) não geram violação.
+   */
+  checkPolicyViolations_: function (input, salaryIncreasePercent) {
+    if (input.type !== MovementType.MERITO && input.type !== MovementType.PROMOCAO) return [];
+
+    var policy = RemunerationPolicyService.get();
+    var violations = [];
+
+    if (salaryIncreasePercent !== null) {
+      if (input.type === MovementType.MERITO && policy.maxMeritPercent !== null && salaryIncreasePercent > policy.maxMeritPercent) {
+        violations.push(
+          'Reajuste de ' + salaryIncreasePercent.toFixed(1) + '% ultrapassa o máximo de ' +
+            policy.maxMeritPercent + '% da Política de Remuneração para Mérito.'
+        );
+      }
+      if (
+        input.type === MovementType.PROMOCAO &&
+        policy.maxPromotionPercent !== null &&
+        salaryIncreasePercent > policy.maxPromotionPercent
+      ) {
+        violations.push(
+          'Reajuste de ' + salaryIncreasePercent.toFixed(1) + '% ultrapassa o máximo de ' +
+            policy.maxPromotionPercent + '% da Política de Remuneração para Promoção.'
+        );
+      }
+    }
+
+    if (policy.minMonthsBetweenRaises !== null && input.employeeId) {
+      var priorRaises = Tables.movementHistory.where(function (h) {
+        return h.employeeId === input.employeeId && (h.type === MovementType.MERITO || h.type === MovementType.PROMOCAO);
+      });
+      if (priorRaises.length > 0) {
+        priorRaises.sort(function (a, b) { return new Date(b.effectiveDate) - new Date(a.effectiveDate); });
+        var lastRaise = priorRaises[0];
+        var last = this.parseIsoDateParts_(lastRaise.effectiveDate);
+        var current = this.parseIsoDateParts_(input.effectiveDate);
+        var monthsSinceLastRaise = (current.year - last.year) * 12 + (current.month - last.month);
+        if (monthsSinceLastRaise < policy.minMonthsBetweenRaises) {
+          violations.push(
+            'Último reajuste desse colaborador foi há ' + monthsSinceLastRaise + ' mês(es) (em ' +
+              lastRaise.effectiveDate + ') — abaixo do mínimo de ' + policy.minMonthsBetweenRaises +
+              ' meses da Política de Remuneração.'
+          );
+        }
+      }
+    }
+
+    return violations;
+  },
+
+  /**
    * Executa a simulação e retorna o resultado (sem persistir). `input`:
-   * {type, directorateId, costCenterId, currentSalary, newSalary,
-   * meritPercentage, plannedSalary, quantity, effectiveDate}.
+   * {type, directorateId, costCenterId, employeeId, currentSalary,
+   * newSalary, meritPercentage, plannedSalary, quantity, effectiveDate}.
    */
   simulate: function (input) {
     var monthsRemaining = this.monthsRemaining_(input.effectiveDate);
@@ -186,14 +292,7 @@ var SimulatorService = {
 
     var baseSalary = Number(input.currentSalary || 0);
     var salaryIncreasePercent = baseSalary > 0 ? (monthlySalaryImpact / baseSalary) * 100 : null;
-    if (salaryIncreasePercent !== null && salaryIncreasePercent > RULES.MAX_INCREASE_PERCENT_ALERT) {
-      alertMessage +=
-        ' Atenção: aumento de ' +
-        salaryIncreasePercent.toFixed(1) +
-        '% ultrapassa o limite de ' +
-        RULES.MAX_INCREASE_PERCENT_ALERT +
-        '% configurado.';
-    }
+    var policyViolations = this.checkPolicyViolations_(input, salaryIncreasePercent);
 
     return {
       monthsRemaining: monthsRemaining,
@@ -211,6 +310,7 @@ var SimulatorService = {
       exceedsBudget: exceedsBudget,
       alertMessage: alertMessage,
       salaryIncreasePercent: salaryIncreasePercent,
+      policyViolations: policyViolations,
     };
   },
 
@@ -220,6 +320,7 @@ var SimulatorService = {
       type: movement.type,
       directorateId: movement.directorateId,
       costCenterId: movement.costCenterId,
+      employeeId: movement.employeeId,
       currentSalary: movement.currentSalary,
       newSalary: movement.newSalary,
       meritPercentage: movement.meritPercentage,
@@ -234,7 +335,7 @@ var SimulatorService = {
     var movement = MovementsService.getRaw_(movementId);
     var result = this.simulate(this.simulationInputFromMovement_(movement));
 
-    return Tables.movementSimulations.insert({
+    var inserted = Tables.movementSimulations.insert({
       movementRequestId: movementId,
       monthsRemaining: result.monthsRemaining,
       monthlySalaryImpact: result.monthlySalaryImpact,
@@ -250,8 +351,14 @@ var SimulatorService = {
       percentConsumed: result.percentConsumed,
       exceedsBudget: result.exceedsBudget,
       alertMessage: result.alertMessage,
+      policyViolations: serializePolicyViolations_(result.policyViolations),
       createdAt: nowIso_(),
     });
+    // A aba guarda policyViolations como texto (uma mensagem por linha); o
+    // valor devolvido ao chamador (e ao cliente) é sempre o array em
+    // memória, igual ao formato de simulate() e de latestSimulation().
+    inserted.policyViolations = result.policyViolations;
+    return inserted;
   },
 
   latestSimulation: function (movementId) {
@@ -262,7 +369,9 @@ var SimulatorService = {
     all.sort(function (a, b) {
       return new Date(b.createdAt) - new Date(a.createdAt);
     });
-    return all[0];
+    var latest = shallowCopy_(all[0]);
+    latest.policyViolations = parsePolicyViolations_(all[0].policyViolations);
+    return latest;
   },
 };
 

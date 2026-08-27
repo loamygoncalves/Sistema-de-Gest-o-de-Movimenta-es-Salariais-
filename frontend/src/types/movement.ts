@@ -92,6 +92,10 @@ export interface MovementSimulation {
   budget: BudgetComparison;
   exceedsBudget: boolean;
   alertMessage: string;
+  // Mensagens da Política de Remuneração (tela ADMIN/RH_REMUNERACAO)
+  // violadas por esta movimentação — nunca bloqueia, só sinaliza tanto para
+  // quem simula quanto para quem vai aprovar. Vazio/ausente = aderente.
+  policyViolations?: string[];
   // Optional breakdown of individual charge/benefit line items — judgment
   // call to let the UI render the "encargos (breakdown)" requested, since
   // the contract only shows the aggregated totals.

@@ -97,8 +97,3 @@ var DEFAULT_APPROVAL_WORKFLOW = [
   { stepOrder: 1, roles: [ApproverRole.RH_REMUNERACAO, ApproverRole.ADMIN] },
   { stepOrder: 2, roles: [ApproverRole.DIRETOR] },
 ];
-
-/** Parametrização de regras de negócio (equivalente a backend/.env). */
-var RULES = {
-  MAX_INCREASE_PERCENT_ALERT: 20,
-};

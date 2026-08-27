@@ -1115,4 +1115,81 @@
         .catch(toastError);
     }
   };
+
+  // -----------------------------------------------------------------------
+  // Política de Remuneração — ADMIN/RH_REMUNERACAO.
+  // api_getRemunerationPolicy / api_saveRemunerationPolicy
+  // -----------------------------------------------------------------------
+  Views.adminRemunerationPolicy = function (root) {
+    var user = App.user;
+    if (!canManage(user)) {
+      adminAccessDenied(root);
+      return;
+    }
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Política de Remuneração</h1>' +
+      '<p>Limites de referência para simulações e solicitações de Mérito e Promoção. Deixar um campo em branco ' +
+      'significa que ele não tem limite. Violar um limite nunca bloqueia a simulação ou a submissão — o sistema ' +
+      'apenas sinaliza, tanto para quem está simulando/solicitando quanto para quem vai aprovar, que a ' +
+      'movimentação está fora da política.</p></div>' +
+      '<div id="remuneration-policy-body">' +
+      loadingHtml() +
+      '</div>';
+
+    loadAndRender();
+
+    function loadAndRender() {
+      var body = document.getElementById('remuneration-policy-body');
+      body.innerHTML = loadingHtml();
+      callApi('api_getRemunerationPolicy')
+        .then(renderBody)
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function renderBody(policy) {
+      var body = document.getElementById('remuneration-policy-body');
+      body.innerHTML =
+        '<div class="card" style="display:flex;flex-direction:column;gap:14px;max-width:360px;">' +
+        '<label>% Máximo de Reajuste — Mérito<input type="number" step="0.01" min="0" id="policy-max-merit" value="' +
+        (policy.maxMeritPercent === null ? '' : policy.maxMeritPercent) +
+        '"></label>' +
+        '<p class="text-sm text-muted">Em branco = sem limite.</p>' +
+        '<label>% Máximo de Reajuste — Promoção<input type="number" step="0.01" min="0" id="policy-max-promotion" value="' +
+        (policy.maxPromotionPercent === null ? '' : policy.maxPromotionPercent) +
+        '"></label>' +
+        '<p class="text-sm text-muted">Em branco = sem limite.</p>' +
+        '<label>Meses mínimos para reajuste<input type="number" step="1" min="0" id="policy-min-months" value="' +
+        (policy.minMonthsBetweenRaises === null ? '' : policy.minMonthsBetweenRaises) +
+        '"></label>' +
+        '<p class="text-sm text-muted">Tempo mínimo, em meses, desde o último reajuste (Mérito ou Promoção) do ' +
+        'colaborador. Em branco = sem limite.</p>' +
+        '</div>' +
+        '<div class="row" style="justify-content:flex-end;margin-top:16px;">' +
+        '<button class="btn" id="remuneration-policy-save-btn">Salvar política</button>' +
+        '</div>';
+
+      document.getElementById('remuneration-policy-save-btn').addEventListener('click', save);
+    }
+
+    function save() {
+      var toNullableNumber = function (id) {
+        var raw = document.getElementById(id).value;
+        return raw === '' ? null : Number(raw);
+      };
+      var input = {
+        maxMeritPercent: toNullableNumber('policy-max-merit'),
+        maxPromotionPercent: toNullableNumber('policy-max-promotion'),
+        minMonthsBetweenRaises: toNullableNumber('policy-min-months'),
+      };
+      callApi('api_saveRemunerationPolicy', input)
+        .then(function (policy) {
+          toast('Política de Remuneração salva com sucesso.', 'success');
+          renderBody(policy);
+        })
+        .catch(toastError);
+    }
+  };
 </script>

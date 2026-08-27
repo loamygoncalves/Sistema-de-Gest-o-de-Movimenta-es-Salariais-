@@ -257,6 +257,18 @@ function api_updateChargeParameter(id, input) {
   return stripRow_(ChargeParametersService.update(id, input));
 }
 
+/** Política de Remuneração (tela ADMIN/RH_REMUNERACAO) — leitura livre, edição restrita. */
+function api_getRemunerationPolicy() {
+  requireUser_();
+  return RemunerationPolicyService.get();
+}
+
+function api_saveRemunerationPolicy(input) {
+  var user = requireUser_();
+  requireRole_(user, manageRoles_());
+  return RemunerationPolicyService.save(input);
+}
+
 /**
  * Simulador rápido (Módulo 4) — Gestor/Diretor testa o impacto de uma
  * promoção/mérito para um de seus colaboradores antes de abrir a
@@ -290,6 +302,7 @@ function api_previewSimulation(input) {
       type: MovementType.PROMOCAO,
       directorateId: employee.directorateId,
       costCenterId: employee.costCenterId,
+      employeeId: employee.id,
       currentSalary: Number(employee.currentSalary),
       newSalary: Number(input.newSalary),
       effectiveDate: input.effectiveDate,
@@ -305,6 +318,7 @@ function api_previewSimulation(input) {
     type: MovementType.MERITO,
     directorateId: employee.directorateId,
     costCenterId: employee.costCenterId,
+    employeeId: employee.id,
     currentSalary: Number(employee.currentSalary),
     meritPercentage: round2_(meritPercentage),
     effectiveDate: input.effectiveDate,

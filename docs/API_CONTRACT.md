@@ -154,7 +154,9 @@ já que não há colaborador para derivar).
   "difference": 0,
   "percentConsumed": 0,
   "exceedsBudget": false,
-  "alertMessage": "Movimentação aderente ao orçamento."
+  "alertMessage": "Movimentação aderente ao orçamento.",
+  "salaryIncreasePercent": 0,
+  "policyViolations": []
 }
 ```
   Apesar do nome dos campos (herdado do modelo original), a comparação é
@@ -189,6 +191,18 @@ já que não há colaborador para derivar).
     do ano.
   - Sem nenhum fechamento no ano da data efetiva, tudo vem zerado (nunca
     herda o cadastro ao vivo nem o fechamento de outro ano).
+
+  `policyViolations` (`string[]`, vazio = aderente) sinaliza — **nunca
+  bloqueia** — quando a movimentação (Mérito ou Promoção; Aumento de
+  Quadro não gera violação, pois não reajusta um colaborador existente)
+  foge da Política de Remuneração (tela ADMIN/RH_REMUNERACAO, ver seção
+  abaixo): `salaryIncreasePercent` acima do limite configurado para o tipo
+  (`maxMeritPercent`/`maxPromotionPercent`), ou menos meses do que
+  `minMonthsBetweenRaises` desde o último Mérito/Promoção desse
+  colaborador em `movement_history` (`employeeId` precisa estar presente
+  na entrada — o Simulador Rápido e o fluxo de submissão sempre enviam).
+  As mensagens ficam salvas em `movement_simulations.policy_violations`,
+  visíveis tanto para quem simula/solicita quanto para quem vai aprovar.
 - `POST /simulator/preview` — Simulador Rápido (Gestor/Diretor testam o
   impacto de uma promoção/mérito para um colaborador ANTES de abrir a
   solicitação de fato; não persiste nada). Body:
@@ -198,6 +212,12 @@ já que não há colaborador para derivar).
   Retorna o mesmo formato de `POST /movements/:id/simulate` acima. 403 se o
   colaborador estiver fora do escopo de acesso do usuário.
 - `GET /charge-parameters` / `POST` / `PATCH /:id` (ADMIN, RH_REMUNERACAO) — encargos/benefícios parametrizáveis
+- `GET /remuneration-policy` (qualquer autenticado) → `{ maxMeritPercent, maxPromotionPercent, minMonthsBetweenRaises }`
+  (cada campo `number | null` — `null` = sem limite configurado). `PUT
+  /remuneration-policy` (ADMIN, RH_REMUNERACAO) mesmo body → Política de
+  Remuneração (tela "Política de Remuneração"): limites globais opcionais
+  usados por `policyViolations` acima. Uma única linha (singleton); nunca
+  bloqueia simulação/submissão, só alimenta a sinalização.
 
 ## Notificações
 Ao submeter uma movimentação (`POST /movements/:id/submit`), o backend
@@ -287,8 +307,10 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).
-2. Alerta quando o aumento percentual ultrapassar o parâmetro configurável
-   `MAX_INCREASE_PERCENT_ALERT` (não bloqueia, apenas sinaliza `alertMessage`).
+2. Sinaliza (nunca bloqueia, ver `policyViolations` acima) quando o % de
+   reajuste ou o intervalo desde o último reajuste do colaborador fogem da
+   Política de Remuneração (tela ADMIN/RH_REMUNERACAO, `GET`/`PUT
+   /remuneration-policy`).
 3. Se `totalAnnualImpact` fizer a folha do centro de custo (nunca do cargo
    específico) ultrapassar o orçamento desse mesmo centro de custo,
    `exceedsBudget = true` e a movimentação pode ser submetida mesmo assim

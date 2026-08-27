@@ -13,6 +13,7 @@ export function SimulationPanel({ simulation }: { simulation: MovementSimulation
     budget,
     exceedsBudget,
     alertMessage,
+    policyViolations,
     chargesBreakdown,
     benefitsBreakdown,
   } = simulation;
@@ -28,6 +29,17 @@ export function SimulationPanel({ simulation }: { simulation: MovementSimulation
       >
         {alertMessage}
       </div>
+
+      {policyViolations && policyViolations.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+          <p className="mb-1 font-semibold">Fora da Política de Remuneração</p>
+          <ul className="list-disc space-y-0.5 pl-4 font-normal">
+            {policyViolations.map((violation, i) => (
+              <li key={i}>{violation}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MetricTile label="Impacto Salarial Mensal" value={formatCurrency(monthlySalaryImpact)} />

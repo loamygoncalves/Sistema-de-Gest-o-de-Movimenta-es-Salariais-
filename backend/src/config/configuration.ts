@@ -14,9 +14,4 @@ export default () => ({
     secret: process.env.JWT_SECRET || 'change-me-in-production',
     expiresIn: process.env.JWT_EXPIRES_IN || '8h',
   },
-  rules: {
-    maxIncreasePercentAlert: parseFloat(
-      process.env.MAX_INCREASE_PERCENT_ALERT || '20',
-    ),
-  },
 });

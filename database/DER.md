@@ -101,6 +101,13 @@ erDiagram
         numeric total_annual_impact
         numeric percent_consumed
         bool exceeds_budget
+        string[] policy_violations
+    }
+    REMUNERATION_POLICIES {
+        uuid id PK
+        numeric max_merit_percent
+        numeric max_promotion_percent
+        int min_months_between_raises
     }
     APPROVAL_STEPS {
         uuid id PK
@@ -240,5 +247,18 @@ erDiagram
 - **`movement_simulations`** persiste o resultado do simulador no momento da
   submissão (não é recalculado silenciosamente depois), garantindo que a
   decisão de aprovação seja auditável com os números que o aprovador viu.
+  `policy_violations` (`TEXT[]`, vazio = aderente) é o mesmo snapshot para a
+  Política de Remuneração — mensagens de violação calculadas na hora da
+  simulação, não recalculadas depois mesmo que a política mude.
+- **`remuneration_policies`** (tela "Política de Remuneração", ADMIN/
+  RH_REMUNERACAO) é a Política de Remuneração: uma única linha (singleton,
+  sem chave de negócio) com limites globais opcionais — `null` em qualquer
+  campo = sem limite configurado para aquele campo. `SimulatorService`
+  compara o % de reajuste (Mérito/Promoção) contra `max_merit_percent`/
+  `max_promotion_percent`, e o intervalo desde o último Mérito/Promoção do
+  colaborador em `movement_history` contra `min_months_between_raises`.
+  Violar a política **nunca bloqueia** a simulação/submissão — só alimenta
+  `movement_simulations.policy_violations`, visível tanto para quem simula
+  quanto para quem vai aprovar.
 - **`audit_logs`** é genérica (entity/entity_id + before/after em JSONB) para
   cobrir qualquer tabela sem precisar de uma tabela de auditoria por entidade.

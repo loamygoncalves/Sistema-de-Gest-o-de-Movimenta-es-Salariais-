@@ -204,6 +204,7 @@ export class MovementsService {
       percentConsumed: result.percentConsumed,
       exceedsBudget: result.exceedsBudget,
       alertMessage: result.alertMessage,
+      policyViolations: result.policyViolations,
     });
 
     return this.simulationRepo.save(simulation);

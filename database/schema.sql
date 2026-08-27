@@ -387,10 +387,22 @@ CREATE TABLE movement_simulations (
   percent_consumed NUMERIC(7,3) NOT NULL,
   exceeds_budget BOOLEAN NOT NULL DEFAULT FALSE,
   alert_message VARCHAR(500),
+  policy_violations TEXT[],
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_movement_simulations_request ON movement_simulations(movement_request_id);
+
+-- Política de Remuneração (tela ADMIN/RH_REMUNERACAO): limites globais
+-- opcionais (null = sem limite) usados por movement_simulations.policy_violations
+-- — nunca bloqueia simulação/submissão, só sinaliza. Uma única linha (singleton).
+CREATE TABLE remuneration_policies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  max_merit_percent NUMERIC(6,3),
+  max_promotion_percent NUMERIC(6,3),
+  min_months_between_raises INT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 
 -- ============================================================================
 -- WORKFLOW DE APROVAÇÃO (configurável — ver Administração > Fluxo de Aprovação)

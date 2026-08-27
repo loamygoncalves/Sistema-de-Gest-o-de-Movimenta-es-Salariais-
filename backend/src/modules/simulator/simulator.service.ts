@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ChargeValueType, MovementType } from '../../common/enums';
 import { budgetAdjustmentFactor, sumAllMonths } from '../../common/utils/months.util';
 import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { BudgetAdjustment } from '../budget/entities/budget-adjustment.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
+import { MovementHistory } from '../history/entities/movement-history.entity';
 import { ChargeParametersService } from './charge-parameters.service';
+import { RemunerationPolicy } from './entities/remuneration-policy.entity';
 
 export interface SimulationResult {
   monthsRemaining: number;
@@ -26,6 +27,7 @@ export interface SimulationResult {
   exceedsBudget: boolean;
   alertMessage: string;
   salaryIncreasePercent: number | null;
+  policyViolations: string[];
 }
 
 /** Entrada mínima para simular sem depender de um MovementRequest persistido (ver simulador rápido). */
@@ -33,6 +35,7 @@ export interface SimulationInput {
   type: MovementType;
   directorateId: string;
   costCenterId?: string | null;
+  employeeId?: string | null;
   currentSalary?: number | null;
   newSalary?: number | null;
   meritPercentage?: number | null;
@@ -45,13 +48,16 @@ export interface SimulationInput {
 export class SimulatorService {
   constructor(
     private readonly chargeParametersService: ChargeParametersService,
-    private readonly configService: ConfigService,
     @InjectRepository(PayrollSnapshot)
     private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
     @InjectRepository(BudgetAdjustment)
     private readonly budgetAdjustmentRepo: Repository<BudgetAdjustment>,
+    @InjectRepository(RemunerationPolicy)
+    private readonly remunerationPolicyRepo: Repository<RemunerationPolicy>,
+    @InjectRepository(MovementHistory)
+    private readonly historyRepo: Repository<MovementHistory>,
   ) {}
 
   /**
@@ -147,6 +153,66 @@ export class SimulatorService {
     return { yearToDatePayroll, lastMonthPayroll, lastClosedMonth };
   }
 
+  /**
+   * Política de Remuneração (tela ADMIN/RH_REMUNERACAO): nunca bloqueia a
+   * simulação/submissão, só devolve mensagens de violação para sinalizar
+   * tanto quem simula quanto quem vai aprovar. Só se aplica a Mérito/
+   * Promoção (Aumento de Quadro não reajusta um colaborador existente).
+   * Limites não configurados (null) não geram violação.
+   */
+  private async checkPolicyViolations(
+    input: SimulationInput,
+    salaryIncreasePercent: number | null,
+  ): Promise<string[]> {
+    if (input.type !== MovementType.MERITO && input.type !== MovementType.PROMOCAO) return [];
+
+    const policy = await this.remunerationPolicyRepo.find({ take: 1 });
+    const maxMeritPercent = policy[0]?.maxMeritPercent ?? null;
+    const maxPromotionPercent = policy[0]?.maxPromotionPercent ?? null;
+    const minMonthsBetweenRaises = policy[0]?.minMonthsBetweenRaises ?? null;
+
+    const violations: string[] = [];
+
+    if (salaryIncreasePercent !== null) {
+      if (input.type === MovementType.MERITO && maxMeritPercent !== null && salaryIncreasePercent > Number(maxMeritPercent)) {
+        violations.push(
+          `Reajuste de ${salaryIncreasePercent.toFixed(1)}% ultrapassa o máximo de ${Number(maxMeritPercent)}% da Política de Remuneração para Mérito.`,
+        );
+      }
+      if (
+        input.type === MovementType.PROMOCAO &&
+        maxPromotionPercent !== null &&
+        salaryIncreasePercent > Number(maxPromotionPercent)
+      ) {
+        violations.push(
+          `Reajuste de ${salaryIncreasePercent.toFixed(1)}% ultrapassa o máximo de ${Number(maxPromotionPercent)}% da Política de Remuneração para Promoção.`,
+        );
+      }
+    }
+
+    if (minMonthsBetweenRaises !== null && input.employeeId) {
+      const lastRaise = await this.historyRepo.findOne({
+        where: {
+          employeeId: input.employeeId,
+          type: In([MovementType.MERITO, MovementType.PROMOCAO]),
+        } as any,
+        order: { effectiveDate: 'DESC' },
+      });
+      if (lastRaise) {
+        const last = this.parseIsoDateParts(lastRaise.effectiveDate);
+        const current = this.parseIsoDateParts(input.effectiveDate);
+        const monthsSinceLastRaise = (current.year - last.year) * 12 + (current.month - last.month);
+        if (monthsSinceLastRaise < Number(minMonthsBetweenRaises)) {
+          violations.push(
+            `Último reajuste desse colaborador foi há ${monthsSinceLastRaise} mês(es) (em ${lastRaise.effectiveDate}) — abaixo do mínimo de ${minMonthsBetweenRaises} meses da Política de Remuneração.`,
+          );
+        }
+      }
+    }
+
+    return violations;
+  }
+
   async simulate(input: SimulationInput): Promise<SimulationResult> {
     const monthsRemaining = this.monthsRemaining(input.effectiveDate);
     const monthlySalaryImpact = this.monthlySalaryImpact(input);
@@ -220,12 +286,7 @@ export class SimulatorService {
 
     const baseSalary = Number(input.currentSalary ?? 0);
     const salaryIncreasePercent = baseSalary > 0 ? (monthlySalaryImpact / baseSalary) * 100 : null;
-    const maxIncreasePercentAlert = this.configService.get<number>('rules.maxIncreasePercentAlert')!;
-    if (salaryIncreasePercent !== null && salaryIncreasePercent > maxIncreasePercentAlert) {
-      alertMessage += ` Atenção: aumento de ${salaryIncreasePercent.toFixed(
-        1,
-      )}% ultrapassa o limite de ${maxIncreasePercentAlert}% configurado.`;
-    }
+    const policyViolations = await this.checkPolicyViolations(input, salaryIncreasePercent);
 
     return {
       monthsRemaining,
@@ -243,6 +304,7 @@ export class SimulatorService {
       exceedsBudget,
       alertMessage,
       salaryIncreasePercent,
+      policyViolations,
     };
   }
 
@@ -252,6 +314,7 @@ export class SimulatorService {
       type: movement.type,
       directorateId: movement.directorateId,
       costCenterId: movement.costCenterId,
+      employeeId: movement.employeeId,
       currentSalary: movement.currentSalary,
       newSalary: movement.newSalary,
       meritPercentage: movement.meritPercentage,

@@ -259,8 +259,12 @@ var TABLES_CONFIG = {
       'id', 'movementRequestId', 'monthsRemaining', 'monthlySalaryImpact', 'annualSalaryImpact',
       'chargesTotal', 'benefitsTotal', 'totalMonthlyImpact', 'totalAnnualImpact',
       'budgetedDirectoratePayroll', 'currentDirectoratePayroll', 'payrollAfterApproval',
-      'difference', 'percentConsumed', 'exceedsBudget', 'alertMessage', 'createdAt',
+      'difference', 'percentConsumed', 'exceedsBudget', 'alertMessage', 'policyViolations', 'createdAt',
     ],
+  },
+  remunerationPolicies: {
+    sheet: 'PoliticaRemuneracao',
+    columns: ['id', 'maxMeritPercent', 'maxPromotionPercent', 'minMonthsBetweenRaises', 'updatedAt'],
   },
   approvalSteps: {
     sheet: 'AprovacaoEtapas',

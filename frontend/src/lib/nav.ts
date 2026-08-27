@@ -44,6 +44,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: "Estrutura Organizacional", href: "/admin/organization", roles: ["ADMIN", "RH_REMUNERACAO"] },
       { label: "Usuários", href: "/admin/users", roles: ["ADMIN"] },
       { label: "Encargos & Benefícios", href: "/admin/charge-parameters", roles: ["ADMIN", "RH_REMUNERACAO"] },
+      { label: "Política de Remuneração", href: "/admin/remuneration-policy", roles: ["ADMIN", "RH_REMUNERACAO"] },
       { label: "Fluxo de Aprovação", href: "/admin/approval-workflow", roles: ["ADMIN"] },
       { label: "Ajuste de Orçamento", href: "/admin/budget-adjustment", roles: ["ADMIN"] },
     ],

@@ -168,6 +168,15 @@ não há rejeição de linha "duplicada" na importação.
   percentual é calculado a partir dele (mesma UX da Promoção). Retorna o
   mesmo formato de `api_simulateMovement` abaixo. Lança `PERMISSAO_NEGADA` se
   o colaborador estiver fora do escopo de acesso do usuário.
+- `api_getRemunerationPolicy()` (qualquer autenticado) → `{ maxMeritPercent,
+  maxPromotionPercent, minMonthsBetweenRaises }` (cada campo `number | null`
+  — `null` = sem limite configurado). `api_saveRemunerationPolicy({
+  maxMeritPercent, maxPromotionPercent, minMonthsBetweenRaises })` (ADMIN,
+  RH_REMUNERACAO) mesmo formato de retorno — Política de Remuneração (tela
+  "Política de Remuneração", aba PoliticaRemuneracao): limites globais
+  opcionais usados por `policyViolations` (ver `api_simulateMovement`
+  abaixo). Uma única linha (singleton); nunca bloqueia
+  simulação/submissão, só alimenta a sinalização.
 
 ## Movimentações — Módulo 3
 Transferência foi descontinuada (não existe mais como `type`). Toda
@@ -189,7 +198,7 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   benefitsTotal, totalMonthlyImpact, totalAnnualImpact,
   budgetedDirectoratePayroll, currentDirectoratePayroll, payrollAfterApproval,
   difference, percentConsumed, exceedsBudget, alertMessage,
-  salaryIncreasePercent }`. Apesar do nome dos campos (herdado do modelo
+  salaryIncreasePercent, policyViolations }`. Apesar do nome dos campos (herdado do modelo
   original), a comparação é sempre pelo **centro de custo exato** (diretoria
   + centro de custo) da movimentação — nunca pelo orçamento da diretoria
   inteira, e nunca restrita ao cargo específico da movimentação.
@@ -221,6 +230,15 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
     do ano.
   - Sem nenhum fechamento no ano da data efetiva, tudo vem zerado (nunca
     herda o cadastro ao vivo nem o fechamento de outro ano).
+
+  `policyViolations` (`string[]`, vazio = aderente) sinaliza — **nunca
+  bloqueia** — quando a movimentação (Mérito ou Promoção; Aumento de
+  Quadro não gera violação) foge da Política de Remuneração:
+  `salaryIncreasePercent` acima do limite do tipo, ou menos meses do que
+  `minMonthsBetweenRaises` desde o último Mérito/Promoção desse
+  colaborador na aba Historico. As mensagens ficam salvas na coluna
+  `policyViolations` de Simulacoes (uma por linha, dentro da célula),
+  visíveis tanto para quem simula/solicita quanto para quem vai aprovar.
 - `api_submitMovement(id)` → dispara a simulação, cria uma etapa de aprovação por
   linha do fluxo configurado (ver seção Aprovações abaixo), muda o status para
   `PENDENTE_APROVACAO` e envia um e-mail de notificação (via `MailApp`, de
