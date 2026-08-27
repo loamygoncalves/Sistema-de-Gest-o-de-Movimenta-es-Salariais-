@@ -9,6 +9,54 @@
   var DASHBOARD_MONTH_LABELS_ = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
   /**
+   * Folha do ano inteiro (jan-dez): barra sólida para meses já fechados
+   * (fechamento real), barra tracejada para meses projetados a partir do
+   * último fechamento (já com o impacto das movimentações aprovadas a
+   * partir de cada mês de vigência). Espelha o LineChart (Fechado sólido /
+   * Projetado tracejado) do Dashboard Next.js.
+   */
+  function annualPayrollProjectionChartHtml_(points) {
+    if (!points || points.length === 0) return emptyStateHtml('Sem dados para exibir.');
+    var max = Math.max.apply(
+      null,
+      points.map(function (p) { return Math.abs(Number(p.value) || 0); }).concat([1])
+    );
+    var legend =
+      '<div class="bar-chart-legend">' +
+      '<span><span class="bar-chart-legend-dot" style="background:var(--brand-500);"></span>Fechado</span>' +
+      '<span><span class="bar-chart-legend-dot" style="background:var(--brand-100);border:1px dashed var(--brand-500);"></span>Projetado</span>' +
+      '</div>';
+    return (
+      legend +
+      '<div class="bar-chart">' +
+      points
+        .map(function (p) {
+          var value = Number(p.value) || 0;
+          var h = Math.max(2, Math.round((Math.abs(value) / max) * BAR_CHART_MAX_PX));
+          var barClass = p.closed ? '' : ' projected';
+          var title =
+            escapeHtml(DASHBOARD_MONTH_LABELS_[p.month - 1]) +
+            ' — ' +
+            (p.closed ? 'Fechado: ' : 'Projetado: ') +
+            escapeHtml(fmt.currency(value));
+          return (
+            '<div class="bar-chart-col" title="' +
+            title +
+            '"><div class="bar-chart-bar' +
+            barClass +
+            '" style="height:' +
+            h +
+            'px"></div><div class="bar-chart-label">' +
+            escapeHtml(DASHBOARD_MONTH_LABELS_[p.month - 1]) +
+            '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  /**
    * Diferença de HC (atual − orçado) com sinal explícito: negativo (abaixo
    * do orçado) é OK, positivo (acima do orçado) não é — a cor do kpiTile é
    * decidida separadamente por quem chama, com o mesmo sinal.
@@ -311,13 +359,13 @@
         '</div>' +
         (function () {
           var projectionCardHtml =
-            cardOpen('Projeção de Impacto — Próximos 12 meses', { subtitle: 'Movimentações aprovadas ou em fluxo de aprovação' }) +
-            renderBarChart(
-              (financial.projection12Months || []).map(function (p) {
-                return { label: fmt.monthLabel(p.month), value: p.impact };
-              }),
-              { formatter: fmt.currency }
-            ) +
+            cardOpen('Folha do Ano ' + state.year + ' — Fechado x Projetado', {
+              subtitle:
+                'Meses já fechados usam o fechamento real da folha; meses futuros são projetados a partir do ' +
+                'último fechamento, já somando o impacto de mérito, promoção e aumento de quadro aprovados a ' +
+                'partir do mês de vigência de cada um.',
+            }) +
+            annualPayrollProjectionChartHtml_(financial.annualPayrollProjection) +
             cardClose();
           // Ranking de Diretorias mostra dados de todas as diretorias, não
           // só a do usuário — GESTOR não deve ver esse comparativo

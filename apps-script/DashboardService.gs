@@ -228,49 +228,61 @@ var DashboardService = {
       monthlyImpact: monthlyImpact,
       annualImpact: annualImpact,
       budgetConsumedPercent: round2_(budgetConsumedPercent),
-      projection12Months: this._projection12Months(scope),
+      annualPayrollProjection: this._annualPayrollProjection(year, scope),
       directorateRanking: directorateRanking,
       monthClosed: payroll.monthClosed,
       openMonths: payroll.openMonths,
     };
   },
 
-  _projection12Months: function (scope) {
-    var now = new Date();
-    var start = new Date(now.getFullYear(), now.getMonth(), 1);
-    var end = new Date(now.getFullYear(), now.getMonth() + 12, 0);
-    var startIso = Utilities.formatDate(start, 'GMT', 'yyyy-MM-dd');
-    var endIso = Utilities.formatDate(end, 'GMT', 'yyyy-MM-dd');
+  /**
+   * Folha do ano inteiro (jan-dez), mês a mês: meses já fechados usam o
+   * fechamento real (FechamentoFolha somado, no escopo); meses ainda sem
+   * fechamento são projetados a partir do último mês fechado, somando o
+   * impacto mensal de toda movimentação já APROVADA cujo mês de vigência
+   * (effectiveDate) caia depois do último fechamento — o impacto entra a
+   * partir do mês de vigência e persiste nos meses seguintes (é o novo
+   * "ritmo" da folha), igual à lógica de lacuna do Simulador. Nunca herda
+   * o cadastro ao vivo: sem nenhum fechamento no ano, os meses abertos
+   * partem de zero (só a soma dos impactos aprovados).
+   */
+  _annualPayrollProjection: function (year, scope) {
+    var allMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+    var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, allMonths, scope);
 
-    var eligibleStatuses = [MovementStatus.APROVADO, MovementStatus.PENDENTE_APROVACAO];
+    var closedMonths = allMonths.filter(function (m) { return salariesByMonth[m].monthClosed; });
+    var lastClosedMonth = closedMonths.length > 0 ? Math.max.apply(null, closedMonths) : 0;
+    var lastClosedPayroll =
+      lastClosedMonth > 0
+        ? salariesByMonth[lastClosedMonth].rows.reduce(function (sum, row) { return sum + row.salary; }, 0)
+        : 0;
 
-    var movements = Tables.movementRequests.where(function (m) {
-      if (eligibleStatuses.indexOf(m.status) === -1) return false;
-      if (m.effectiveDate < startIso || m.effectiveDate > endIso) return false;
+    var approvedMovements = Tables.movementRequests.where(function (m) {
+      if (m.status !== MovementStatus.APROVADO) return false;
+      if (String(m.effectiveDate).slice(0, 4) !== String(year)) return false;
       if (!matchesAccessScope_(m, scope)) return false;
       return true;
     });
 
-    var byMonth = {};
-    for (var i = 0; i < 12; i++) {
-      var d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      byMonth[Utilities.formatDate(d, 'GMT', 'yyyy-MM')] = 0;
-    }
-
-    movements.forEach(function (m) {
+    var impactByMonth = {};
+    approvedMovements.forEach(function (m) {
+      var month = Number(String(m.effectiveDate).slice(5, 7));
+      if (month <= lastClosedMonth) return; // já refletido no fechamento real desse mês
       var simulation = SimulatorService.latestSimulation(m.id);
-      if (!simulation) return;
-      var month = String(m.effectiveDate).slice(0, 7);
-      if (byMonth.hasOwnProperty(month)) {
-        byMonth[month] += Number(simulation.totalMonthlyImpact || 0);
-      }
+      var impact = simulation ? Number(simulation.totalMonthlyImpact || 0) : 0;
+      impactByMonth[month] = (impactByMonth[month] || 0) + impact;
     });
 
-    return Object.keys(byMonth)
-      .sort()
-      .map(function (month) {
-        return { month: month, impact: byMonth[month] };
-      });
+    var cumulativeImpact = 0;
+    return allMonths.map(function (month) {
+      var monthly = salariesByMonth[month];
+      if (monthly.monthClosed) {
+        var value = monthly.rows.reduce(function (sum, row) { return sum + row.salary; }, 0);
+        return { month: month, value: value, closed: true };
+      }
+      cumulativeImpact += impactByMonth[month] || 0;
+      return { month: month, value: lastClosedPayroll + cumulativeImpact, closed: false };
+    });
   },
 
   /**

@@ -51,9 +51,14 @@ export interface MovementsDashboard {
   headcountIncrease: number;
 }
 
-export interface ProjectionPoint {
-  month: string;
-  impact: number;
+// Folha do ano inteiro (jan-dez) mês a mês: meses fechados usam o
+// fechamento real (payroll_snapshots); meses ainda sem fechamento
+// projetam a partir do último fechado, somando o impacto de toda
+// movimentação já aprovada com vigência a partir daquele mês.
+export interface AnnualPayrollProjectionPoint {
+  month: number;
+  value: number;
+  closed: boolean;
 }
 
 export interface DirectorateRankingItem {
@@ -66,7 +71,7 @@ export interface FinancialDashboard {
   monthlyImpact: number;
   annualImpact: number;
   budgetConsumedPercent: number;
-  projection12Months: ProjectionPoint[];
+  annualPayrollProjection: AnnualPayrollProjectionPoint[];
   directorateRanking: DirectorateRankingItem[];
   monthClosed: boolean;
   openMonths: number[];

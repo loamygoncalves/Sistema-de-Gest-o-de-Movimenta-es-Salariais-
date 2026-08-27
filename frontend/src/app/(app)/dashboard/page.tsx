@@ -298,12 +298,30 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card title="Projeção de Impacto — 12 meses">
+            <Card title={`Folha do Ano ${payroll?.year ?? ""} — Fechado x Projetado`}>
+              <p className="mb-2 -mt-2 text-xs text-brand-text">
+                Janeiro a dezembro: meses já fechados usam o fechamento real da folha; meses futuros são
+                projetados a partir do último fechamento, já somando o impacto de mérito, promoção e
+                aumento de quadro aprovados a partir do mês de vigência de cada um.
+              </p>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={financial?.projection12Months ?? []}>
+                  <LineChart
+                    data={(() => {
+                      const points = financial?.annualPayrollProjection ?? [];
+                      const lastClosedIndex = points.reduce(
+                        (last, p, i) => (p.closed ? i : last),
+                        -1
+                      );
+                      return points.map((p, i) => ({
+                        monthLabel: FULL_MONTH_LABELS[p.month],
+                        closedValue: p.closed ? p.value : null,
+                        projectedValue: !p.closed || i === lastClosedIndex ? p.value : null,
+                      }));
+                    })()}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+                    <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} stroke="#94a3b8" />
                     <YAxis
                       tick={{ fontSize: 12 }}
                       stroke="#94a3b8"
@@ -311,7 +329,26 @@ export default function DashboardPage() {
                       width={90}
                     />
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Line type="monotone" dataKey="impact" stroke="#00AFAA" strokeWidth={2} dot={false} name="Impacto" />
+                    <Legend />
+                    <Line
+                      type="monotone"
+                      dataKey="closedValue"
+                      stroke="#00AFAA"
+                      strokeWidth={2}
+                      dot={false}
+                      name="Fechado"
+                      connectNulls={false}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="projectedValue"
+                      stroke="#00AFAA"
+                      strokeWidth={2}
+                      strokeDasharray="6 4"
+                      dot={false}
+                      name="Projetado"
+                      connectNulls={false}
+                    />
                   </LineChart>
                 </ResponsiveContainer>
               </div>

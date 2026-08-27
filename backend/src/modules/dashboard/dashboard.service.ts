@@ -332,7 +332,7 @@ export class DashboardService {
     const budgetConsumedPercent =
       payroll.payrollBudgeted > 0 ? (payroll.payrollCurrent / payroll.payrollBudgeted) * 100 : 0;
 
-    const projection12Months = await this.getProjection12Months(scope, directorateId, costCenterId);
+    const annualPayrollProjection = await this.getAnnualPayrollProjection(year, scope, directorateId, costCenterId);
     // Ranking de Diretorias compara todas as diretorias entre si — GESTOR
     // (identificado por ter costCenterIds no escopo) não deve ter acesso a
     // esse comparativo cross-empresa, só à própria área.
@@ -343,19 +343,47 @@ export class DashboardService {
       monthlyImpact,
       annualImpact,
       budgetConsumedPercent: Number(budgetConsumedPercent.toFixed(2)),
-      projection12Months,
+      annualPayrollProjection,
       directorateRanking,
       monthClosed: payroll.monthClosed,
       openMonths: payroll.openMonths,
     };
   }
 
-  private async getProjection12Months(scope: AccessScope, directorateId?: string, costCenterId?: string) {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = new Date(now.getFullYear(), now.getMonth() + 12, 0);
+  /**
+   * Folha do ano inteiro (jan-dez), mês a mês: meses já fechados usam o
+   * fechamento real (payroll_snapshots somado, no escopo); meses ainda sem
+   * fechamento são projetados a partir do último mês fechado, somando o
+   * impacto mensal de toda movimentação já APROVADA cujo mês de vigência
+   * (effectiveDate) caia depois do último fechamento — o impacto entra a
+   * partir do mês de vigência e persiste nos meses seguintes (é o novo
+   * "ritmo" da folha), igual à lógica de lacuna do Simulador. Nunca herda
+   * live `employees.current_salary`: sem nenhum fechamento no ano, os
+   * meses abertos partem de zero (só a soma dos impactos aprovados).
+   */
+  private async getAnnualPayrollProjection(
+    year: number,
+    scope: AccessScope,
+    directorateId?: string,
+    costCenterId?: string,
+  ) {
+    const allMonths = Array.from({ length: 12 }, (_, i) => i + 1);
+    const salariesByMonth = await this.resolveMonthlySalariesByMonth(
+      year,
+      allMonths,
+      scope,
+      directorateId,
+      costCenterId,
+    );
 
-    const qb = this.movementRepo
+    const closedMonths = allMonths.filter((m) => salariesByMonth.get(m)!.monthClosed);
+    const lastClosedMonth = closedMonths.length > 0 ? Math.max(...closedMonths) : 0;
+    const lastClosedPayroll =
+      lastClosedMonth > 0
+        ? salariesByMonth.get(lastClosedMonth)!.salaries.reduce((sum, s) => sum + s, 0)
+        : 0;
+
+    const movementQb = this.movementRepo
       .createQueryBuilder('m')
       .leftJoin(
         MovementSimulation,
@@ -364,30 +392,35 @@ export class DashboardService {
       )
       .select('m.effectiveDate', 'effectiveDate')
       .addSelect('sim.totalMonthlyImpact', 'impact')
-      .where('m.status IN (:...statuses)', {
-        statuses: [MovementStatus.APROVADO, MovementStatus.PENDENTE_APROVACAO],
-      })
-      .andWhere('m.effectiveDate BETWEEN :start AND :end', {
-        start: start.toISOString().slice(0, 10),
-        end: end.toISOString().slice(0, 10),
-      });
-    applyAccessScope(qb, 'm', scope, directorateId, costCenterId);
+      .where('m.status = :status', { status: MovementStatus.APROVADO })
+      .andWhere('EXTRACT(YEAR FROM m.effectiveDate) = :year', { year });
+    applyAccessScope(movementQb, 'm', scope, directorateId, costCenterId);
+    const movementRows = await movementQb.getRawMany();
 
-    const rows = await qb.getRawMany();
-
-    const byMonth = new Map<string, number>();
-    for (let i = 0; i < 12; i++) {
-      const date = new Date(now.getFullYear(), now.getMonth() + i, 1);
-      byMonth.set(date.toISOString().slice(0, 7), 0);
+    // `effectiveDate` volta do driver pg como Date (não string) numa query
+    // raw — .toISOString() é seguro (sempre UTC) para extrair o mês; usar
+    // .getMonth() aqui reintroduziria o mesmo bug de timezone já corrigido
+    // no Simulador (ver parseIsoDateParts em simulator.service.ts).
+    const impactByMonth = new Map<number, number>();
+    for (const row of movementRows) {
+      const month = Number(new Date(row.effectiveDate).toISOString().slice(5, 7));
+      if (month <= lastClosedMonth) continue; // já refletido no fechamento real desse mês
+      impactByMonth.set(month, (impactByMonth.get(month) ?? 0) + Number(row.impact ?? 0));
     }
-    for (const row of rows) {
-      const month = new Date(row.effectiveDate).toISOString().slice(0, 7);
-      if (byMonth.has(month)) {
-        byMonth.set(month, byMonth.get(month)! + Number(row.impact ?? 0));
+
+    const months: { month: number; value: number; closed: boolean }[] = [];
+    let cumulativeImpact = 0;
+    for (const month of allMonths) {
+      const monthly = salariesByMonth.get(month)!;
+      if (monthly.monthClosed) {
+        months.push({ month, value: monthly.salaries.reduce((sum, s) => sum + s, 0), closed: true });
+        continue;
       }
+      cumulativeImpact += impactByMonth.get(month) ?? 0;
+      months.push({ month, value: lastClosedPayroll + cumulativeImpact, closed: false });
     }
 
-    return Array.from(byMonth.entries()).map(([month, impact]) => ({ month, impact }));
+    return months;
   }
 
   /**

@@ -293,9 +293,19 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
   `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
 - `GET /dashboard/financial?year=&months=&directorateId=` →
-  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, projection12Months: [{month, impact}], directorateRanking: [{directorate, currentPayroll, annualBudget, consumedPercent}], monthClosed, openMonths }`
+  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, annualPayrollProjection: [{month, value, closed}], directorateRanking: [{directorate, currentPayroll, annualBudget, consumedPercent}], monthClosed, openMonths }`
   (`monthClosed`/`openMonths` refletem os mesmos meses usados em `budgetConsumedPercent`,
   herdados de `GET /dashboard/payroll`)
+  `annualPayrollProjection` é a folha do ano inteiro (`year`), jan-dez, um
+  item por mês (`month` 1-12): para meses já fechados, `value` é o
+  fechamento real da folha somado (`closed: true`); para meses ainda sem
+  fechamento, `value` projeta a partir do **último mês fechado** somando o
+  impacto mensal de toda movimentação já `APROVADO` cujo `effectiveDate`
+  caia depois desse último fechamento — o impacto entra no mês de vigência
+  e persiste nos meses seguintes (`closed: false`), a mesma lógica de
+  lacuna usada em `payrollAfterApproval` do Simulador (ver seção abaixo).
+  Sem nenhum fechamento no ano, os meses abertos partem de zero (nunca
+  herda `employees.current_salary` ao vivo nem dados de outro ano).
   `directorateRanking.currentPayroll` usa **exclusivamente** o fechamento da folha
   (`payroll_snapshots`) dos meses selecionados, somado — nunca `employees.current_salary` ao
   vivo (que reflete o salário mais recente de cada colaborador, não o de um mês fechado
