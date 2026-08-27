@@ -78,14 +78,15 @@ var SimulatorService = {
    * centro de custo não há como localizar uma linha orçamentária: o
    * orçamento é zero.
    */
-  bucketBudgetAnnual_: function (directorateId, costCenterId) {
+  bucketBudgetAnnual_: function (directorateId, costCenterId, year) {
     if (!costCenterId) return 0;
     var entries = Tables.budgetEntries.where(function (b) {
       return b.directorateId === directorateId && b.costCenterId === costCenterId;
     });
+    var factor = BudgetService.getAdjustmentFactor_(year);
     return entries.reduce(function (sum, entry) {
       return sum + sumAllMonths_(entry);
-    }, 0);
+    }, 0) * factor;
   },
 
   /**
@@ -143,8 +144,8 @@ var SimulatorService = {
     var totalMonthlyImpact = monthlySalaryImpact + chargesTotal + benefitsTotal;
     var totalAnnualImpact = totalMonthlyImpact * monthsRemaining;
 
-    var budgetedDirectoratePayroll = this.bucketBudgetAnnual_(input.directorateId, input.costCenterId);
     var effectiveYear = this.parseIsoDateParts_(input.effectiveDate).year;
+    var budgetedDirectoratePayroll = this.bucketBudgetAnnual_(input.directorateId, input.costCenterId, effectiveYear);
     var closedMonths = this.bucketClosedMonthsPayroll_(input.directorateId, input.costCenterId, effectiveYear);
     var currentDirectoratePayroll = closedMonths.yearToDatePayroll;
 

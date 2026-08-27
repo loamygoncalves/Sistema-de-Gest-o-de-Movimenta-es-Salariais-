@@ -105,6 +105,17 @@ orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
   `payrollBudgeted` são do mês de referência (`month` 1-12, padrão mês
   corrente); `annualBudgeted` é a soma de todas as 12 colunas de todas as
   linhas (visão do ano inteiro).
+- `GET /budget/adjustment?year=` (ADMIN) → `{ year, percent }` (100 se nunca
+  ajustado). `PUT /budget/adjustment` (ADMIN) `{ year, percent }` — Ajuste de
+  Orçamento (tela ADMIN): um percentual por ano (ex.: 90) que reduz/aumenta
+  proporcionalmente todo "orçado" em R$ exibido no sistema (este endpoint,
+  Dashboard, Simulador, `EmployeesService#compareWithBudget`) sem alterar os
+  valores originais em `budget_entries` — o fator é aplicado só na leitura,
+  nunca gravado sobre a fonte. Não afeta contagem de HC/vagas orçadas, só
+  valores monetários. Sem ajuste salvo para o ano, o fator é 100% (sem
+  efeito). Só ADMIN tem acesso a este endpoint (leitura e escrita) — os
+  demais perfis nunca veem o percentual, apenas os valores já ajustados nos
+  outros endpoints.
 
 ## Movements (solicitações) — módulo 3
 Transferência foi descontinuada (não existe mais como `type`). Toda

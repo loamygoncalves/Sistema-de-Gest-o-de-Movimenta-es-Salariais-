@@ -146,6 +146,17 @@ não há rejeição de linha "duplicada" na importação.
   O `year` é sobreposto pelo ano derivado do cabeçalho de mês, quando este é
   uma data real. Reimportar substitui integralmente o orçado do ano para as
   diretorias presentes no arquivo.
+- `api_getBudgetAdjustment(year)` (ADMIN) → `{ year, percent }` (100 se nunca
+  ajustado). `api_saveBudgetAdjustment(year, percent)` (ADMIN) → mesmo
+  formato — Ajuste de Orçamento (tela ADMIN, aba `AjusteOrcamento`): um
+  percentual por ano (ex.: 90) que reduz/aumenta proporcionalmente todo
+  "orçado" em R$ exibido no sistema (`api_getBudgetDashboard`, Dashboard,
+  Simulador, `EmployeesService.compareWithBudget`) sem alterar os valores
+  originais na aba `Orcamento` — o fator é aplicado só na leitura, nunca
+  gravado sobre a fonte. Não afeta contagem de HC/vagas orçadas, só valores
+  monetários. Sem ajuste salvo para o ano, o fator é 100% (sem efeito). Só
+  ADMIN tem acesso a estas funções — os demais perfis nunca veem o
+  percentual, apenas os valores já ajustados nas outras funções.
 
 ## Simulador / encargos — Módulo 4
 - `api_listChargeParameters()`, `api_createChargeParameter({name,label,valueType,value,isBenefit})`, `api_updateChargeParameter(id, patch)`

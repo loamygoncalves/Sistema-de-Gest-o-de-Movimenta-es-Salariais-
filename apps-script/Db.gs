@@ -273,6 +273,10 @@ var TABLES_CONFIG = {
     sheet: 'FluxoAprovacao',
     columns: ['id', 'stepOrder', 'roles', 'createdAt', 'updatedAt'],
   },
+  budgetAdjustments: {
+    sheet: 'AjusteOrcamento',
+    columns: ['id', 'year', 'percent', 'updatedAt'],
+  },
   payrollSnapshots: {
     sheet: 'FechamentoFolha',
     columns: [

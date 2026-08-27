@@ -6,11 +6,12 @@ import { ImportType, MONTH_KEYS, MonthKey, PlannedSituation } from '../../common
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelSheetRaw, toNumber } from '../../common/utils/excel.util';
-import { monthKeyFromNumber, monthValue, sumAllMonths } from '../../common/utils/months.util';
+import { budgetAdjustmentFactor, monthKeyFromNumber, monthValue, sumAllMonths } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
 import { BudgetEntry } from './entities/budget-entry.entity';
-import { BudgetDashboardQueryDto, BudgetEntryQueryDto } from './dto/budget.dto';
+import { BudgetAdjustment } from './entities/budget-adjustment.entity';
+import { BudgetDashboardQueryDto, BudgetEntryQueryDto, SaveBudgetAdjustmentDto } from './dto/budget.dto';
 
 /** Rótulos aceitos na coluna "TIPO DE MOVIMENTAÇÃO" da planilha de orçamento. */
 const SITUATION_LABELS: Record<string, PlannedSituation> = {
@@ -54,9 +55,36 @@ export class BudgetService {
   constructor(
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
+    @InjectRepository(BudgetAdjustment)
+    private readonly budgetAdjustmentRepo: Repository<BudgetAdjustment>,
     private readonly orgService: OrgService,
     private readonly importBatchService: ImportBatchService,
   ) {}
+
+  /**
+   * Ajuste de Orçamento (tela ADMIN): fator (ex.: 0.9 para 90%) aplicado a
+   * todo "orçado" em R$ do ano — nunca à contagem de HC/vagas orçadas, e
+   * nunca gravado sobre `budget_entries` (ver nota da entidade).
+   */
+  async getAdjustmentFactor(year: number): Promise<number> {
+    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
+    return budgetAdjustmentFactor(row?.percent);
+  }
+
+  /** Percentual salvo do Ajuste de Orçamento do ano (100 se nunca ajustado). */
+  async getAdjustment(year: number): Promise<{ year: number; percent: number }> {
+    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
+    return { year, percent: row ? Number(row.percent) : 100 };
+  }
+
+  /** Salva (cria ou substitui) o percentual do Ajuste de Orçamento do ano — só ADMIN (ver controller). */
+  async saveAdjustment(dto: SaveBudgetAdjustmentDto): Promise<{ year: number; percent: number }> {
+    let row = await this.budgetAdjustmentRepo.findOne({ where: { year: dto.year } });
+    if (!row) row = this.budgetAdjustmentRepo.create({ year: dto.year });
+    row.percent = dto.percent;
+    await this.budgetAdjustmentRepo.save(row);
+    return { year: dto.year, percent: Number(row.percent) };
+  }
 
   async findEntries(query: BudgetEntryQueryDto, scope: AccessScope) {
     const page = query.page ?? 1;
@@ -95,14 +123,13 @@ export class BudgetService {
   ) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
     const entries = await this.loadFiltered(year, scope, costCenterId);
+    const factor = await this.getAdjustmentFactor(year);
 
     const activeEntries = entries.filter((entry) => monthValue(entry as any, referenceMonth) !== null);
     const hcBudgeted = activeEntries.length;
-    const payrollBudgeted = activeEntries.reduce(
-      (sum, entry) => sum + Number(monthValue(entry as any, referenceMonth) ?? 0),
-      0,
-    );
-    const annualBudgeted = entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0);
+    const payrollBudgeted =
+      activeEntries.reduce((sum, entry) => sum + Number(monthValue(entry as any, referenceMonth) ?? 0), 0) * factor;
+    const annualBudgeted = entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0) * factor;
 
     return {
       year,

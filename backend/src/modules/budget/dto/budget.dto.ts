@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsUUID, Max, Min } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
 
 export class BudgetEntryQueryDto extends PaginationQueryDto {
@@ -40,4 +40,23 @@ export class BudgetDashboardQueryDto {
   @IsOptional()
   @IsUUID()
   costCenterId?: string;
+}
+
+export class BudgetAdjustmentQueryDto {
+  @Type(() => Number)
+  @IsInt()
+  year: number;
+}
+
+/** Percentual do Ajuste de Orçamento (tela ADMIN) — ex.: 90 reduz todo orçado em R$ para 90% do importado. */
+export class SaveBudgetAdjustmentDto {
+  @Type(() => Number)
+  @IsInt()
+  year: number;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  @Max(300)
+  percent: number;
 }

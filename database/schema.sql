@@ -298,6 +298,16 @@ CREATE INDEX idx_budget_entries_directorate ON budget_entries(directorate_id);
 CREATE INDEX idx_budget_entries_cost_center ON budget_entries(cost_center_id);
 CREATE INDEX idx_budget_entries_position ON budget_entries(position_id);
 
+-- Ajuste de Orçamento (tela ADMIN): percentual por ano que reduz/aumenta
+-- proporcionalmente todo "orçado" em R$ exibido no sistema, aplicado só na
+-- leitura (nunca sobre budget_entries) — sem linha para o ano, fator = 100%.
+CREATE TABLE budget_adjustments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  year INT NOT NULL UNIQUE,
+  percent NUMERIC(5,2) NOT NULL CHECK (percent > 0 AND percent <= 300),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ============================================================================
 -- PARÂMETROS DE ENCARGOS E BENEFÍCIOS
 -- ============================================================================

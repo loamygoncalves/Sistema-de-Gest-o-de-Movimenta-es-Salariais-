@@ -6,10 +6,11 @@ import { EmployeeStatus, ImportType, PlannedSituation } from '../../common/enums
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelBuffer, toDate, toMonthYear, toNumber } from '../../common/utils/excel.util';
-import { monthValue } from '../../common/utils/months.util';
+import { budgetAdjustmentFactor, monthValue } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
+import { BudgetAdjustment } from '../budget/entities/budget-adjustment.entity';
 import { Employee } from './entities/employee.entity';
 import { PayrollSnapshot } from './entities/payroll-snapshot.entity';
 import { CreateEmployeeDto, EmployeeQueryDto, UpdateEmployeeDto } from './dto/employee.dto';
@@ -23,9 +24,17 @@ export class EmployeesService {
     private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
+    @InjectRepository(BudgetAdjustment)
+    private readonly budgetAdjustmentRepo: Repository<BudgetAdjustment>,
     private readonly orgService: OrgService,
     private readonly importBatchService: ImportBatchService,
   ) {}
+
+  /** Fator do Ajuste de Orçamento (tela ADMIN) do ano — nunca gravado sobre budget_entries, só aplicado na leitura. */
+  private async getAdjustmentFactor(year: number): Promise<number> {
+    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
+    return budgetAdjustmentFactor(row?.percent);
+  }
 
   async findAll(query: EmployeeQueryDto, scope: AccessScope) {
     const page = query.page ?? 1;
@@ -365,6 +374,7 @@ export class EmployeesService {
     const budgetEntries = allBudgetEntries.filter(
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
+    const factor = await this.getAdjustmentFactor(year);
 
     const { rows: salaryRows, monthClosed } = await this.resolveMonthlySalaryRows(year, referenceMonth, scope);
 
@@ -394,7 +404,7 @@ export class EmployeesService {
         currentCost: 0,
       };
       bucket.budgetedCount += 1;
-      bucket.budgetedCost += Number(monthValue(entry as any, referenceMonth) ?? 0);
+      bucket.budgetedCost += Number(monthValue(entry as any, referenceMonth) ?? 0) * factor;
       buckets.set(key, bucket);
     }
 

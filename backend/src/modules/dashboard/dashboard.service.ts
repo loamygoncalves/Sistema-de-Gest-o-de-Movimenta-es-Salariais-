@@ -4,9 +4,10 @@ import { In, Repository } from 'typeorm';
 import { MovementStatus, MovementType, PlannedSituation } from '../../common/enums';
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
-import { monthValue } from '../../common/utils/months.util';
+import { budgetAdjustmentFactor, monthValue } from '../../common/utils/months.util';
 import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
+import { BudgetAdjustment } from '../budget/entities/budget-adjustment.entity';
 import { Directorate } from '../org/entities/directorate.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
 import { MovementSimulation } from '../movements/entities/movement-simulation.entity';
@@ -19,6 +20,8 @@ export class DashboardService {
     private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
+    @InjectRepository(BudgetAdjustment)
+    private readonly budgetAdjustmentRepo: Repository<BudgetAdjustment>,
     @InjectRepository(Directorate)
     private readonly directorateRepo: Repository<Directorate>,
     @InjectRepository(MovementRequest)
@@ -32,6 +35,12 @@ export class DashboardService {
   /** Meses efetivos para um filtro opcional: os informados, ou só o mês corrente. */
   private resolveMonths(months?: number[]): number[] {
     return months && months.length > 0 ? months : [new Date().getMonth() + 1];
+  }
+
+  /** Fator do Ajuste de Orçamento (tela ADMIN) do ano — nunca aplicado a contagens de HC/vagas, só a R$ orçado. */
+  private async getAdjustmentFactor(year: number): Promise<number> {
+    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
+    return budgetAdjustmentFactor(row?.percent);
   }
 
   /**
@@ -147,6 +156,7 @@ export class DashboardService {
     const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
     applyAccessScope(budgetQb, 'b', scope, directorateId, costCenterId);
     const allBudgetEntries = await budgetQb.getMany();
+    const factor = await this.getAdjustmentFactor(year);
 
     const salariesByMonth = await this.resolveMonthlySalariesByMonth(
       year,
@@ -157,7 +167,8 @@ export class DashboardService {
     );
 
     const byMonth = referenceMonths.map((month) => {
-      const budgeted = allBudgetEntries.reduce((sum, b) => sum + Number(monthValue(b as any, month) ?? 0), 0);
+      const budgeted =
+        allBudgetEntries.reduce((sum, b) => sum + Number(monthValue(b as any, month) ?? 0), 0) * factor;
       const monthly = salariesByMonth.get(month)!;
       const current = monthly.salaries.reduce((sum, salary) => sum + salary, 0);
       return { month, payrollBudgeted: budgeted, payrollCurrent: current, monthClosed: monthly.monthClosed };
@@ -198,6 +209,7 @@ export class DashboardService {
     const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
     applyAccessScope(budgetQb, 'b', scope, directorateId);
     const allBudgetEntries = await budgetQb.getMany();
+    const factor = await this.getAdjustmentFactor(year);
 
     const snapshotQb = this.payrollSnapshotRepo
       .createQueryBuilder('s')
@@ -244,7 +256,7 @@ export class DashboardService {
         const value = monthValue(entry as any, month);
         if (value === null) continue;
         const bucket = getBucket(entry.directorateId, entry.costCenterId, entry.directorate?.name, entry.costCenter?.name);
-        bucket.budgetedCost += Number(value);
+        bucket.budgetedCost += Number(value) * factor;
         bucket.budgetedCountByMonth.set(month, (bucket.budgetedCountByMonth.get(month) ?? 0) + 1);
       }
       for (const snapshot of snapshots.filter((s) => s.month === month)) {

@@ -122,3 +122,12 @@ export interface BudgetDashboard {
   payrollBudgeted: number;
   annualBudgeted: number;
 }
+
+// Ajuste de Orçamento (tela ADMIN, GET/PUT /budget/adjustment?year=): percentual
+// que reduz/aumenta proporcionalmente todo "orçado" em R$ exibido no sistema
+// (Dashboard, Simulador, comparativo de colaboradores) sem alterar os valores
+// originais importados. 100 = sem ajuste (padrão quando nunca configurado).
+export interface BudgetAdjustment {
+  year: number;
+  percent: number;
+}

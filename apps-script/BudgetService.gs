@@ -84,7 +84,42 @@ function sumAllMonths_(record) {
   }, 0);
 }
 
+/**
+ * Fator multiplicativo do Ajuste de Orçamento (tela ADMIN) a partir do
+ * percentual salvo para o ano — sem linha salva, `percent` chega
+ * null/undefined e o fator é 1 (100%, sem ajuste).
+ */
+function budgetAdjustmentFactor_(percent) {
+  return percent === null || percent === undefined ? 1 : Number(percent) / 100;
+}
+
 var BudgetService = {
+  /**
+   * Ajuste de Orçamento (tela ADMIN): fator (ex.: 0.9 para 90%) aplicado a
+   * todo "orçado" em R$ do ano — nunca à contagem de HC/vagas orçadas, e
+   * nunca gravado sobre budget_entries/BudgetEntries (ver AjusteOrcamento).
+   */
+  getAdjustmentFactor_: function (year) {
+    var row = Tables.budgetAdjustments.where(function (a) { return Number(a.year) === Number(year); })[0];
+    return budgetAdjustmentFactor_(row ? row.percent : null);
+  },
+
+  /** Percentual salvo do Ajuste de Orçamento do ano (100 se nunca ajustado). */
+  getAdjustment: function (year) {
+    var row = Tables.budgetAdjustments.where(function (a) { return Number(a.year) === Number(year); })[0];
+    return { year: year, percent: row ? Number(row.percent) : 100 };
+  },
+
+  /** Salva (cria ou substitui) o percentual do Ajuste de Orçamento do ano — só ADMIN (ver Api.gs). */
+  saveAdjustment: function (input) {
+    var row = Tables.budgetAdjustments.where(function (a) { return Number(a.year) === Number(input.year); })[0];
+    if (row) {
+      Tables.budgetAdjustments.update(row.id, { percent: Number(input.percent), updatedAt: nowIso_() });
+    } else {
+      Tables.budgetAdjustments.insert({ year: Number(input.year), percent: Number(input.percent), updatedAt: nowIso_() });
+    }
+    return { year: Number(input.year), percent: Number(input.percent) };
+  },
   listEntries: function (year, scope, positionId) {
     scope = scope || {};
     return Tables.budgetEntries.where(function (b) {
@@ -104,6 +139,7 @@ var BudgetService = {
   getDashboard: function (year, month, scope) {
     var referenceMonth = month || new Date().getMonth() + 1;
     var entries = this.listEntries(year, scope);
+    var factor = this.getAdjustmentFactor_(year);
 
     var activeEntries = entries.filter(function (entry) {
       return monthValue_(entry, referenceMonth) !== null;
@@ -111,10 +147,10 @@ var BudgetService = {
     var hcBudgeted = activeEntries.length;
     var payrollBudgeted = activeEntries.reduce(function (sum, entry) {
       return sum + Number(monthValue_(entry, referenceMonth) || 0);
-    }, 0);
+    }, 0) * factor;
     var annualBudgeted = entries.reduce(function (sum, entry) {
       return sum + sumAllMonths_(entry);
-    }, 0);
+    }, 0) * factor;
 
     return {
       year: year,

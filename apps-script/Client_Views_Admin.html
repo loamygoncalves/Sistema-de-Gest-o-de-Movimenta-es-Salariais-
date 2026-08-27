@@ -1039,4 +1039,80 @@
         .catch(toastError);
     }
   };
+
+  // -----------------------------------------------------------------------
+  // Ajuste de Orçamento — ADMIN. api_getBudgetAdjustment / api_saveBudgetAdjustment
+  // -----------------------------------------------------------------------
+  Views.adminBudgetAdjustment = function (root) {
+    var user = App.user;
+    if (!isAdminRole(user)) {
+      adminAccessDenied(root);
+      return;
+    }
+
+    var state = { year: new Date().getFullYear() };
+
+    root.innerHTML =
+      '<div class="page-header"><div><h1>Ajuste de Orçamento</h1>' +
+      '<p>Define, por ano, um percentual do orçamento importado que fica disponível — ex.: 90% reduz todo ' +
+      '"orçado" em R$ exibido no Dashboard, no Simulador e no comparativo de colaboradores para 90% do que foi ' +
+      'importado (100.000,00 orçados em um centro de custo passam a aparecer como 90.000,00), refletindo em ' +
+      'todos os meses do ano. Não altera a planilha original nem a contagem de HC/vagas orçadas — só o valor em ' +
+      'R$ mostrado. Visível e editável apenas pelo perfil Administrador.</p></div>' +
+      '<div id="budget-adjustment-body">' +
+      loadingHtml() +
+      '</div>';
+
+    loadAndRender();
+
+    function loadAndRender() {
+      var body = document.getElementById('budget-adjustment-body');
+      body.innerHTML = loadingHtml();
+      callApi('api_getBudgetAdjustment', state.year)
+        .then(function (adjustment) {
+          renderBody(adjustment.percent);
+        })
+        .catch(function (err) {
+          body.innerHTML = errorStateHtml(apiErrorMessage(err));
+        });
+    }
+
+    function renderBody(percent) {
+      var body = document.getElementById('budget-adjustment-body');
+      body.innerHTML =
+        '<div class="card" style="display:flex;flex-direction:column;gap:14px;max-width:360px;">' +
+        '<label>Ano<input type="number" id="budget-adjustment-year" value="' +
+        state.year +
+        '"></label>' +
+        '<label>Percentual disponibilizado (%)<input type="number" step="0.01" min="1" max="300" id="budget-adjustment-percent" value="' +
+        percent +
+        '"></label>' +
+        '<p class="text-sm text-muted">100 = sem ajuste (valor original importado). Ex.: 90 mostra 90% do orçado.</p>' +
+        '</div>' +
+        '<div class="row" style="justify-content:flex-end;margin-top:16px;">' +
+        '<button class="btn" id="budget-adjustment-save-btn">Salvar ajuste</button>' +
+        '</div>';
+
+      document.getElementById('budget-adjustment-year').addEventListener('change', function (e) {
+        state.year = Number(e.target.value) || state.year;
+        loadAndRender();
+      });
+      document.getElementById('budget-adjustment-save-btn').addEventListener('click', save);
+    }
+
+    function save() {
+      var percentInput = document.getElementById('budget-adjustment-percent');
+      var percent = Number(percentInput.value);
+      if (!percent || percent <= 0) {
+        toast('Informe um percentual maior que zero.', 'error');
+        return;
+      }
+      callApi('api_saveBudgetAdjustment', state.year, percent)
+        .then(function (adjustment) {
+          toast('Ajuste de ' + state.year + ' salvo: orçado passa a ser exibido a ' + adjustment.percent + '%.', 'success');
+          renderBody(adjustment.percent);
+        })
+        .catch(toastError);
+    }
+  };
 </script>

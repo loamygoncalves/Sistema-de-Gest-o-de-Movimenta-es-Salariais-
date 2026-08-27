@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -18,7 +20,12 @@ import {
 } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums';
 import { BudgetService } from './budget.service';
-import { BudgetDashboardQueryDto, BudgetEntryQueryDto } from './dto/budget.dto';
+import {
+  BudgetAdjustmentQueryDto,
+  BudgetDashboardQueryDto,
+  BudgetEntryQueryDto,
+  SaveBudgetAdjustmentDto,
+} from './dto/budget.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('budget')
@@ -38,6 +45,19 @@ export class BudgetController {
       resolveAccessScope(user),
       query.costCenterId,
     );
+  }
+
+  /** Ajuste de Orçamento (tela ADMIN) — só ADMIN vê e altera; os demais nunca têm acesso a este endpoint. */
+  @Get('adjustment')
+  @Roles(UserRole.ADMIN)
+  getAdjustment(@Query() query: BudgetAdjustmentQueryDto) {
+    return this.budgetService.getAdjustment(query.year);
+  }
+
+  @Put('adjustment')
+  @Roles(UserRole.ADMIN)
+  saveAdjustment(@Body() dto: SaveBudgetAdjustmentDto) {
+    return this.budgetService.saveAdjustment(dto);
   }
 
   @Post('import')

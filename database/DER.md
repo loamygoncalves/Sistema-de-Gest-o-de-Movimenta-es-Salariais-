@@ -78,6 +78,11 @@ erDiagram
         numeric mar
         numeric dez
     }
+    BUDGET_ADJUSTMENTS {
+        uuid id PK
+        int year
+        numeric percent
+    }
     MOVEMENT_REQUESTS {
         uuid id PK
         string type
@@ -161,6 +166,15 @@ erDiagram
   referência, não por matrícula — comparar por cargo faria um cargo
   estourado e outro com sobra no mesmo centro de custo aparecerem como dois
   problemas separados em vez de se cancelarem.
+- **`budget_adjustments`** (tela "Ajuste de Orçamento", só ADMIN) é o Ajuste
+  de Orçamento: um percentual por ano (`year` único), sem FK — não altera
+  `budget_entries`, apenas multiplica todo "orçado" em R$ lido dessa tabela
+  (Dashboard, Simulador, `EmployeesService#compareWithBudget`,
+  `BudgetService#getDashboard`) por `percent / 100` no momento da leitura.
+  Sem linha para um ano, o fator é 1 (100%, sem ajuste). Nunca afeta a
+  contagem de HC/vagas orçadas (linhas de `budget_entries`), só os valores
+  monetários — e nunca é gravado sobre `budget_entries`, para não compor
+  erros ao trocar o percentual repetidamente (90% duas vezes não vira 81%).
 - **`payroll_snapshots`** é o fechamento mensal da folha (`POST
   /employees/import`, coluna `mes_de_referencia` da planilha, formato
   `MM/AAAA`): um "retrato" do salário de cada

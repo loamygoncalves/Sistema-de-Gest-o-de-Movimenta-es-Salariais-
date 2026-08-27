@@ -223,6 +223,19 @@ function api_importBudget(base64Data, mimeType, filename, year) {
   return BudgetService.importFromFile(base64Data, mimeType, filename, year, user.email);
 }
 
+/** Ajuste de Orçamento (tela ADMIN) — só ADMIN vê e altera; os demais nunca têm acesso a esta função. */
+function api_getBudgetAdjustment(year) {
+  var user = requireUser_();
+  requireRole_(user, [UserRole.ADMIN]);
+  return BudgetService.getAdjustment(year);
+}
+
+function api_saveBudgetAdjustment(year, percent) {
+  var user = requireUser_();
+  requireRole_(user, [UserRole.ADMIN]);
+  return BudgetService.saveAdjustment({ year: year, percent: percent });
+}
+
 // ---------------------------------------------------------------------------
 // Simulador / encargos (Módulo 4)
 // ---------------------------------------------------------------------------

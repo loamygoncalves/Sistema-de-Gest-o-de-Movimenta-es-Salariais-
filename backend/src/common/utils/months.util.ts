@@ -28,3 +28,12 @@ export function isActiveInMonth(
 ): boolean {
   return monthValue(record, month) !== null;
 }
+
+/**
+ * Fator multiplicativo do Ajuste de Orçamento (tela ADMIN) a partir do
+ * percentual salvo para o ano — sem linha salva, `percent` chega `null`/
+ * `undefined` e o fator é 1 (100%, sem ajuste).
+ */
+export function budgetAdjustmentFactor(percent: number | null | undefined): number {
+  return percent === null || percent === undefined ? 1 : Number(percent) / 100;
+}

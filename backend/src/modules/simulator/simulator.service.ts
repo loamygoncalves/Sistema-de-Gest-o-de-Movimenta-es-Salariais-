@@ -3,9 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ChargeValueType, MovementType } from '../../common/enums';
-import { sumAllMonths } from '../../common/utils/months.util';
+import { budgetAdjustmentFactor, sumAllMonths } from '../../common/utils/months.util';
 import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
+import { BudgetAdjustment } from '../budget/entities/budget-adjustment.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
 import { ChargeParametersService } from './charge-parameters.service';
 
@@ -49,6 +50,8 @@ export class SimulatorService {
     private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
+    @InjectRepository(BudgetAdjustment)
+    private readonly budgetAdjustmentRepo: Repository<BudgetAdjustment>,
   ) {}
 
   /**
@@ -99,12 +102,20 @@ export class SimulatorService {
   private async bucketBudgetAnnual(
     directorateId: string,
     costCenterId: string | null | undefined,
+    year: number,
   ): Promise<number> {
     if (!costCenterId) return 0;
     const entries = await this.budgetRepo.find({
       where: { directorateId, costCenterId } as any,
     });
-    return entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0);
+    const factor = await this.getAdjustmentFactor(year);
+    return entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0) * factor;
+  }
+
+  /** Fator do Ajuste de Orçamento (tela ADMIN) do ano — nunca gravado sobre budget_entries, só aplicado na leitura. */
+  private async getAdjustmentFactor(year: number): Promise<number> {
+    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
+    return budgetAdjustmentFactor(row?.percent);
   }
 
   /**
@@ -156,11 +167,12 @@ export class SimulatorService {
     const totalMonthlyImpact = monthlySalaryImpact + chargesTotal + benefitsTotal;
     const totalAnnualImpact = totalMonthlyImpact * monthsRemaining;
 
+    const effectiveYear = this.parseIsoDateParts(input.effectiveDate).year;
     const budgetedDirectoratePayroll = await this.bucketBudgetAnnual(
       input.directorateId,
       input.costCenterId,
+      effectiveYear,
     );
-    const effectiveYear = this.parseIsoDateParts(input.effectiveDate).year;
     const { yearToDatePayroll, lastMonthPayroll } = await this.bucketClosedMonthsPayroll(
       input.directorateId,
       input.costCenterId,
