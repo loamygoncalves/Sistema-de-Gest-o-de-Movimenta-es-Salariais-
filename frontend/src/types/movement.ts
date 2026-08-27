@@ -82,6 +82,11 @@ export interface BudgetComparison {
   percentConsumed: number;
 }
 
+// Formato usado pela UI (SimulationPanel) — o backend devolve os campos
+// monetários no nível raiz (ver SimulationResult em
+// backend/src/modules/simulator/simulator.service.ts); `lib/normalize.ts`
+// (`normalizeSimulation`) converte a resposta bruta da API para este
+// formato antes de chegar em qualquer tela.
 export interface MovementSimulation {
   monthlySalaryImpact: number;
   annualSalaryImpact: number;

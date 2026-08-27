@@ -59,6 +59,7 @@ export function normalizeSimulation(raw: any): MovementSimulation {
     totalAnnualImpact: raw.totalAnnualImpact,
     exceedsBudget: raw.exceedsBudget,
     alertMessage: raw.alertMessage,
+    policyViolations: raw.policyViolations,
     budget: {
       budgeted: raw.budgetedDirectoratePayroll,
       current: raw.currentDirectoratePayroll,
