@@ -51,10 +51,24 @@ export class SimulatorService {
     private readonly budgetRepo: Repository<BudgetEntry>,
   ) {}
 
+  /**
+   * Extrai {year, month} de uma data `YYYY-MM-DD` direto da string, sem
+   * passar por `new Date(...).getMonth()/getFullYear()`: uma string
+   * date-only é interpretada como meia-noite UTC pelo `Date`, então em
+   * qualquer servidor com timezone atrás de UTC (ex.: America/Sao_Paulo,
+   * UTC-3) os getters locais devolveriam o dia/mês anterior — 01/09
+   * "viraria" 31/08 e a movimentação seria contada a partir de agosto em
+   * vez de setembro.
+   */
+  private parseIsoDateParts(isoDate: string): { year: number; month: number } {
+    const [year, month] = isoDate.split('-').map(Number);
+    return { year, month };
+  }
+
   /** Meses restantes no ano-calendário da data efetiva, incluindo o próprio mês (Jan=12, Dez=1). */
   private monthsRemaining(effectiveDate: string): number {
-    const date = new Date(effectiveDate);
-    return 13 - (date.getMonth() + 1);
+    const { month } = this.parseIsoDateParts(effectiveDate);
+    return 13 - month;
   }
 
   /** Diferença de salário mensal introduzida pela movimentação. */
@@ -146,7 +160,7 @@ export class SimulatorService {
       input.directorateId,
       input.costCenterId,
     );
-    const effectiveYear = new Date(input.effectiveDate).getFullYear();
+    const effectiveYear = this.parseIsoDateParts(input.effectiveDate).year;
     const { yearToDatePayroll, lastMonthPayroll } = await this.bucketClosedMonthsPayroll(
       input.directorateId,
       input.costCenterId,

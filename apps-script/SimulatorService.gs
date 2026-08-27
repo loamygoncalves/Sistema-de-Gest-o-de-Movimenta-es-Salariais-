@@ -35,10 +35,24 @@ var ChargeParametersService = {
 };
 
 var SimulatorService = {
+  /**
+   * Extrai {year, month} de uma data `YYYY-MM-DD` direto da string, sem
+   * passar por `new Date(...).getMonth()/getFullYear()`: uma string
+   * date-only é interpretada como meia-noite UTC pelo `Date`, então com o
+   * timezone do projeto Apps Script atrás de UTC (ex.: America/Sao_Paulo,
+   * UTC-3) os getters locais devolveriam o dia/mês anterior — 01/09
+   * "viraria" 31/08 e a movimentação seria contada a partir de agosto em
+   * vez de setembro.
+   */
+  parseIsoDateParts_: function (isoDate) {
+    var parts = String(isoDate).split('-').map(Number);
+    return { year: parts[0], month: parts[1] };
+  },
+
   /** Meses restantes no ano-calendário da data efetiva, incluindo o próprio mês (jan=12, dez=1). */
   monthsRemaining_: function (effectiveDateIso) {
-    var date = new Date(effectiveDateIso);
-    return 13 - (date.getMonth() + 1);
+    var month = this.parseIsoDateParts_(effectiveDateIso).month;
+    return 13 - month;
   },
 
   /** Diferença de salário mensal introduzida pela movimentação. `input` é um SimulationInput. */
@@ -130,7 +144,7 @@ var SimulatorService = {
     var totalAnnualImpact = totalMonthlyImpact * monthsRemaining;
 
     var budgetedDirectoratePayroll = this.bucketBudgetAnnual_(input.directorateId, input.costCenterId);
-    var effectiveYear = new Date(input.effectiveDate).getFullYear();
+    var effectiveYear = this.parseIsoDateParts_(input.effectiveDate).year;
     var closedMonths = this.bucketClosedMonthsPayroll_(input.directorateId, input.costCenterId, effectiveYear);
     var currentDirectoratePayroll = closedMonths.yearToDatePayroll;
 
