@@ -149,7 +149,10 @@ já que não há colaborador para derivar).
   Apesar do nome dos campos (herdado do modelo original), a comparação é
   sempre feita pelo **centro de custo exato** (diretoria + centro de custo)
   da movimentação — nunca pelo orçamento da diretoria inteira, e nunca
-  restrita ao cargo específico da movimentação.
+  restrita ao cargo específico da movimentação. `currentDirectoratePayroll`
+  usa **exclusivamente** o fechamento da folha (`payroll_snapshots`) do mês
+  mais recente já fechado, anualizado (× 12) — nunca `employees.
+  current_salary` ao vivo. Sem nenhum fechamento ainda, vem zerado.
 - `POST /simulator/preview` — Simulador Rápido (Gestor/Diretor testam o
   impacto de uma promoção/mérito para um colaborador ANTES de abrir a
   solicitação de fato; não persiste nada). Body:

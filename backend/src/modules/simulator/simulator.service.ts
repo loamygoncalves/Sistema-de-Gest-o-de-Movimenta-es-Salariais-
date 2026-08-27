@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ChargeValueType, EmployeeStatus, MovementType } from '../../common/enums';
+import { ChargeValueType, MovementType } from '../../common/enums';
 import { sumAllMonths } from '../../common/utils/months.util';
-import { Employee } from '../employees/entities/employee.entity';
+import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
 import { ChargeParametersService } from './charge-parameters.service';
@@ -45,8 +45,8 @@ export class SimulatorService {
   constructor(
     private readonly chargeParametersService: ChargeParametersService,
     private readonly configService: ConfigService,
-    @InjectRepository(Employee)
-    private readonly employeeRepo: Repository<Employee>,
+    @InjectRepository(PayrollSnapshot)
+    private readonly payrollSnapshotRepo: Repository<PayrollSnapshot>,
     @InjectRepository(BudgetEntry)
     private readonly budgetRepo: Repository<BudgetEntry>,
   ) {}
@@ -93,16 +93,47 @@ export class SimulatorService {
     return entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0);
   }
 
-  /** Folha anualizada (salário mensal x12) dos colaboradores ativos hoje nesse mesmo centro de custo. */
+  /**
+   * (year, month) mais recente que já tem fechamento salvo — mesma noção de
+   * "mês mais recente" usada em EmployeesService#resolveLatestPayrollSnapshotMonth,
+   * para que o "Atual" do simulador reflita o mesmo fechamento usado no
+   * resto do sistema, nunca o salário ao vivo do cadastro de Colaboradores.
+   */
+  private async resolveLatestClosedMonth(): Promise<{ year: number; month: number } | null> {
+    const snapshots = await this.payrollSnapshotRepo.find({ select: ['year', 'month'] });
+    if (snapshots.length === 0) return null;
+    let year = 0;
+    let month = 0;
+    let keyNum = -1;
+    for (const s of snapshots) {
+      const thisKeyNum = s.year * 12 + s.month;
+      if (thisKeyNum > keyNum) {
+        keyNum = thisKeyNum;
+        year = s.year;
+        month = s.month;
+      }
+    }
+    return { year, month };
+  }
+
+  /**
+   * Folha anualizada (salário do fechamento x12) desse centro de custo no
+   * mês mais recente já fechado — usa exclusivamente payroll_snapshots,
+   * nunca employees.current_salary ao vivo (que reflete o salário mais
+   * recente do cadastro, não o de um fechamento específico). Sem nenhum
+   * fechamento ainda, o "Atual" vem zerado em vez de herdar o cadastro.
+   */
   private async bucketCurrentAnnualPayroll(
     directorateId: string,
     costCenterId: string | null | undefined,
   ): Promise<number> {
     if (!costCenterId) return 0;
-    const employees = await this.employeeRepo.find({
-      where: { directorateId, costCenterId, status: EmployeeStatus.ATIVO } as any,
+    const latest = await this.resolveLatestClosedMonth();
+    if (!latest) return 0;
+    const snapshots = await this.payrollSnapshotRepo.find({
+      where: { year: latest.year, month: latest.month, directorateId, costCenterId } as any,
     });
-    return employees.reduce((sum, e) => sum + Number(e.currentSalary || 0), 0) * 12;
+    return snapshots.reduce((sum, s) => sum + Number(s.salary || 0), 0) * 12;
   }
 
   async simulate(input: SimulationInput): Promise<SimulationResult> {

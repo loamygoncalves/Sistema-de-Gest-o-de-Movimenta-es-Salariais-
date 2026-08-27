@@ -168,14 +168,16 @@ erDiagram
   um valor único e vivo — sem esse snapshot, um relatório de um mês passado
   mostraria o salário mais recente (re-importado depois) em vez do que a
   folha realmente era naquele mês. `DashboardService`/
-  `EmployeesService#compareWithBudget` usam **exclusivamente** o snapshot do
-  mês exato pedido — nunca `current_salary` ao vivo. Sem snapshot para o mês
-  pedido (mês corrente ainda em aberto, ou histórico anterior a este
-  recurso), os indicadores desse mês vêm zerados (`monthClosed: false` na
-  resposta da API); usar `current_salary` faria um mês sem fechamento
-  "herdar" os números do último mês fechado, como se as folhas tivessem
-  sido somadas entre meses — o acumulado do ano é responsabilidade de outra
-  métrica (ex.: `movement_history`/impacto acumulado), não desta.
+  `EmployeesService#compareWithBudget`/`SimulatorService` usam
+  **exclusivamente** o snapshot — nunca `current_salary` ao vivo:
+  Dashboard/comparativo usam o mês exato pedido (sem snapshot, indicadores
+  zerados e `monthClosed: false` na resposta da API); o comparativo
+  orçamentário do Simulador (rápido e oficial) usa o mês mais recente já
+  fechado, já que não há um mês selecionado nesse fluxo. Usar
+  `current_salary` faria um mês sem fechamento "herdar" os números do
+  último mês fechado, como se as folhas tivessem sido somadas entre meses —
+  o acumulado do ano é responsabilidade de outra métrica (ex.:
+  `movement_history`/impacto acumulado), não desta.
   Reimportar o mesmo (year, month) substitui o snapshot anterior de cada
   colaborador (chave única `year+month+employee_id`), nunca duplica. Quando
   um fechamento avança o mês mais recente da folha (não é uma correção de

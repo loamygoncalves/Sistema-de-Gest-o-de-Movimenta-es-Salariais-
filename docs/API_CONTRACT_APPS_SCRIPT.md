@@ -182,6 +182,10 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   original), a comparação é sempre pelo **centro de custo exato** (diretoria
   + centro de custo) da movimentação — nunca pelo orçamento da diretoria
   inteira, e nunca restrita ao cargo específico da movimentação.
+  `currentDirectoratePayroll` usa **exclusivamente** o fechamento da folha
+  (aba FechamentoFolha) do mês mais recente já fechado, anualizado (× 12) —
+  nunca `employees.currentSalary` ao vivo. Sem nenhum fechamento ainda, vem
+  zerado.
 - `api_submitMovement(id)` → dispara a simulação, cria uma etapa de aprovação por
   linha do fluxo configurado (ver seção Aprovações abaixo), muda o status para
   `PENDENTE_APROVACAO` e envia um e-mail de notificação (via `MailApp`, de

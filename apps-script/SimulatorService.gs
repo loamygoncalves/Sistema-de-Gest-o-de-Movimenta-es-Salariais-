@@ -74,13 +74,28 @@ var SimulatorService = {
     }, 0);
   },
 
-  /** Folha anualizada (salário mensal x12) dos colaboradores ativos hoje nesse mesmo centro de custo. */
+  /**
+   * Folha anualizada (salário do fechamento x12) desse centro de custo no
+   * mês mais recente já fechado — usa exclusivamente a aba FechamentoFolha
+   * (payrollSnapshots), nunca employees.currentSalary ao vivo (que reflete
+   * o salário mais recente do cadastro, não o de um fechamento específico).
+   * Sem nenhum fechamento ainda, o "Atual" vem zerado em vez de herdar o
+   * cadastro. Mesmo (year, month) mais recente usado em
+   * latestPayrollSnapshotMonth_ (EmployeesService.gs).
+   */
   bucketCurrentAnnualPayroll_: function (directorateId, costCenterId) {
     if (!costCenterId) return 0;
-    var employees = Tables.employees.where(function (e) {
-      return e.status === EmployeeStatus.ATIVO && e.directorateId === directorateId && e.costCenterId === costCenterId;
+    var latest = latestPayrollSnapshotMonth_();
+    if (!latest) return 0;
+    var snapshots = Tables.payrollSnapshots.where(function (s) {
+      return (
+        Number(s.year) === latest.year &&
+        Number(s.month) === latest.month &&
+        s.directorateId === directorateId &&
+        s.costCenterId === costCenterId
+      );
     });
-    return sumBy_(employees, 'currentSalary') * 12;
+    return sumBy_(snapshots, 'salary') * 12;
   },
 
   /**
