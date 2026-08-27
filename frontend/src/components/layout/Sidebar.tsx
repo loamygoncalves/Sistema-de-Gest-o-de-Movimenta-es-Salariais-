@@ -14,16 +14,16 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r border-brand-border bg-white md:flex">
-      <div className="flex h-16 flex-col justify-center gap-1 border-b border-brand-border px-5">
+      <div className="flex h-24 flex-col justify-center gap-1.5 border-b-2 border-brand-teal/20 px-5">
         <Image
           src="/beep-logo-color.png"
           alt="Beep Saúde"
           width={1920}
           height={1080}
           priority
-          className="h-7 w-auto"
+          className="h-11 w-auto"
         />
-        <p className="text-[11px] font-medium leading-tight text-brand-text">Movimentações Salariais</p>
+        <p className="text-sm font-semibold leading-tight text-brand-teal-dark">Movimentações Salariais</p>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {NAV_GROUPS.map((group) => {
