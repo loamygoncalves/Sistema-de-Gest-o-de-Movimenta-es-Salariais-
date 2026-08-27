@@ -131,12 +131,12 @@ export class SimulatorService {
     directorateId: string,
     costCenterId: string | null | undefined,
     year: number,
-  ): Promise<{ yearToDatePayroll: number; lastMonthPayroll: number }> {
-    if (!costCenterId) return { yearToDatePayroll: 0, lastMonthPayroll: 0 };
+  ): Promise<{ yearToDatePayroll: number; lastMonthPayroll: number; lastClosedMonth: number | null }> {
+    if (!costCenterId) return { yearToDatePayroll: 0, lastMonthPayroll: 0, lastClosedMonth: null };
     const snapshots = await this.payrollSnapshotRepo.find({
       where: { year, directorateId, costCenterId } as any,
     });
-    if (snapshots.length === 0) return { yearToDatePayroll: 0, lastMonthPayroll: 0 };
+    if (snapshots.length === 0) return { yearToDatePayroll: 0, lastMonthPayroll: 0, lastClosedMonth: null };
 
     const yearToDatePayroll = snapshots.reduce((sum, s) => sum + Number(s.salary || 0), 0);
     const lastClosedMonth = Math.max(...snapshots.map((s) => s.month));
@@ -144,7 +144,7 @@ export class SimulatorService {
       .filter((s) => s.month === lastClosedMonth)
       .reduce((sum, s) => sum + Number(s.salary || 0), 0);
 
-    return { yearToDatePayroll, lastMonthPayroll };
+    return { yearToDatePayroll, lastMonthPayroll, lastClosedMonth };
   }
 
   async simulate(input: SimulationInput): Promise<SimulationResult> {
@@ -173,20 +173,31 @@ export class SimulatorService {
       input.costCenterId,
       effectiveYear,
     );
-    const { yearToDatePayroll, lastMonthPayroll } = await this.bucketClosedMonthsPayroll(
+    const { yearToDatePayroll, lastMonthPayroll, lastClosedMonth } = await this.bucketClosedMonthsPayroll(
       input.directorateId,
       input.costCenterId,
       effectiveYear,
     );
     const currentDirectoratePayroll = yearToDatePayroll;
 
-    // Projeção até dezembro: acumulado real (meses já fechados) + meses que
-    // faltam no ano, projetados a partir do último fechamento já com o
-    // impacto mensal total da movimentação — não um simples "atual anual +
-    // impacto x meses", que ignoraria o histórico real do centro de custo.
+    // Meses entre o último fechamento e a movimentação (ex.: fechamento até
+    // agosto, movimentação efetiva em novembro) não têm folha real nem
+    // impacto da movimentação ainda — para não ficarem de fora da projeção
+    // anual, replicam o último fechamento sem o impacto (setembro/outubro
+    // no exemplo); a partir do mês da movimentação, a projeção normal
+    // (último fechamento + impacto, meses restantes) assume.
+    const effectiveMonth = this.parseIsoDateParts(input.effectiveDate).month;
+    const gapMonths = lastClosedMonth ? Math.max(0, effectiveMonth - lastClosedMonth - 1) : 0;
+    const gapPayroll = lastMonthPayroll * gapMonths;
+
+    // Projeção até dezembro: acumulado real (meses já fechados) + meses de
+    // lacuna replicados sem impacto + meses que faltam no ano, projetados a
+    // partir do último fechamento já com o impacto mensal total da
+    // movimentação — não um simples "atual anual + impacto x meses", que
+    // ignoraria o histórico real do centro de custo.
     const projectedMonthlyPayroll = lastMonthPayroll + totalMonthlyImpact;
     const projectedRemainingPayroll = projectedMonthlyPayroll * monthsRemaining;
-    const payrollAfterApproval = yearToDatePayroll + projectedRemainingPayroll;
+    const payrollAfterApproval = yearToDatePayroll + gapPayroll + projectedRemainingPayroll;
     const difference = budgetedDirectoratePayroll - payrollAfterApproval;
     const percentConsumed =
       budgetedDirectoratePayroll > 0

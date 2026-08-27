@@ -195,6 +195,13 @@ erDiagram
   **último mês fechado** desse centro de custo somado ao novo impacto
   mensal da movimentação — é essa projeção anual que é comparada ao
   orçamento anual para dizer se a movimentação estoura ou não o orçamento.
+  Quando a data efetiva da movimentação está mais de um mês à frente do
+  último fechamento (ex.: fechamento até agosto, movimentação em
+  01/11), os meses entre os dois (setembro, outubro) não têm folha real
+  nem impacto da movimentação ainda — para não ficarem de fora da
+  projeção, esses meses de lacuna replicam o valor do último fechamento
+  **sem** o impacto da movimentação; a partir do mês da movimentação em
+  diante, a projeção normal (último fechamento + impacto) assume.
   Reimportar o mesmo (year, month) substitui o snapshot anterior de cada
   colaborador (chave única `year+month+employee_id`), nunca duplica. Quando
   um fechamento avança o mês mais recente da folha (não é uma correção de

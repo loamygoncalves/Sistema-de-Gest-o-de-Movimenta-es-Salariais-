@@ -175,6 +175,13 @@ já que não há colaborador para derivar).
     restantes no ano a partir da data efetiva (`monthsRemaining`) — não é
     `currentDirectoratePayroll + totalAnnualImpact` simples, que ignoraria
     o histórico real acumulado do centro de custo.
+  - Quando a data efetiva está mais de um mês à frente do último
+    fechamento (ex.: fechamento até agosto, movimentação em 01/11), os
+    meses de lacuna entre os dois (setembro, outubro) replicam o total do
+    último mês fechado **sem** o `totalMonthlyImpact` (ainda não é o novo
+    ritmo) e somam a `payrollAfterApproval` — do contrário esses meses
+    ficariam de fora da projeção inteira. A partir do mês da data efetiva,
+    a projeção volta a usar o último fechamento + impacto normalmente.
   - `percentConsumed`/`exceedsBudget`/`difference` comparam esse
     `payrollAfterApproval` projetado (ano inteiro) contra
     `budgetedDirectoratePayroll` (orçamento anual) — é o que permite ao
