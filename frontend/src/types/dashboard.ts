@@ -54,11 +54,15 @@ export interface MovementsDashboard {
 // Folha do ano inteiro (jan-dez) mês a mês: meses fechados usam o
 // fechamento real (payroll_snapshots); meses ainda sem fechamento
 // projetam a partir do último fechado, somando o impacto de toda
-// movimentação já aprovada com vigência a partir daquele mês.
+// movimentação já aprovada com vigência a partir daquele mês. `budgeted` é
+// o orçado do mês (já com o fator de Ajuste de Orçamento aplicado);
+// `overBudget` marca quando value > budgeted (fechado ou projetado).
 export interface AnnualPayrollProjectionPoint {
   month: number;
   value: number;
   closed: boolean;
+  budgeted: number;
+  overBudget: boolean;
 }
 
 export interface DirectorateRankingItem {

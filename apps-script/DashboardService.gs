@@ -250,6 +250,15 @@ var DashboardService = {
     var allMonths = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
     var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, allMonths, scope);
 
+    var allBudgetEntries = BudgetService.listEntries(year, scope);
+    var factor = BudgetService.getAdjustmentFactor_(year);
+    var budgetedByMonth = {};
+    allMonths.forEach(function (month) {
+      budgetedByMonth[month] = allBudgetEntries.reduce(function (sum, b) {
+        return sum + Number(monthValue_(b, month) || 0);
+      }, 0) * factor;
+    });
+
     var closedMonths = allMonths.filter(function (m) { return salariesByMonth[m].monthClosed; });
     var lastClosedMonth = closedMonths.length > 0 ? Math.max.apply(null, closedMonths) : 0;
     var lastClosedPayroll =
@@ -275,13 +284,21 @@ var DashboardService = {
 
     var cumulativeImpact = 0;
     return allMonths.map(function (month) {
+      var budgeted = budgetedByMonth[month] || 0;
       var monthly = salariesByMonth[month];
       if (monthly.monthClosed) {
         var value = monthly.rows.reduce(function (sum, row) { return sum + row.salary; }, 0);
-        return { month: month, value: value, closed: true };
+        return { month: month, value: value, closed: true, budgeted: budgeted, overBudget: budgeted > 0 && value > budgeted };
       }
       cumulativeImpact += impactByMonth[month] || 0;
-      return { month: month, value: lastClosedPayroll + cumulativeImpact, closed: false };
+      var projectedValue = lastClosedPayroll + cumulativeImpact;
+      return {
+        month: month,
+        value: projectedValue,
+        closed: false,
+        budgeted: budgeted,
+        overBudget: budgeted > 0 && projectedValue > budgeted,
+      };
     });
   },
 

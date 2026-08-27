@@ -293,7 +293,7 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
   `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
 - `GET /dashboard/financial?year=&months=&directorateId=` →
-  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, annualPayrollProjection: [{month, value, closed}], directorateRanking: [{directorate, currentPayroll, annualBudget, consumedPercent}], monthClosed, openMonths }`
+  `{ months, monthlyImpact, annualImpact, budgetConsumedPercent, annualPayrollProjection: [{month, value, closed, budgeted, overBudget}], directorateRanking: [{directorate, currentPayroll, annualBudget, consumedPercent}], monthClosed, openMonths }`
   (`monthClosed`/`openMonths` refletem os mesmos meses usados em `budgetConsumedPercent`,
   herdados de `GET /dashboard/payroll`)
   `annualPayrollProjection` é a folha do ano inteiro (`year`), jan-dez, um
@@ -306,6 +306,12 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
   lacuna usada em `payrollAfterApproval` do Simulador (ver seção abaixo).
   Sem nenhum fechamento no ano, os meses abertos partem de zero (nunca
   herda `employees.current_salary` ao vivo nem dados de outro ano).
+  `budgeted` é a soma do orçado (`budget_entries`) daquele mês, já com o
+  fator de **Ajuste de Orçamento** do ano aplicado (mesmo cálculo de
+  `payrollBudgeted` em `GET /dashboard/payroll`); `overBudget` é
+  `true` quando `value > budgeted` (`budgeted > 0`), tanto para meses
+  fechados (estouro real) quanto projetados (estouro projetado) — usado
+  para sinalizar a barra em vermelho no gráfico.
   `directorateRanking.currentPayroll` usa **exclusivamente** o fechamento da folha
   (`payroll_snapshots`) dos meses selecionados, somado — nunca `employees.current_salary` ao
   vivo (que reflete o salário mais recente de cada colaborador, não o de um mês fechado

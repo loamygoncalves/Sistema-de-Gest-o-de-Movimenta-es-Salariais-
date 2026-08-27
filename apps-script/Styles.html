@@ -1008,6 +1008,27 @@
     background: var(--brand-100);
     border: 2px dashed var(--brand-500);
   }
+  .bar-chart-bar.over-budget {
+    background: var(--red-500, #ef4444);
+  }
+  .bar-chart-bar.over-budget.projected {
+    background: #fee2e2;
+    border-color: var(--red-500, #ef4444);
+  }
+  .bar-chart-bar-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 28px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .bar-chart-budget-marker {
+    position: absolute;
+    left: -3px;
+    right: -3px;
+    border-top: 2px dashed var(--slate-400, #94a3b8);
+  }
   .bar-chart-label {
     font-size: 10px;
     color: var(--slate-500);

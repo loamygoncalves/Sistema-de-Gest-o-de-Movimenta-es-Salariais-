@@ -376,6 +376,18 @@ export class DashboardService {
       costCenterId,
     );
 
+    const budgetQb = this.budgetRepo.createQueryBuilder('b').where('b.year = :year', { year });
+    applyAccessScope(budgetQb, 'b', scope, directorateId, costCenterId);
+    const allBudgetEntries = await budgetQb.getMany();
+    const factor = await this.getAdjustmentFactor(year);
+    const budgetedByMonth = new Map<number, number>();
+    for (const month of allMonths) {
+      budgetedByMonth.set(
+        month,
+        allBudgetEntries.reduce((sum, b) => sum + Number(monthValue(b as any, month) ?? 0), 0) * factor,
+      );
+    }
+
     const closedMonths = allMonths.filter((m) => salariesByMonth.get(m)!.monthClosed);
     const lastClosedMonth = closedMonths.length > 0 ? Math.max(...closedMonths) : 0;
     const lastClosedPayroll =
@@ -408,16 +420,19 @@ export class DashboardService {
       impactByMonth.set(month, (impactByMonth.get(month) ?? 0) + Number(row.impact ?? 0));
     }
 
-    const months: { month: number; value: number; closed: boolean }[] = [];
+    const months: { month: number; value: number; closed: boolean; budgeted: number; overBudget: boolean }[] = [];
     let cumulativeImpact = 0;
     for (const month of allMonths) {
+      const budgeted = budgetedByMonth.get(month) ?? 0;
       const monthly = salariesByMonth.get(month)!;
       if (monthly.monthClosed) {
-        months.push({ month, value: monthly.salaries.reduce((sum, s) => sum + s, 0), closed: true });
+        const value = monthly.salaries.reduce((sum, s) => sum + s, 0);
+        months.push({ month, value, closed: true, budgeted, overBudget: budgeted > 0 && value > budgeted });
         continue;
       }
       cumulativeImpact += impactByMonth.get(month) ?? 0;
-      months.push({ month, value: lastClosedPayroll + cumulativeImpact, closed: false });
+      const value = lastClosedPayroll + cumulativeImpact;
+      months.push({ month, value, closed: false, budgeted, overBudget: budgeted > 0 && value > budgeted });
     }
 
     return months;

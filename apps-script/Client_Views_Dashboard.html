@@ -12,19 +12,27 @@
    * Folha do ano inteiro (jan-dez): barra sólida para meses já fechados
    * (fechamento real), barra tracejada para meses projetados a partir do
    * último fechamento (já com o impacto das movimentações aprovadas a
-   * partir de cada mês de vigência). Espelha o LineChart (Fechado sólido /
-   * Projetado tracejado) do Dashboard Next.js.
+   * partir de cada mês de vigência). Uma marca tracejada em cada coluna
+   * indica o orçado do mês (já com o fator de Ajuste de Orçamento); a
+   * barra fica vermelha quando o valor (fechado ou projetado) estoura esse
+   * orçado. Espelha o ComposedChart (barra + linha Orçado) do Dashboard
+   * Next.js.
    */
   function annualPayrollProjectionChartHtml_(points) {
     if (!points || points.length === 0) return emptyStateHtml('Sem dados para exibir.');
     var max = Math.max.apply(
       null,
-      points.map(function (p) { return Math.abs(Number(p.value) || 0); }).concat([1])
+      points
+        .map(function (p) { return Math.abs(Number(p.value) || 0); })
+        .concat(points.map(function (p) { return Math.abs(Number(p.budgeted) || 0); }))
+        .concat([1])
     );
     var legend =
       '<div class="bar-chart-legend">' +
       '<span><span class="bar-chart-legend-dot" style="background:var(--brand-500);"></span>Fechado</span>' +
       '<span><span class="bar-chart-legend-dot" style="background:var(--brand-100);border:1px dashed var(--brand-500);"></span>Projetado</span>' +
+      '<span><span class="bar-chart-legend-dot" style="background:var(--red-500,#ef4444);"></span>Acima do orçado</span>' +
+      '<span><span class="bar-chart-legend-dot" style="background:transparent;border-top:2px dashed var(--slate-400,#94a3b8);height:0;"></span>Orçado</span>' +
       '</div>';
     return (
       legend +
@@ -32,21 +40,30 @@
       points
         .map(function (p) {
           var value = Number(p.value) || 0;
+          var budgeted = Number(p.budgeted) || 0;
           var h = Math.max(2, Math.round((Math.abs(value) / max) * BAR_CHART_MAX_PX));
-          var barClass = p.closed ? '' : ' projected';
+          var markerH = Math.max(0, Math.round((Math.abs(budgeted) / max) * BAR_CHART_MAX_PX));
+          var barClass = (p.closed ? '' : ' projected') + (p.overBudget ? ' over-budget' : '');
           var title =
             escapeHtml(DASHBOARD_MONTH_LABELS_[p.month - 1]) +
             ' — ' +
             (p.closed ? 'Fechado: ' : 'Projetado: ') +
-            escapeHtml(fmt.currency(value));
+            escapeHtml(fmt.currency(value)) +
+            ' | Orçado: ' +
+            escapeHtml(fmt.currency(budgeted)) +
+            (p.overBudget ? ' (acima do orçado)' : '');
           return (
             '<div class="bar-chart-col" title="' +
             title +
-            '"><div class="bar-chart-bar' +
+            '"><div class="bar-chart-bar-wrap" style="height:' +
+            BAR_CHART_MAX_PX +
+            'px"><div class="bar-chart-budget-marker" style="bottom:' +
+            markerH +
+            'px"></div><div class="bar-chart-bar' +
             barClass +
             '" style="height:' +
             h +
-            'px"></div><div class="bar-chart-label">' +
+            'px"></div></div><div class="bar-chart-label">' +
             escapeHtml(DASHBOARD_MONTH_LABELS_[p.month - 1]) +
             '</div></div>'
           );
@@ -359,11 +376,12 @@
         '</div>' +
         (function () {
           var projectionCardHtml =
-            cardOpen('Folha do Ano ' + state.year + ' — Fechado x Projetado', {
+            cardOpen('Folha do Ano ' + state.year + ' — Fechado x Orçado', {
               subtitle:
                 'Meses já fechados usam o fechamento real da folha; meses futuros são projetados a partir do ' +
                 'último fechamento, já somando o impacto de mérito, promoção e aumento de quadro aprovados a ' +
-                'partir do mês de vigência de cada um.',
+                'partir do mês de vigência de cada um. A marca tracejada é o orçado do mês; barras em ' +
+                'vermelho estouraram o orçamento.',
             }) +
             annualPayrollProjectionChartHtml_(financial.annualPayrollProjection) +
             cardClose();

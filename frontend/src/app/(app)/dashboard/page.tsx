@@ -6,6 +6,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
   Line,
   LineChart,
@@ -298,27 +299,23 @@ export default function DashboardPage() {
               </div>
             </Card>
 
-            <Card title={`Folha do Ano ${payroll?.year ?? ""} — Fechado x Projetado`}>
+            <Card title={`Folha do Ano ${payroll?.year ?? ""} — Fechado x Orçado`}>
               <p className="mb-2 -mt-2 text-xs text-brand-text">
                 Janeiro a dezembro: meses já fechados usam o fechamento real da folha; meses futuros são
                 projetados a partir do último fechamento, já somando o impacto de mérito, promoção e
-                aumento de quadro aprovados a partir do mês de vigência de cada um.
+                aumento de quadro aprovados a partir do mês de vigência de cada um. A linha tracejada é o
+                orçado do mês; barras em vermelho estouraram o orçamento.
               </p>
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={(() => {
-                      const points = financial?.annualPayrollProjection ?? [];
-                      const lastClosedIndex = points.reduce(
-                        (last, p, i) => (p.closed ? i : last),
-                        -1
-                      );
-                      return points.map((p, i) => ({
-                        monthLabel: FULL_MONTH_LABELS[p.month],
-                        closedValue: p.closed ? p.value : null,
-                        projectedValue: !p.closed || i === lastClosedIndex ? p.value : null,
-                      }));
-                    })()}
+                  <ComposedChart
+                    data={(financial?.annualPayrollProjection ?? []).map((p) => ({
+                      monthLabel: FULL_MONTH_LABELS[p.month],
+                      value: p.value,
+                      budgeted: p.budgeted,
+                      closed: p.closed,
+                      overBudget: p.overBudget,
+                    }))}
                   >
                     <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                     <XAxis dataKey="monthLabel" tick={{ fontSize: 12 }} stroke="#94a3b8" />
@@ -329,27 +326,32 @@ export default function DashboardPage() {
                       width={90}
                     />
                     <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Legend />
-                    <Line
-                      type="monotone"
-                      dataKey="closedValue"
-                      stroke="#00AFAA"
-                      strokeWidth={2}
-                      dot={false}
-                      name="Fechado"
-                      connectNulls={false}
+                    <Legend
+                      payload={[
+                        { value: "Fechado", type: "square", color: "#00AFAA" },
+                        { value: "Projetado", type: "square", color: "#99DEDB" },
+                        { value: "Acima do orçado", type: "square", color: "#dc2626" },
+                        { value: "Orçado", type: "line", color: "#94a3b8" },
+                      ]}
                     />
                     <Line
                       type="monotone"
-                      dataKey="projectedValue"
-                      stroke="#00AFAA"
+                      dataKey="budgeted"
+                      stroke="#94a3b8"
                       strokeWidth={2}
-                      strokeDasharray="6 4"
+                      strokeDasharray="5 4"
                       dot={false}
-                      name="Projetado"
-                      connectNulls={false}
+                      name="Orçado"
                     />
-                  </LineChart>
+                    <Bar dataKey="value" name="Folha" radius={[4, 4, 0, 0]} legendType="none">
+                      {(financial?.annualPayrollProjection ?? []).map((p) => (
+                        <Cell
+                          key={p.month}
+                          fill={p.overBudget ? "#dc2626" : p.closed ? "#00AFAA" : "#99DEDB"}
+                        />
+                      ))}
+                    </Bar>
+                  </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </Card>
