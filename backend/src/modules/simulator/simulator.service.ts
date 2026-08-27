@@ -94,46 +94,32 @@ export class SimulatorService {
   }
 
   /**
-   * (year, month) mais recente que já tem fechamento salvo — mesma noção de
-   * "mês mais recente" usada em EmployeesService#resolveLatestPayrollSnapshotMonth,
-   * para que o "Atual" do simulador reflita o mesmo fechamento usado no
-   * resto do sistema, nunca o salário ao vivo do cadastro de Colaboradores.
+   * Folha real acumulada (soma, não anualizada) desse centro de custo em
+   * todos os meses já fechados do ano de referência (`year`, o ano da data
+   * efetiva da movimentação) — usa exclusivamente payroll_snapshots, nunca
+   * employees.current_salary ao vivo. Também devolve o total do ÚLTIMO mês
+   * fechado nesse centro de custo, base para projetar os meses restantes
+   * (ver simulate() abaixo). Sem nenhum fechamento no ano, tudo vem zerado
+   * em vez de herdar o cadastro ou outro ano.
    */
-  private async resolveLatestClosedMonth(): Promise<{ year: number; month: number } | null> {
-    const snapshots = await this.payrollSnapshotRepo.find({ select: ['year', 'month'] });
-    if (snapshots.length === 0) return null;
-    let year = 0;
-    let month = 0;
-    let keyNum = -1;
-    for (const s of snapshots) {
-      const thisKeyNum = s.year * 12 + s.month;
-      if (thisKeyNum > keyNum) {
-        keyNum = thisKeyNum;
-        year = s.year;
-        month = s.month;
-      }
-    }
-    return { year, month };
-  }
-
-  /**
-   * Folha anualizada (salário do fechamento x12) desse centro de custo no
-   * mês mais recente já fechado — usa exclusivamente payroll_snapshots,
-   * nunca employees.current_salary ao vivo (que reflete o salário mais
-   * recente do cadastro, não o de um fechamento específico). Sem nenhum
-   * fechamento ainda, o "Atual" vem zerado em vez de herdar o cadastro.
-   */
-  private async bucketCurrentAnnualPayroll(
+  private async bucketClosedMonthsPayroll(
     directorateId: string,
     costCenterId: string | null | undefined,
-  ): Promise<number> {
-    if (!costCenterId) return 0;
-    const latest = await this.resolveLatestClosedMonth();
-    if (!latest) return 0;
+    year: number,
+  ): Promise<{ yearToDatePayroll: number; lastMonthPayroll: number }> {
+    if (!costCenterId) return { yearToDatePayroll: 0, lastMonthPayroll: 0 };
     const snapshots = await this.payrollSnapshotRepo.find({
-      where: { year: latest.year, month: latest.month, directorateId, costCenterId } as any,
+      where: { year, directorateId, costCenterId } as any,
     });
-    return snapshots.reduce((sum, s) => sum + Number(s.salary || 0), 0) * 12;
+    if (snapshots.length === 0) return { yearToDatePayroll: 0, lastMonthPayroll: 0 };
+
+    const yearToDatePayroll = snapshots.reduce((sum, s) => sum + Number(s.salary || 0), 0);
+    const lastClosedMonth = Math.max(...snapshots.map((s) => s.month));
+    const lastMonthPayroll = snapshots
+      .filter((s) => s.month === lastClosedMonth)
+      .reduce((sum, s) => sum + Number(s.salary || 0), 0);
+
+    return { yearToDatePayroll, lastMonthPayroll };
   }
 
   async simulate(input: SimulationInput): Promise<SimulationResult> {
@@ -160,12 +146,21 @@ export class SimulatorService {
       input.directorateId,
       input.costCenterId,
     );
-    const currentDirectoratePayroll = await this.bucketCurrentAnnualPayroll(
+    const effectiveYear = new Date(input.effectiveDate).getFullYear();
+    const { yearToDatePayroll, lastMonthPayroll } = await this.bucketClosedMonthsPayroll(
       input.directorateId,
       input.costCenterId,
+      effectiveYear,
     );
+    const currentDirectoratePayroll = yearToDatePayroll;
 
-    const payrollAfterApproval = currentDirectoratePayroll + totalAnnualImpact;
+    // Projeção até dezembro: acumulado real (meses já fechados) + meses que
+    // faltam no ano, projetados a partir do último fechamento já com o
+    // impacto mensal total da movimentação — não um simples "atual anual +
+    // impacto x meses", que ignoraria o histórico real do centro de custo.
+    const projectedMonthlyPayroll = lastMonthPayroll + totalMonthlyImpact;
+    const projectedRemainingPayroll = projectedMonthlyPayroll * monthsRemaining;
+    const payrollAfterApproval = yearToDatePayroll + projectedRemainingPayroll;
     const difference = budgetedDirectoratePayroll - payrollAfterApproval;
     const percentConsumed =
       budgetedDirectoratePayroll > 0

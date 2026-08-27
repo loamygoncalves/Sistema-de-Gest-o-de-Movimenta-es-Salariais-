@@ -182,10 +182,27 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   original), a comparação é sempre pelo **centro de custo exato** (diretoria
   + centro de custo) da movimentação — nunca pelo orçamento da diretoria
   inteira, e nunca restrita ao cargo específico da movimentação.
-  `currentDirectoratePayroll` usa **exclusivamente** o fechamento da folha
-  (aba FechamentoFolha) do mês mais recente já fechado, anualizado (× 12) —
-  nunca `employees.currentSalary` ao vivo. Sem nenhum fechamento ainda, vem
-  zerado.
+
+  `currentDirectoratePayroll` e `payrollAfterApproval` usam **exclusivamente**
+  o fechamento da folha (aba FechamentoFolha) desse centro de custo — nunca
+  `employees.currentSalary` ao vivo:
+  - `currentDirectoratePayroll` = soma real (não anualizada) de todos os
+    meses já fechados no ano da data efetiva da movimentação (ex.: soma de
+    jan a ago se ago for o último fechamento).
+  - `payrollAfterApproval` = `currentDirectoratePayroll` + uma projeção dos
+    meses que faltam até dezembro: pega o total do **último mês fechado**
+    para esse centro de custo, soma o `totalMonthlyImpact` da movimentação
+    (o novo "ritmo mensal" após a mudança) e multiplica pelos meses
+    restantes no ano a partir da data efetiva (`monthsRemaining`) — não é
+    `currentDirectoratePayroll + totalAnnualImpact` simples, que ignoraria
+    o histórico real acumulado do centro de custo.
+  - `percentConsumed`/`exceedsBudget`/`difference` comparam esse
+    `payrollAfterApproval` projetado (ano inteiro) contra
+    `budgetedDirectoratePayroll` (orçamento anual) — é o que permite ao
+    gestor saber, ao simular, se a movimentação estoura ou não o orçamento
+    do ano.
+  - Sem nenhum fechamento no ano da data efetiva, tudo vem zerado (nunca
+    herda o cadastro ao vivo nem o fechamento de outro ano).
 - `api_submitMovement(id)` → dispara a simulação, cria uma etapa de aprovação por
   linha do fluxo configurado (ver seção Aprovações abaixo), muda o status para
   `PENDENTE_APROVACAO` e envia um e-mail de notificação (via `MailApp`, de

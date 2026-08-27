@@ -75,27 +75,33 @@ var SimulatorService = {
   },
 
   /**
-   * Folha anualizada (salário do fechamento x12) desse centro de custo no
-   * mês mais recente já fechado — usa exclusivamente a aba FechamentoFolha
-   * (payrollSnapshots), nunca employees.currentSalary ao vivo (que reflete
-   * o salário mais recente do cadastro, não o de um fechamento específico).
-   * Sem nenhum fechamento ainda, o "Atual" vem zerado em vez de herdar o
-   * cadastro. Mesmo (year, month) mais recente usado em
-   * latestPayrollSnapshotMonth_ (EmployeesService.gs).
+   * Folha real acumulada (soma, não anualizada) desse centro de custo em
+   * todos os meses já fechados do ano de referência (`year`, o ano da data
+   * efetiva da movimentação) — usa exclusivamente a aba FechamentoFolha
+   * (payrollSnapshots), nunca employees.currentSalary ao vivo. Também
+   * devolve o total do ÚLTIMO mês fechado nesse centro de custo, base para
+   * projetar os meses restantes (ver simulate abaixo). Sem nenhum
+   * fechamento no ano, tudo vem zerado em vez de herdar o cadastro ou
+   * outro ano.
    */
-  bucketCurrentAnnualPayroll_: function (directorateId, costCenterId) {
-    if (!costCenterId) return 0;
-    var latest = latestPayrollSnapshotMonth_();
-    if (!latest) return 0;
+  bucketClosedMonthsPayroll_: function (directorateId, costCenterId, year) {
+    if (!costCenterId) return { yearToDatePayroll: 0, lastMonthPayroll: 0 };
     var snapshots = Tables.payrollSnapshots.where(function (s) {
-      return (
-        Number(s.year) === latest.year &&
-        Number(s.month) === latest.month &&
-        s.directorateId === directorateId &&
-        s.costCenterId === costCenterId
-      );
+      return Number(s.year) === Number(year) && s.directorateId === directorateId && s.costCenterId === costCenterId;
     });
-    return sumBy_(snapshots, 'salary') * 12;
+    if (snapshots.length === 0) return { yearToDatePayroll: 0, lastMonthPayroll: 0 };
+
+    var yearToDatePayroll = sumBy_(snapshots, 'salary');
+    var lastClosedMonth = Math.max.apply(
+      null,
+      snapshots.map(function (s) { return Number(s.month); })
+    );
+    var lastMonthPayroll = sumBy_(
+      snapshots.filter(function (s) { return Number(s.month) === lastClosedMonth; }),
+      'salary'
+    );
+
+    return { yearToDatePayroll: yearToDatePayroll, lastMonthPayroll: lastMonthPayroll };
   },
 
   /**
@@ -124,9 +130,17 @@ var SimulatorService = {
     var totalAnnualImpact = totalMonthlyImpact * monthsRemaining;
 
     var budgetedDirectoratePayroll = this.bucketBudgetAnnual_(input.directorateId, input.costCenterId);
-    var currentDirectoratePayroll = this.bucketCurrentAnnualPayroll_(input.directorateId, input.costCenterId);
+    var effectiveYear = new Date(input.effectiveDate).getFullYear();
+    var closedMonths = this.bucketClosedMonthsPayroll_(input.directorateId, input.costCenterId, effectiveYear);
+    var currentDirectoratePayroll = closedMonths.yearToDatePayroll;
 
-    var payrollAfterApproval = currentDirectoratePayroll + totalAnnualImpact;
+    // Projeção até dezembro: acumulado real (meses já fechados) + meses que
+    // faltam no ano, projetados a partir do último fechamento já com o
+    // impacto mensal total da movimentação — não um simples "atual anual +
+    // impacto x meses", que ignoraria o histórico real do centro de custo.
+    var projectedMonthlyPayroll = closedMonths.lastMonthPayroll + totalMonthlyImpact;
+    var projectedRemainingPayroll = projectedMonthlyPayroll * monthsRemaining;
+    var payrollAfterApproval = closedMonths.yearToDatePayroll + projectedRemainingPayroll;
     var difference = budgetedDirectoratePayroll - payrollAfterApproval;
     var percentConsumed = budgetedDirectoratePayroll > 0 ? (payrollAfterApproval / budgetedDirectoratePayroll) * 100 : 0;
     var exceedsBudget = payrollAfterApproval > budgetedDirectoratePayroll;

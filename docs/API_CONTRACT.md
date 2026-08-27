@@ -149,10 +149,28 @@ já que não há colaborador para derivar).
   Apesar do nome dos campos (herdado do modelo original), a comparação é
   sempre feita pelo **centro de custo exato** (diretoria + centro de custo)
   da movimentação — nunca pelo orçamento da diretoria inteira, e nunca
-  restrita ao cargo específico da movimentação. `currentDirectoratePayroll`
-  usa **exclusivamente** o fechamento da folha (`payroll_snapshots`) do mês
-  mais recente já fechado, anualizado (× 12) — nunca `employees.
-  current_salary` ao vivo. Sem nenhum fechamento ainda, vem zerado.
+  restrita ao cargo específico da movimentação.
+
+  `currentDirectoratePayroll` e `payrollAfterApproval` usam **exclusivamente**
+  o fechamento da folha (`payroll_snapshots`) desse centro de custo — nunca
+  `employees.current_salary` ao vivo:
+  - `currentDirectoratePayroll` = soma real (não anualizada) de todos os
+    meses já fechados no ano da data efetiva da movimentação (ex.: soma de
+    jan a ago se ago for o último fechamento).
+  - `payrollAfterApproval` = `currentDirectoratePayroll` + uma projeção dos
+    meses que faltam até dezembro: pega o total do **último mês fechado**
+    para esse centro de custo, soma o `totalMonthlyImpact` da movimentação
+    (o novo "ritmo mensal" após a mudança) e multiplica pelos meses
+    restantes no ano a partir da data efetiva (`monthsRemaining`) — não é
+    `currentDirectoratePayroll + totalAnnualImpact` simples, que ignoraria
+    o histórico real acumulado do centro de custo.
+  - `percentConsumed`/`exceedsBudget`/`difference` comparam esse
+    `payrollAfterApproval` projetado (ano inteiro) contra
+    `budgetedDirectoratePayroll` (orçamento anual) — é o que permite ao
+    gestor saber, ao simular, se a movimentação estoura ou não o orçamento
+    do ano.
+  - Sem nenhum fechamento no ano da data efetiva, tudo vem zerado (nunca
+    herda o cadastro ao vivo nem o fechamento de outro ano).
 - `POST /simulator/preview` — Simulador Rápido (Gestor/Diretor testam o
   impacto de uma promoção/mérito para um colaborador ANTES de abrir a
   solicitação de fato; não persiste nada). Body:

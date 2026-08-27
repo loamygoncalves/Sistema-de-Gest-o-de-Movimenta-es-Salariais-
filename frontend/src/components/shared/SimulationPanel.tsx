@@ -50,16 +50,21 @@ export function SimulationPanel({ simulation }: { simulation: MovementSimulation
       ) : null}
 
       <div>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
           Comparativo Orçamentário
+        </p>
+        <p className="mb-2 text-xs text-brand-text">
+          Projeção do ano inteiro (jan-dez) para o centro de custo: acumulado real dos meses já
+          fechados + o restante do ano projetado a partir do último fechamento já com esta
+          movimentação, comparado ao orçamento anual.
         </p>
         <div className="overflow-x-auto rounded-lg border border-brand-border">
           <table className="w-full min-w-max text-sm">
             <thead className="bg-brand-bg">
               <tr>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Orçado</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Atual</th>
-                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Após Aprovação</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Orçado (ano)</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Atual (acumulado)</th>
+                <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Projeção (ano)</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">Diferença</th>
                 <th className="px-4 py-2 text-left text-xs font-semibold uppercase text-brand-text">% Consumido</th>
               </tr>

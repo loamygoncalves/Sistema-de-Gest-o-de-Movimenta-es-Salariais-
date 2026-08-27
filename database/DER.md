@@ -171,13 +171,16 @@ erDiagram
   `EmployeesService#compareWithBudget`/`SimulatorService` usam
   **exclusivamente** o snapshot — nunca `current_salary` ao vivo:
   Dashboard/comparativo usam o mês exato pedido (sem snapshot, indicadores
-  zerados e `monthClosed: false` na resposta da API); o comparativo
-  orçamentário do Simulador (rápido e oficial) usa o mês mais recente já
-  fechado, já que não há um mês selecionado nesse fluxo. Usar
-  `current_salary` faria um mês sem fechamento "herdar" os números do
-  último mês fechado, como se as folhas tivessem sido somadas entre meses —
-  o acumulado do ano é responsabilidade de outra métrica (ex.:
-  `movement_history`/impacto acumulado), não desta.
+  zerados e `monthClosed: false` na resposta da API); usar `current_salary`
+  faria um mês sem fechamento "herdar" os números do último mês fechado,
+  como se as folhas tivessem sido somadas entre meses.
+  O comparativo orçamentário do Simulador (rápido e oficial — mesmo
+  `SimulatorService#simulate`) projeta o ano inteiro em vez de olhar um mês
+  isolado: soma os meses já fechados no ano da movimentação (real
+  acumulado) + os meses que faltam até dezembro, projetados a partir do
+  **último mês fechado** desse centro de custo somado ao novo impacto
+  mensal da movimentação — é essa projeção anual que é comparada ao
+  orçamento anual para dizer se a movimentação estoura ou não o orçamento.
   Reimportar o mesmo (year, month) substitui o snapshot anterior de cada
   colaborador (chave única `year+month+employee_id`), nunca duplica. Quando
   um fechamento avança o mês mais recente da folha (não é uma correção de

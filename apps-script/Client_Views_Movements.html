@@ -65,8 +65,9 @@
       metricTile('Impacto Total Mensal', fmt.currency(sim.totalMonthlyImpact), true) +
       metricTile('Impacto Total Anual', fmt.currency(sim.totalAnnualImpact), true) +
       '</div>' +
-      '<div style="margin-top:18px;"><p class="uppercase-label" style="margin-bottom:8px;">Comparativo Orçamentário do Centro de Custo</p>' +
-      '<div class="table-wrap"><table><thead><tr><th>Orçado</th><th>Atual</th><th>Após Aprovação</th><th>Diferença</th><th>% Consumido</th></tr></thead><tbody>' +
+      '<div style="margin-top:18px;"><p class="uppercase-label" style="margin-bottom:4px;">Comparativo Orçamentário do Centro de Custo</p>' +
+      '<p class="text-sm text-muted" style="margin-bottom:8px;">Projeção do ano inteiro (jan-dez): acumulado real dos meses já fechados + o restante do ano projetado a partir do último fechamento já com esta movimentação, comparado ao orçamento anual.</p>' +
+      '<div class="table-wrap"><table><thead><tr><th>Orçado (ano)</th><th>Atual (acumulado)</th><th>Projeção (ano)</th><th>Diferença</th><th>% Consumido</th></tr></thead><tbody>' +
       '<tr><td>' +
       fmt.currency(sim.budgetedDirectoratePayroll) +
       '</td><td>' +
