@@ -202,6 +202,7 @@ var ApprovalsService = {
     if (remaining.length === 0) {
       Tables.movementRequests.update(movement.id, { status: MovementStatus.APROVADO, updatedAt: nowIso_() });
       this._recordHistory(movement);
+      notifyMovementDecided_(MovementsService.get(movement.id), MovementStatus.APROVADO, user, comment);
     }
 
     recordAudit_(user.email, 'APPROVE', 'movement_requests', movement.id, { step: step.stepOrder, role: user.role });
@@ -228,6 +229,7 @@ var ApprovalsService = {
     });
 
     Tables.movementRequests.update(movement.id, { status: MovementStatus.REPROVADO, updatedAt: nowIso_() });
+    notifyMovementDecided_(MovementsService.get(movement.id), MovementStatus.REPROVADO, user, comment);
     recordAudit_(user.email, 'REJECT', 'movement_requests', movement.id, { step: step.stepOrder, comment: comment });
     return Tables.approvalSteps.get(step.id);
   },

@@ -245,6 +245,14 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de custo e o
   DIRETOR da diretoria — ver `apps-script/Notifications.gs`.
 
+  Todos os e-mails do sistema (nova solicitação e decisão, ver seção
+  Aprovações) usam o mesmo cartão com a logo Beep e as cores da marca
+  (teal) no cabeçalho, um botão de acesso ao Web App
+  (`ScriptApp.getService().getUrl()`) e resumo da movimentação — o e-mail
+  de decisão soma quem decidiu, um selo verde/vermelho conforme
+  aprovada/reprovada e o comentário do aprovador, quando houver. Falha de
+  envio nunca bloqueia a ação que o originou (protegido por try/catch).
+
 ## Aprovações — Módulo 5
 O fluxo de aprovação é configurável (ADMIN, tela Fluxo de Aprovação): uma
 sequência de etapas ordenadas, cada uma com um conjunto de perfis
@@ -262,9 +270,9 @@ durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
 - `api_getApprovalTimeline(movementId)` → cada etapa com `{ id, stepOrder, eligibleRoles,
   decidedByRole, status, approverEmail, comment, decidedAt }`
 - `api_approveStep(stepId, comment?)` — se essa era a última etapa pendente, a movimentação
-  vira `APROVADO`
+  vira `APROVADO` e um e-mail de decisão é enviado ao solicitante (ver seção Notificações)
 - `api_rejectStep(stepId, comment)` (comentário obrigatório na reprovação) — reprova a
-  movimentação e pula as demais etapas
+  movimentação, pula as demais etapas e envia o e-mail de decisão ao solicitante
 
 ## Histórico — Módulo 6
 - `api_listHistory({ directorateId?, positionId?, type?, costCenterId?, startDate?, endDate? })`
