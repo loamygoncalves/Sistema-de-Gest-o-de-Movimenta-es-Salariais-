@@ -110,9 +110,8 @@ var SimulatorService = {
   monthlySalaryImpact_: function (input) {
     switch (input.type) {
       case MovementType.PROMOCAO:
-        return Number(input.newSalary || 0) - Number(input.currentSalary || 0);
       case MovementType.MERITO:
-        return Number(input.currentSalary || 0) * (Number(input.meritPercentage || 0) / 100);
+        return Number(input.newSalary || 0) - Number(input.currentSalary || 0);
       case MovementType.AUMENTO_QUADRO:
         return Number(input.plannedSalary || 0) * Number(input.quantity || 1);
       default:
