@@ -346,7 +346,9 @@ function buildCareerApprovalBody_(movement) {
 
   var highlightRows =
     infoRowHtml_('Data de efetivação', escapeHtml_(formatEffectiveDate_(movement.effectiveDate)), !hasNewPosition) +
-    (hasNewPosition ? infoRowHtml_('Nova função', escapeHtml_(movement.newPositionName), true) : '');
+    (hasNewPosition
+      ? infoRowHtml_('Nova função', escapeHtml_(String(movement.newPositionName).toUpperCase()), true)
+      : '');
 
   var paragraphs = [
     'A partir deste momento, você já pode compartilhar essa conquista com o(a) colaborador(a).',
@@ -377,9 +379,9 @@ function buildCareerApprovalBody_(movement) {
     intro:
       'Olá, ' +
       escapeHtml_(gestorName) +
-      ' — a solicitação de ' +
+      ' — a solicitação de <strong>' +
       escapeHtml_(typeLabel) +
-      ' para o(a) colaborador(a) <strong>' +
+      '</strong> para o(a) colaborador(a) <strong>' +
       escapeHtml_(employeeName) +
       '</strong> foi aprovada em todas as alçadas necessárias.',
     bodyHtml: bodyHtml,
