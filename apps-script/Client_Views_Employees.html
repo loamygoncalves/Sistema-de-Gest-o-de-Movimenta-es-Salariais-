@@ -97,6 +97,8 @@
       search: '',
       tab: 'list',
       year: new Date().getFullYear(),
+      salariesVisible: false,
+      lastList: null,
     };
 
     var tabs = [{ key: 'list', label: 'Colaboradores' }];
@@ -161,6 +163,10 @@
         '<div class="col" style="min-width:220px;"><label>Buscar (nome/matrícula)</label><input type="search" id="emp-f-search" value="' +
         escapeHtml(state.search) +
         '" placeholder="Digite para buscar..."></div>' +
+        '<div class="col" style="justify-content:flex-end;"><label>&nbsp;</label>' +
+        '<button class="btn btn-outline btn-sm" id="emp-toggle-salary-btn" type="button">' +
+        (state.salariesVisible ? 'Ocultar salários' : 'Mostrar salários') +
+        '</button></div>' +
         '</div><div id="emp-table-wrap">' +
         loadingHtml() +
         '</div>';
@@ -178,8 +184,51 @@
           loadList();
         }, 300);
       });
+      document.getElementById('emp-toggle-salary-btn').addEventListener('click', function () {
+        state.salariesVisible = !state.salariesVisible;
+        this.textContent = state.salariesVisible ? 'Ocultar salários' : 'Mostrar salários';
+        renderEmployeeTable(state.lastList);
+      });
 
       loadList();
+    }
+
+    function renderEmployeeTable(list) {
+      var wrap = document.getElementById('emp-table-wrap');
+      if (!wrap) return;
+      if (!list || list.length === 0) {
+        wrap.innerHTML = emptyStateHtml('Nenhum colaborador encontrado com os filtros atuais.');
+        return;
+      }
+      wrap.innerHTML =
+        '<div class="table-wrap"><table><thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Diretoria</th>' +
+        '<th>Contrato</th><th>Admissão</th><th class="cell-num">Salário Atual</th><th>Status</th></tr></thead><tbody>' +
+        list
+          .map(function (e) {
+            return (
+              '<tr class="clickable" data-route="#/employees/' +
+              e.id +
+              '"><td>' +
+              escapeHtml(e.registration) +
+              '</td><td>' +
+              escapeHtml(e.name) +
+              '</td><td>' +
+              escapeHtml(e.positionName || '—') +
+              '</td><td>' +
+              escapeHtml(e.directorateName || '—') +
+              '</td><td>' +
+              escapeHtml(labelFor('contractType', e.contractType)) +
+              '</td><td>' +
+              fmt.date(e.admissionDate) +
+              '</td><td class="cell-num">' +
+              (state.salariesVisible ? fmt.currency(e.currentSalary) : '••••••') +
+              '</td><td>' +
+              badge('employeeStatus', e.status) +
+              '</td></tr>'
+            );
+          })
+          .join('') +
+        '</tbody></table></div>';
     }
 
     function loadList() {
@@ -193,39 +242,8 @@
         search: state.search || undefined,
       })
         .then(function (list) {
-          if (!list || list.length === 0) {
-            wrap.innerHTML = emptyStateHtml('Nenhum colaborador encontrado com os filtros atuais.');
-            return;
-          }
-          wrap.innerHTML =
-            '<div class="table-wrap"><table><thead><tr><th>Matrícula</th><th>Nome</th><th>Cargo</th><th>Diretoria</th>' +
-            '<th>Contrato</th><th>Admissão</th><th class="cell-num">Salário Atual</th><th>Status</th></tr></thead><tbody>' +
-            list
-              .map(function (e) {
-                return (
-                  '<tr class="clickable" data-route="#/employees/' +
-                  e.id +
-                  '"><td>' +
-                  escapeHtml(e.registration) +
-                  '</td><td>' +
-                  escapeHtml(e.name) +
-                  '</td><td>' +
-                  escapeHtml(e.positionName || '—') +
-                  '</td><td>' +
-                  escapeHtml(e.directorateName || '—') +
-                  '</td><td>' +
-                  escapeHtml(labelFor('contractType', e.contractType)) +
-                  '</td><td>' +
-                  fmt.date(e.admissionDate) +
-                  '</td><td class="cell-num">' +
-                  fmt.currency(e.currentSalary) +
-                  '</td><td>' +
-                  badge('employeeStatus', e.status) +
-                  '</td></tr>'
-                );
-              })
-              .join('') +
-            '</tbody></table></div>';
+          state.lastList = list;
+          renderEmployeeTable(list);
         })
         .catch(function (err) {
           wrap.innerHTML = errorStateHtml(apiErrorMessage(err));

@@ -84,6 +84,7 @@ function EmployeeListTab() {
   const [total, setTotal] = useState(0);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [salariesVisible, setSalariesVisible] = useState(false);
   const limit = 10;
 
   useEffect(() => {
@@ -121,30 +122,40 @@ function EmployeeListTab() {
     { key: "registration", header: "Matrícula", render: (r) => r.registration ?? "—" },
     { key: "position", header: "Cargo", render: (r) => r.positionName ?? "—" },
     { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
-    { key: "salary", header: "Salário Atual", render: (r) => formatCurrency(r.currentSalary), align: "right" },
+    {
+      key: "salary",
+      header: "Salário Atual",
+      render: (r) => (salariesVisible ? formatCurrency(r.currentSalary) : "••••••"),
+      align: "right",
+    },
     { key: "admission", header: "Admissão", render: (r) => formatDate(r.admissionDate) },
     { key: "status", header: "Status", render: (r) => <EmployeeStatusBadge status={r.status} /> },
   ];
 
   return (
     <Card>
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Input label="Buscar" placeholder="Nome, matrícula, e-mail..." value={search} onChange={(e) => setSearch(e.target.value)} />
-        <DirectorateSelect value={directorateId} onChange={setDirectorateId} directorates={directorates} />
-        <Select
-          label="Cargo"
-          placeholder="Todos os cargos"
-          options={positions.map((p) => ({ value: p.id, label: p.name }))}
-          value={positionId}
-          onChange={(e) => setPositionId(e.target.value)}
-        />
-        <Select
-          label="Status"
-          placeholder="Todos"
-          options={Object.entries(EMPLOYEE_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        />
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Input label="Buscar" placeholder="Nome, matrícula, e-mail..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <DirectorateSelect value={directorateId} onChange={setDirectorateId} directorates={directorates} />
+          <Select
+            label="Cargo"
+            placeholder="Todos os cargos"
+            options={positions.map((p) => ({ value: p.id, label: p.name }))}
+            value={positionId}
+            onChange={(e) => setPositionId(e.target.value)}
+          />
+          <Select
+            label="Status"
+            placeholder="Todos"
+            options={Object.entries(EMPLOYEE_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setSalariesVisible((v) => !v)}>
+          {salariesVisible ? "Ocultar salários" : "Mostrar salários"}
+        </Button>
       </div>
       <Table
         columns={columns}
