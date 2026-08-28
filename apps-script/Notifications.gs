@@ -207,16 +207,19 @@ function infoRowHtml_(label, valueHtml, isLast) {
  * (tabela de 2 colunas larga, feita para uma lista longa de campos), aqui
  * rótulo e valor ficam colados verticalmente, sem o vão horizontal entre
  * eles que destoa quando há só 1-2 campos em destaque. */
-function highlightStatHtml_(label, valueHtml) {
+function highlightStatHtml_(label, valueHtml, isFirst) {
+  var border = isFirst ? '' : 'border-top:1px solid #e2e8f0;';
   return (
-    '<td style="padding:14px 18px;vertical-align:top;">' +
+    '<tr><td style="padding:12px 18px;text-align:center;' +
+    border +
+    '">' +
     '<span style="display:block;font-size:11px;font-weight:700;letter-spacing:.06em;color:#94a3b8;text-transform:uppercase;">' +
     escapeHtml_(label) +
     '</span>' +
-    '<span style="display:block;font-size:16px;font-weight:700;color:#0f172a;margin-top:3px;">' +
+    '<span style="display:block;font-size:14px;font-weight:700;color:#0f172a;margin-top:3px;">' +
     valueHtml +
     '</span>' +
-    '</td>'
+    '</td></tr>'
   );
 }
 
@@ -362,17 +365,16 @@ function buildCareerApprovalBody_(movement) {
   var isPromotion = movement.type === MovementType.PROMOCAO;
   var hasNewPosition = isPromotion && !!movement.newPositionName;
 
-  var highlightCells =
-    highlightStatHtml_('Data de efetivação', escapeHtml_(formatEffectiveDate_(movement.effectiveDate))) +
+  var highlightRows =
+    highlightStatHtml_('Data de efetivação', escapeHtml_(formatEffectiveDate_(movement.effectiveDate)), true) +
     (hasNewPosition
-      ? highlightStatHtml_('Nova função', escapeHtml_(String(movement.newPositionName).toUpperCase()))
+      ? highlightStatHtml_('Nova função', escapeHtml_(String(movement.newPositionName).toUpperCase()), false)
       : '');
   var highlightBlock =
     '<tr><td style="padding:0 28px;">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;text-align:center;">' +
-    '<tr>' +
-    highlightCells +
-    '</tr></table></td></tr>';
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;">' +
+    highlightRows +
+    '</table></td></tr>';
 
   var paragraphs = [
     'A partir deste momento, você já pode compartilhar essa conquista com o(a) colaborador(a).',
