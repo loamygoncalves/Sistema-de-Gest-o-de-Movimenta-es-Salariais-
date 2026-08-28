@@ -369,7 +369,7 @@ function buildCareerApprovalBody_(movement) {
       : '');
   var highlightBlock =
     '<tr><td style="padding:0 28px;">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;text-align:center;">' +
     '<tr>' +
     highlightCells +
     '</tr></table></td></tr>';
