@@ -202,6 +202,24 @@ function infoRowHtml_(label, valueHtml, isLast) {
   );
 }
 
+/** Célula de destaque (rótulo pequeno diretamente acima do valor) usada no
+ * e-mail de aprovação de Mérito/Promoção — ao contrário de infoRowHtml_
+ * (tabela de 2 colunas larga, feita para uma lista longa de campos), aqui
+ * rótulo e valor ficam colados verticalmente, sem o vão horizontal entre
+ * eles que destoa quando há só 1-2 campos em destaque. */
+function highlightStatHtml_(label, valueHtml) {
+  return (
+    '<td style="padding:14px 18px;vertical-align:top;">' +
+    '<span style="display:block;font-size:11px;font-weight:700;letter-spacing:.06em;color:#94a3b8;text-transform:uppercase;">' +
+    escapeHtml_(label) +
+    '</span>' +
+    '<span style="display:block;font-size:16px;font-weight:700;color:#0f172a;margin-top:3px;">' +
+    valueHtml +
+    '</span>' +
+    '</td>'
+  );
+}
+
 /** Linhas de resumo da movimentação, compartilhadas entre o e-mail de nova solicitação e o de decisão. */
 function movementInfoRowsHtml_(movement) {
   var rows = [];
@@ -344,11 +362,17 @@ function buildCareerApprovalBody_(movement) {
   var isPromotion = movement.type === MovementType.PROMOCAO;
   var hasNewPosition = isPromotion && !!movement.newPositionName;
 
-  var highlightRows =
-    infoRowHtml_('Data de efetivação', escapeHtml_(formatEffectiveDate_(movement.effectiveDate)), !hasNewPosition) +
+  var highlightCells =
+    highlightStatHtml_('Data de efetivação', escapeHtml_(formatEffectiveDate_(movement.effectiveDate))) +
     (hasNewPosition
-      ? infoRowHtml_('Nova função', escapeHtml_(String(movement.newPositionName).toUpperCase()), true)
+      ? highlightStatHtml_('Nova função', escapeHtml_(String(movement.newPositionName).toUpperCase()))
       : '');
+  var highlightBlock =
+    '<tr><td style="padding:0 28px;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border-radius:10px;">' +
+    '<tr>' +
+    highlightCells +
+    '</tr></table></td></tr>';
 
   var paragraphs = [
     'A partir deste momento, você já pode compartilhar essa conquista com o(a) colaborador(a).',
@@ -365,9 +389,7 @@ function buildCareerApprovalBody_(movement) {
     .join('');
 
   var bodyHtml =
-    '<tr><td style="padding:0 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' +
-    highlightRows +
-    '</table></td></tr>' +
+    highlightBlock +
     '<tr><td style="padding:22px 28px 4px 28px;">' +
     paragraphs +
     '</td></tr>';
