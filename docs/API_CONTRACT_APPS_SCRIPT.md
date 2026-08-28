@@ -66,11 +66,12 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
 - `api_createCostCenter({ code, name, directorateId })`
 - `api_importCostCenters(base64Data, mimeType, filename)` → `{ batch, totalRows, successRows, errors: [{rowNumber, field, message}] }` —
   importação em massa a partir de uma planilha com as colunas **CÓDIGO,
-  CENTRO DE CUSTO e DIRETORIA** (diretoria é opcional; quando informada, é
+  CENTRO DE RESULTADO e DIRETORIA** (aceita também o cabeçalho legado CENTRO
+  DE CUSTO; diretoria é opcional; quando informada, é
   resolvida por nome exato). Rejeita código/nome vazio ou duplicado (na
   planilha ou já cadastrado) e diretoria informada mas inexistente.
 - `api_removeCostCenter(id)` → `{ ok: true }` — exclusão definitiva (não há
-  reativação; `code` é único). Lança erro se o centro de custo estiver
+  reativação; `code` é único). Lança erro se o centro de resultado estiver
   referenciado no orçamento.
 - `api_removeCostCenters(ids)` → `{ removed, removedIds, failed: [{id, message}] }` —
   exclusão em massa (multi-seleção); cada id é processado individualmente,
@@ -105,11 +106,11 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
 - `api_updateEmployee(id, patch)`
 - `api_deactivateEmployee(id)`
 - `api_importEmployees(base64Data, mimeType, filename)` — **fechamento mensal da folha**.
-  Colunas esperadas (normalizadas): `matricula, nome, cargo, centro_de_custo, admissao,
+  Colunas esperadas (normalizadas): `matricula, nome, cargo, centro_de_resultado, admissao,
   salario_atual, mes_de_referencia`. `mes_de_referencia` é `MM/AAAA` (ex.: `08/2026`) — o
   mês que está sendo fechado, lido linha a linha (não um parâmetro do arquivo inteiro); a
-  diretoria é derivada do centro de custo informado (não é mais uma coluna própria — o
-  centro de custo precisa já ter uma diretoria vinculada em Estrutura Organizacional). Além
+  diretoria é derivada do centro de resultado informado (não é mais uma coluna própria — o
+  centro de resultado precisa já ter uma diretoria vinculada em Estrutura Organizacional). Além
   de atualizar `employees.currentSalary`/`employees.costCenterId` de cada colaborador (como
   sempre), grava um snapshot do mês de cada linha na aba `FechamentoFolha` — reimportar o
   mesmo (year, month) substitui o snapshot anterior de cada colaborador, nunca duplica.
@@ -122,7 +123,7 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
   maioria das vezes; o cliente lê o arquivo com `FileReader.readAsDataURL`, extrai a parte
   base64 após a vírgula)
 - `api_getEmployeesComparison(year, month?)` → compara a base x orçada, agregando por
-  centro de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de
+  centro de resultado (nunca por cargo — sempre diretoria + centro de resultado) no mês de
   referência (`month` 1-12, padrão mês corrente). O lado "atual" usa **exclusivamente** o
   snapshot de fechamento do mês exato pedido (ver `api_importEmployees` acima) — nunca o
   salário atual ao vivo. Sem fechamento para o mês pedido,
@@ -133,12 +134,12 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
   `{ year, month, hcBudgeted, hcCurrent, openPositions, headcountExcess, budgetSavings, budgetOverrun, movementsByType: {SEM_MOVIMENTACAO,PROMOCAO,MERITO,SUBSTITUICAO,AUMENTO_DE_QUADRO,DESLIGAMENTO}, items: [{type: 'VAGA_ABERTA'|'EXCESSO_HC', directorate, costCenter, budgetedCount, currentCount, budgetedCost, currentCost}], monthClosed }`
 
 ## Orçamento — Módulo 1
-Orçamento por **diretoria + centro de custo + cargo** — não é vinculado a
+Orçamento por **diretoria + centro de resultado + cargo** — não é vinculado a
 colaborador (sem matrícula/nome). Cada linha (`Tables.budgetEntries`) tem um
 `movementType` (`SEM_MOVIMENTACAO | PROMOCAO | MERITO | SUBSTITUICAO |
 AUMENTO_DE_QUADRO | DESLIGAMENTO`) e um custo orçado por mês (`jan`..`dez`,
 `null` fora do período orçado). Múltiplas linhas podem repetir a mesma
-combinação diretoria+centro de custo+cargo+tipo — cada uma representa uma
+combinação diretoria+centro de resultado+cargo+tipo — cada uma representa uma
 vaga/assento orçado distinto (24 linhas idênticas = 24 vagas daquele tipo);
 não há rejeição de linha "duplicada" na importação.
 
@@ -197,7 +198,14 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
     informa-se o novo salário; o servidor calcula e persiste `meritPercentage` automaticamente
     (`newSalary` precisa ser maior que o salário atual do colaborador)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
-- `api_updateMovement(id, patch)` (somente RASCUNHO)
+- `api_updateMovement(id, patch)` — RASCUNHO (o próprio fluxo de rascunho, sem
+  restrição de perfil) ou PENDENTE_APROVACAO (só ADMIN/RH_REMUNERACAO, para
+  corrigir uma solicitação já em aprovação antes de decidida). Nunca muda
+  `type`/`employeeId` — só os campos específicos do tipo, os mesmos aceitos em
+  `api_createMovement`. Editar uma PENDENTE_APROVACAO sempre reroda a
+  simulação (mesmo efeito de `api_simulateMovement`) para a fila de aprovação
+  nunca mostrar números defasados em relação ao que foi editado. Botão
+  "Editar" em `Client_Views_Movements.html#Views.movementDetail`.
 - `api_cancelMovement(id)` (somente RASCUNHO)
 - `api_simulateMovement(id)` → recalcula e persiste a simulação; retorna
   `{ monthsRemaining, monthlySalaryImpact, annualSalaryImpact, chargesTotal,
@@ -205,23 +213,23 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   budgetedDirectoratePayroll, currentDirectoratePayroll, payrollAfterApproval,
   difference, percentConsumed, exceedsBudget, alertMessage,
   salaryIncreasePercent, policyViolations }`. Apesar do nome dos campos (herdado do modelo
-  original), a comparação é sempre pelo **centro de custo exato** (diretoria
-  + centro de custo) da movimentação — nunca pelo orçamento da diretoria
+  original), a comparação é sempre pelo **centro de resultado exato** (diretoria
+  + centro de resultado) da movimentação — nunca pelo orçamento da diretoria
   inteira, e nunca restrita ao cargo específico da movimentação.
 
   `currentDirectoratePayroll` e `payrollAfterApproval` usam **exclusivamente**
-  o fechamento da folha (aba FechamentoFolha) desse centro de custo — nunca
+  o fechamento da folha (aba FechamentoFolha) desse centro de resultado — nunca
   `employees.currentSalary` ao vivo:
   - `currentDirectoratePayroll` = soma real (não anualizada) de todos os
     meses já fechados no ano da data efetiva da movimentação (ex.: soma de
     jan a ago se ago for o último fechamento).
   - `payrollAfterApproval` = `currentDirectoratePayroll` + uma projeção dos
     meses que faltam até dezembro: pega o total do **último mês fechado**
-    para esse centro de custo, soma o `totalMonthlyImpact` da movimentação
+    para esse centro de resultado, soma o `totalMonthlyImpact` da movimentação
     (o novo "ritmo mensal" após a mudança) e multiplica pelos meses
     restantes no ano a partir da data efetiva (`monthsRemaining`) — não é
     `currentDirectoratePayroll + totalAnnualImpact` simples, que ignoraria
-    o histórico real acumulado do centro de custo.
+    o histórico real acumulado do centro de resultado.
   - Quando a data efetiva está mais de um mês à frente do último
     fechamento (ex.: fechamento até agosto, movimentação em 01/11), os
     meses de lacuna entre os dois (setembro, outubro) replicam o total do
@@ -248,7 +256,7 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
 - `api_submitMovement(id)` → dispara a simulação, cria uma etapa de aprovação por
   linha do fluxo configurado (ver seção Aprovações abaixo), muda o status para
   `PENDENTE_APROVACAO` e envia um e-mail de notificação (via `MailApp`, de
-  verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de custo e o
+  verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de resultado e o
   DIRETOR da diretoria — ver `apps-script/Notifications.gs`.
 
   Todos os e-mails do sistema (nova solicitação e decisão, ver seção
@@ -315,9 +323,9 @@ Selecionar os 12 meses dá a visão "acumulado do ano".
   `openMonths`; `monthClosed` só é `true` quando TODOS os meses selecionados estão fechados.
 - `api_getDashboardCostCenters(year, months?, directorateId?)` →
   `{ year, months, items: [{ directorateId, directorateName, costCenterId, costCenterName, budgetedCost, currentCost, difference, budgetedCount, currentCount, status }] }`
-  Orçado x Atual por centro de custo, somando o custo e mediando o headcount entre os meses
+  Orçado x Atual por centro de resultado, somando o custo e mediando o headcount entre os meses
   selecionados — é o que permite a uma diretoria (filtro `directorateId`) ver exatamente quais
-  dos seus centros de custo estão `DENTRO` ou `ACIMA` do orçamento no período escolhido.
+  dos seus centros de resultado estão `DENTRO` ou `ACIMA` do orçamento no período escolhido.
   `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `api_getDashboardMovements(year, directorateId?)` → `{ promotions, merits, headcountIncrease }`
 - `api_getDashboardFinancial(year, months?, directorateId?)` →
@@ -346,7 +354,7 @@ Selecionar os 12 meses dá a visão "acumulado do ano".
   Folha de Pagamento, só que quebrada por diretoria. `directorateRanking` vem **vazio (`[]`)**
   para GESTOR (identificado por `scope.costCenterIds` presente) — esse comparativo abrange
   todas as diretorias da empresa, então não faz parte do escopo de um gestor restrito a
-  alguns centros de custo.
+  alguns centros de resultado.
 
 ## Upload de arquivo (import)
 

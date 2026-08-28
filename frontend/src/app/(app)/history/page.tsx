@@ -100,7 +100,7 @@ export default function HistoryPage() {
     { key: "employee", header: "Colaborador", render: (r) => r.employeeName ?? "—" },
     { key: "position", header: "Cargo", render: (r) => r.positionName ?? "—" },
     { key: "directorate", header: "Diretoria", render: (r) => r.directorateName },
-    { key: "costCenter", header: "Centro de Custo", render: (r) => r.costCenterName ?? "—" },
+    { key: "costCenter", header: "Centro de Resultado", render: (r) => r.costCenterName ?? "—" },
     { key: "effectiveDate", header: "Data Efetiva", render: (r) => formatDate(r.effectiveDate) },
     { key: "monthlyImpact", header: "Impacto Mensal", render: (r) => formatCurrency(r.monthlyImpact), align: "right" },
     { key: "annualImpact", header: "Impacto Anual", render: (r) => formatCurrency(r.annualImpact), align: "right" },
@@ -168,7 +168,7 @@ export default function HistoryPage() {
             }}
           />
           <Select
-            label="Centro de Custo"
+            label="Centro de Resultado"
             placeholder="Todos"
             options={costCenters.map((c) => ({ value: c.id, label: c.name }))}
             value={costCenterId}

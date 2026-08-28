@@ -40,8 +40,8 @@ export class MovementsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateMovementDto) {
-    return this.movementsService.update(id, dto);
+  update(@Param('id') id: string, @Body() dto: UpdateMovementDto, @CurrentUser() user: AuthenticatedUser) {
+    return this.movementsService.update(id, dto, user);
   }
 
   @Delete(':id')

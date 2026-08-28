@@ -195,7 +195,7 @@ export default function DashboardPage() {
           <section>
             <div className="mb-2 flex items-baseline justify-between">
               <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Orçado x Atual por Centro de Custo
+                Orçado x Atual por Centro de Resultado
               </h2>
               <span className="text-xs text-brand-text">
                 {directorateId
@@ -206,7 +206,7 @@ export default function DashboardPage() {
             <Card>
               {costCenterChartData.length === 0 ? (
                 <p className="py-8 text-center text-sm text-brand-text">
-                  Nenhum centro de custo com orçado ou folha fechada no período selecionado.
+                  Nenhum centro de resultado com orçado ou folha fechada no período selecionado.
                 </p>
               ) : (
                 <>
@@ -233,7 +233,7 @@ export default function DashboardPage() {
                       <thead>
                         <tr className="border-b border-brand-border text-xs uppercase tracking-wide text-slate-400">
                           <th className="py-2 pr-4">Diretoria</th>
-                          <th className="py-2 pr-4">Centro de Custo</th>
+                          <th className="py-2 pr-4">Centro de Resultado</th>
                           <th className="py-2 pr-4 text-right">HC Orçado</th>
                           <th className="py-2 pr-4 text-right">HC Atual</th>
                           <th className="py-2 pr-4 text-right">Custo Orçado</th>

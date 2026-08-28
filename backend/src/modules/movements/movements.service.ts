@@ -7,7 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
-import { MovementStatus, MovementType } from '../../common/enums';
+import { MovementStatus, MovementType, UserRole } from '../../common/enums';
 import { AccessScope, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { Employee } from '../employees/entities/employee.entity';
@@ -130,7 +130,7 @@ export class MovementsService {
       }
       case MovementType.AUMENTO_QUADRO: {
         if (!dto.directorateId) throw new BadRequestException('Diretoria é obrigatória');
-        if (!dto.costCenterId) throw new BadRequestException('Centro de custo é obrigatório');
+        if (!dto.costCenterId) throw new BadRequestException('Centro de resultado é obrigatório');
         if (!dto.positionId) throw new BadRequestException('Cargo é obrigatório');
         if (!dto.quantity || dto.quantity < 1) {
           throw new BadRequestException('Quantidade de vagas deve ser maior que zero');
@@ -155,24 +155,85 @@ export class MovementsService {
     return this.movementRepo.save(this.movementRepo.create(base));
   }
 
-  async update(id: string, dto: UpdateMovementDto): Promise<MovementRequest> {
+  /**
+   * Edita uma movimentação já criada — o próprio rascunho (RASCUNHO, sem
+   * restrição de perfil, comportamento original) ou, só ADMIN/RH_REMUNERACAO,
+   * uma solicitação já em aprovação (PENDENTE_APROVACAO) que precise de
+   * correção antes de decidida (ver ApprovalsController). Nunca muda
+   * type/employeeId — só os campos específicos do tipo, iguais aos aceitos
+   * na criação. Reedita a movimentação PENDENTE_APROVACAO sempre reroda a
+   * simulação (this.simulate) para a fila de aprovação nunca mostrar
+   * números defasados em relação ao que foi editado.
+   */
+  async update(id: string, dto: UpdateMovementDto, user: AuthenticatedUser): Promise<MovementRequest> {
     const movement = await this.loadMovementOrFail(id);
-    if (movement.status !== MovementStatus.RASCUNHO) {
-      throw new ForbiddenException('Somente movimentações em rascunho podem ser editadas');
+    const isPending = movement.status === MovementStatus.PENDENTE_APROVACAO;
+    if (movement.status !== MovementStatus.RASCUNHO && !isPending) {
+      throw new ForbiddenException(
+        'Somente movimentações em rascunho ou pendentes de aprovação podem ser editadas',
+      );
     }
-
-    if (
-      movement.type === MovementType.PROMOCAO &&
-      dto.newSalary !== undefined &&
-      movement.currentSalary !== undefined &&
-      dto.newSalary < movement.currentSalary
-    ) {
-      throw new BadRequestException(
-        'Promoção não pode ter novo salário inferior ao salário atual do colaborador',
+    if (isPending && ![UserRole.ADMIN, UserRole.RH_REMUNERACAO].includes(user.role)) {
+      throw new ForbiddenException(
+        'Só Administrador ou RH Remuneração podem editar uma movimentação já em aprovação',
       );
     }
 
-    await this.movementRepo.update(id, dto as any);
+    const patch: Partial<MovementRequest> = {
+      effectiveDate: dto.effectiveDate ?? movement.effectiveDate,
+      justification: dto.justification ?? movement.justification,
+    };
+
+    switch (movement.type) {
+      case MovementType.PROMOCAO: {
+        const newSalary = dto.newSalary ?? movement.newSalary;
+        if (newSalary !== undefined && movement.currentSalary !== undefined && newSalary < movement.currentSalary) {
+          throw new BadRequestException(
+            'Promoção não pode ter novo salário inferior ao salário atual do colaborador',
+          );
+        }
+        Object.assign(patch, {
+          newPositionId: dto.newPositionId ?? movement.newPositionId,
+          newSalary,
+        });
+        break;
+      }
+      case MovementType.MERITO: {
+        const newSalary = dto.newSalary ?? movement.newSalary;
+        if (newSalary !== undefined && movement.currentSalary !== undefined && newSalary <= movement.currentSalary) {
+          throw new BadRequestException(
+            'Mérito precisa ter novo salário maior que o salário atual do colaborador',
+          );
+        }
+        const meritPercentage =
+          newSalary !== undefined && movement.currentSalary
+            ? Number((((newSalary - movement.currentSalary) / movement.currentSalary) * 100).toFixed(2))
+            : movement.meritPercentage;
+        Object.assign(patch, { newSalary, meritPercentage });
+        break;
+      }
+      case MovementType.AUMENTO_QUADRO: {
+        const quantity = dto.quantity ?? movement.quantity;
+        if (!quantity || quantity < 1) {
+          throw new BadRequestException('Quantidade de vagas deve ser maior que zero');
+        }
+        const plannedSalary = dto.plannedSalary ?? movement.plannedSalary;
+        if (plannedSalary === undefined || plannedSalary < 0) {
+          throw new BadRequestException('Salário previsto é obrigatório');
+        }
+        Object.assign(patch, {
+          directorateId: dto.directorateId ?? movement.directorateId,
+          costCenterId: dto.costCenterId ?? movement.costCenterId,
+          newPositionId: dto.positionId ?? movement.newPositionId,
+          quantity,
+          plannedSalary,
+        });
+        break;
+      }
+    }
+
+    await this.movementRepo.update(id, patch);
+    if (isPending) await this.simulate(id);
     return this.loadMovementOrFail(id);
   }
 

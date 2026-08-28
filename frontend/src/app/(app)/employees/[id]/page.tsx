@@ -113,7 +113,7 @@ export default function EmployeeDetailPage() {
             onChange={(e) => setForm((f) => ({ ...f, directorateId: e.target.value }))}
           />
           <Select
-            label="Centro de Custo"
+            label="Centro de Resultado"
             options={costCenters.map((c) => ({ value: c.id, label: `${c.code} — ${c.name}` }))}
             value={form.costCenterId ?? ""}
             disabled={!canEdit}

@@ -68,21 +68,50 @@ export class CreateMovementDto {
   justification: string;
 }
 
+/**
+ * Edição de uma movimentação já criada — usada tanto para o rascunho do
+ * próprio solicitante (RASCUNHO) quanto, por ADMIN/RH_REMUNERACAO, para
+ * corrigir uma solicitação já em aprovação (PENDENTE_APROVACAO), ver
+ * MovementsService#update. Nunca muda `type`/`employeeId` — só os campos
+ * específicos de cada tipo, os mesmos aceitos na criação.
+ */
 export class UpdateMovementDto {
+  // Aumento de quadro
   @IsOptional()
   @IsUUID()
-  newPositionId?: string;
+  directorateId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  costCenterId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  positionId?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  quantity?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
-  newSalary?: number;
+  plannedSalary?: number;
 
+  // Promoção
+  @IsOptional()
+  @IsUUID()
+  newPositionId?: string;
+
+  // Promoção / Mérito
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
-  percentage?: number;
+  @Min(0)
+  newSalary?: number;
 
   @IsOptional()
   @IsDateString()

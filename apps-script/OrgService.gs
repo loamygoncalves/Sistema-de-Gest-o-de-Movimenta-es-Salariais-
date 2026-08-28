@@ -128,9 +128,9 @@ var OrgService = {
     var inUse = Tables.budgetEntries.findOne(function (b) {
       return b.costCenterId === id;
     });
-    if (inUse) throw new Error('Centro de custo em uso no orçamento — não pode ser excluído.');
+    if (inUse) throw new Error('Centro de resultado em uso no orçamento — não pode ser excluído.');
     var removed = Tables.costCenters.remove(id);
-    if (!removed) throw new Error('Centro de custo não encontrado');
+    if (!removed) throw new Error('Centro de resultado não encontrado');
   },
 
   removeCostCenters: function (ids) {
@@ -141,12 +141,12 @@ var OrgService = {
         return b.costCenterId === id;
       });
       if (inUse) {
-        failed.push({ id: id, message: 'Centro de custo em uso no orçamento — não pode ser excluído.' });
+        failed.push({ id: id, message: 'Centro de resultado em uso no orçamento — não pode ser excluído.' });
         return;
       }
       var removed = Tables.costCenters.remove(id);
       if (removed) removedIds.push(id);
-      else failed.push({ id: id, message: 'Centro de custo não encontrado' });
+      else failed.push({ id: id, message: 'Centro de resultado não encontrado' });
     });
     return { removed: removedIds.length, removedIds: removedIds, failed: failed };
   },
@@ -165,7 +165,7 @@ var OrgService = {
     var rows = sheet.rows;
 
     var codeAliases = ['CODIGO', 'CÓDIGO'];
-    var nameAliases = ['CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'NOME'];
+    var nameAliases = ['CENTRO DE RESULTADO', 'CENTRO_DE_RESULTADO', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'NOME'];
     var directorateAliases = ['DIRETORIA'];
 
     function findHeaderIndex(aliases) {
@@ -182,11 +182,11 @@ var OrgService = {
     if (codeIdx === -1 || nameIdx === -1) {
       var missing = [];
       if (codeIdx === -1) missing.push('código');
-      if (nameIdx === -1) missing.push('centro de custo');
+      if (nameIdx === -1) missing.push('centro de resultado');
       throw new Error(
         'Planilha inválida: coluna(s) não encontrada(s): ' +
           missing.join(', ') +
-          '. Esperado: CÓDIGO, CENTRO DE CUSTO, DIRETORIA (opcional).',
+          '. Esperado: CÓDIGO, CENTRO DE RESULTADO, DIRETORIA (opcional).',
       );
     }
 
@@ -221,7 +221,7 @@ var OrgService = {
       if (seenCodes[codeKey]) return fail('codigo', 'Código duplicado na planilha: ' + code);
       if (existingCodes[codeKey]) return fail('codigo', 'Código já cadastrado: ' + code);
       if (seenNames[nameKey]) return fail('nome', 'Nome duplicado na planilha: ' + name);
-      if (existingNames[nameKey]) return fail('nome', 'Centro de custo já cadastrado: ' + name);
+      if (existingNames[nameKey]) return fail('nome', 'Centro de resultado já cadastrado: ' + name);
 
       var directorateId = '';
       if (directorateName) {

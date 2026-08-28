@@ -75,7 +75,7 @@
       metricTile('Impacto Total Mensal', fmt.currency(sim.totalMonthlyImpact), true) +
       metricTile('Impacto Total Anual', fmt.currency(sim.totalAnnualImpact), true) +
       '</div>' +
-      '<div style="margin-top:18px;"><p class="uppercase-label" style="margin-bottom:4px;">Comparativo Orçamentário do Centro de Custo</p>' +
+      '<div style="margin-top:18px;"><p class="uppercase-label" style="margin-bottom:4px;">Comparativo Orçamentário do Centro de Resultado</p>' +
       '<p class="text-sm text-muted" style="margin-bottom:8px;">Projeção do ano inteiro (jan-dez): acumulado real dos meses já fechados + o restante do ano projetado a partir do último fechamento já com esta movimentação, comparado ao orçamento anual.</p>' +
       '<div class="table-wrap"><table><thead><tr><th>Orçado (ano)</th><th>Atual (acumulado)</th><th>Projeção (ano)</th><th>Diferença</th><th>% Consumido</th></tr></thead><tbody>' +
       '<tr><td>' +
@@ -304,7 +304,7 @@
           '<div class="field"><label>Diretoria <span class="req">*</span></label><select id="mn-directorateId">' +
           optionsHtml(org.directorates, { placeholder: 'Selecione' }) +
           '</select><p class="field-error" id="mn-err-directorateId" style="display:none;"></p></div>' +
-          '<div class="field"><label>Centro de Custo <span class="req">*</span></label><select id="mn-costCenterId">' +
+          '<div class="field"><label>Centro de Resultado <span class="req">*</span></label><select id="mn-costCenterId">' +
           optionsHtml(org.costCenters, { placeholder: 'Selecione' }) +
           '</select><p class="field-error" id="mn-err-costCenterId" style="display:none;"></p></div>' +
           '<div class="field"><label>Quantidade de Vagas <span class="req">*</span></label><input type="number" min="1" step="1" id="mn-quantity" value="1">' +
@@ -442,7 +442,7 @@
         var plannedSalary = v('plannedSalary');
         if (!positionId) errors.positionId = 'Selecione o cargo.';
         if (!directorateId) errors.directorateId = 'Selecione a diretoria.';
-        if (!costCenterId) errors.costCenterId = 'Selecione o centro de custo.';
+        if (!costCenterId) errors.costCenterId = 'Selecione o centro de resultado.';
         if (!quantity || Number(quantity) < 1) errors.quantity = 'Informe uma quantidade válida.';
         if (plannedSalary === '' || Number(plannedSalary) < 0) errors.plannedSalary = 'Informe um salário planejado válido.';
         payload.positionId = positionId;
@@ -487,10 +487,16 @@
   // Detalhe de movimentação
   // -----------------------------------------------------------------------
   Views.movementDetail = function (root, id) {
+    var user = App.user;
+    var org = null;
+    var state = { editing: false };
     root.innerHTML = loadingHtml();
 
-    callApi('api_getMovement', id)
-      .then(render)
+    Promise.all([callApi('api_getMovement', id), getOrgLookups()])
+      .then(function (results) {
+        org = results[1];
+        render(results[0]);
+      })
       .catch(function (err) {
         root.innerHTML = errorStateHtml(apiErrorMessage(err));
       });
@@ -500,21 +506,13 @@
       return '<div><dt class="uppercase-label">' + escapeHtml(label) + '</dt><dd style="margin:2px 0 0;color:var(--slate-800);">' + escapeHtml(value) + '</dd></div>';
     }
 
-    function render(movement) {
-      root.innerHTML =
-        '<div class="page-header"><div><a href="#" data-route="#/movements" class="text-xs text-faint">← Voltar para Movimentações</a>' +
-        '<div class="row" style="margin-top:4px;gap:10px;"><h1>' +
-        escapeHtml(labelFor('movementType', movement.type)) +
-        '</h1>' +
-        badge('movementStatus', movement.status) +
-        '</div><p>' +
-        escapeHtml(movement.employeeName || movement.directorateName || 'Aumento de quadro / vaga') +
-        '</p></div>' +
-        '<div class="row">' +
-        (movement.status === 'RASCUNHO'
-          ? '<button class="btn btn-outline" id="mov-cancel-btn">Cancelar Rascunho</button><button class="btn" id="mov-submit-btn">Submeter para Aprovação</button>'
-          : '') +
-        '</div></div>' +
+    /** ADMIN/RH_REMUNERACAO podem corrigir uma solicitação já em aprovação, se necessário. */
+    function canEditMovement(movement) {
+      return movement.status === 'PENDENTE_APROVACAO' && canManage(user);
+    }
+
+    function dataCardHtml(movement) {
+      return (
         cardOpen('Dados da Movimentação') +
         '<dl class="grid grid-3" style="row-gap:14px;">' +
         fieldHtml('Colaborador', movement.employeeName) +
@@ -526,7 +524,7 @@
         fieldHtml('Quantidade de Vagas', movement.quantity != null ? fmt.number(movement.quantity) : null) +
         fieldHtml('Salário Planejado', movement.plannedSalary != null ? fmt.currency(movement.plannedSalary) : null) +
         fieldHtml('Diretoria', movement.directorateName) +
-        fieldHtml('Centro de Custo', movement.costCenterName) +
+        fieldHtml('Centro de Resultado', movement.costCenterName) +
         fieldHtml('Data Efetiva', fmt.date(movement.effectiveDate)) +
         fieldHtml('Solicitado por', movement.requestedByEmail) +
         fieldHtml('Criado em', fmt.dateTime(movement.createdAt)) +
@@ -535,7 +533,115 @@
         '<p class="uppercase-label">Justificativa</p><p class="text-sm" style="margin-top:4px;color:var(--slate-700);">' +
         escapeHtml(movement.justification) +
         '</p>' +
-        cardClose() +
+        cardClose()
+      );
+    }
+
+    /**
+     * Formulário de edição — só os campos do tipo da movimentação (nunca
+     * colaborador/tipo). Salvar dispara uma nova simulação no backend
+     * (MovementsService.update), então só é preciso recarregar a tela.
+     */
+    function editFormHtml(movement) {
+      var typeFields = '';
+      if (movement.type === 'PROMOCAO') {
+        typeFields =
+          '<div class="field"><label>Novo Cargo</label><select id="me-newPositionId">' +
+          optionsHtml(org.positions, { placeholder: 'Selecione', selected: movement.newPositionId }) +
+          '</select></div>' +
+          '<div class="field"><label>Novo Salário</label><input type="number" step="0.01" id="me-newSalary" value="' + (movement.newSalary != null ? movement.newSalary : '') + '"></div>';
+      } else if (movement.type === 'MERITO') {
+        typeFields =
+          '<div class="field"><label>Novo Salário</label><input type="number" step="0.01" id="me-newSalary" value="' + (movement.newSalary != null ? movement.newSalary : '') + '">' +
+          '<p class="field-hint">O percentual de mérito é recalculado automaticamente a partir do novo salário.</p></div>';
+      } else if (movement.type === 'AUMENTO_QUADRO') {
+        typeFields =
+          '<div class="form-grid">' +
+          '<div class="field"><label>Cargo</label><select id="me-positionId">' +
+          optionsHtml(org.positions, { placeholder: 'Selecione', selected: movement.newPositionId }) +
+          '</select></div>' +
+          '<div class="field"><label>Diretoria</label><select id="me-directorateId">' +
+          optionsHtml(org.directorates, { placeholder: 'Selecione', selected: movement.directorateId }) +
+          '</select></div>' +
+          '<div class="field"><label>Centro de Resultado</label><select id="me-costCenterId">' +
+          optionsHtml(org.costCenters, { placeholder: 'Selecione', selected: movement.costCenterId }) +
+          '</select></div>' +
+          '<div class="field"><label>Quantidade de Vagas</label><input type="number" min="1" step="1" id="me-quantity" value="' + (movement.quantity != null ? movement.quantity : 1) + '"></div>' +
+          '<div class="field"><label>Salário Planejado</label><input type="number" step="0.01" id="me-plannedSalary" value="' + (movement.plannedSalary != null ? movement.plannedSalary : '') + '"></div>' +
+          '</div>';
+      }
+
+      return (
+        cardOpen('Editar Movimentação', { subtitle: 'Alterações são salvas com uma nova simulação de impacto.' }) +
+        typeFields +
+        '<div class="field" style="margin-top:14px;"><label>Data Efetiva</label>' +
+        '<input type="date" id="me-effectiveDate" style="max-width:220px;" value="' + escapeHtml(String(movement.effectiveDate).slice(0, 10)) + '"></div>' +
+        '<div class="field"><label>Justificativa</label><textarea id="me-justification" rows="3">' + escapeHtml(movement.justification || '') + '</textarea></div>' +
+        '<div class="form-actions"><button class="btn btn-outline" id="mov-edit-cancel-btn">Cancelar</button>' +
+        '<button class="btn" id="mov-edit-save-btn">Salvar</button></div>' +
+        cardClose()
+      );
+    }
+
+    function wireEditForm(movement) {
+      function v(id) {
+        var el = document.getElementById('me-' + id);
+        return el ? el.value : '';
+      }
+      document.getElementById('mov-edit-cancel-btn').addEventListener('click', function () {
+        state.editing = false;
+        render(movement);
+      });
+      document.getElementById('mov-edit-save-btn').addEventListener('click', function () {
+        var payload = { effectiveDate: v('effectiveDate'), justification: v('justification').trim() };
+        if (movement.type === 'PROMOCAO') {
+          payload.newPositionId = v('newPositionId');
+          payload.newSalary = Number(v('newSalary'));
+        } else if (movement.type === 'MERITO') {
+          payload.newSalary = Number(v('newSalary'));
+        } else if (movement.type === 'AUMENTO_QUADRO') {
+          payload.positionId = v('positionId');
+          payload.directorateId = v('directorateId');
+          payload.costCenterId = v('costCenterId');
+          payload.quantity = Number(v('quantity'));
+          payload.plannedSalary = Number(v('plannedSalary'));
+        }
+
+        var btn = document.getElementById('mov-edit-save-btn');
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+        callApi('api_updateMovement', movement.id, payload)
+          .then(function () {
+            toast('Movimentação atualizada — simulação recalculada.', 'success');
+            state.editing = false;
+            Views.movementDetail(root, movement.id);
+          })
+          .catch(function (err) {
+            toastError(err);
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
+          });
+      });
+    }
+
+    function render(movement) {
+      var showEditBtn = canEditMovement(movement) && !state.editing;
+      root.innerHTML =
+        '<div class="page-header"><div><a href="#" data-route="#/movements" class="text-xs text-faint">← Voltar para Movimentações</a>' +
+        '<div class="row" style="margin-top:4px;gap:10px;"><h1>' +
+        escapeHtml(labelFor('movementType', movement.type)) +
+        '</h1>' +
+        badge('movementStatus', movement.status) +
+        '</div><p>' +
+        escapeHtml(movement.employeeName || movement.directorateName || 'Aumento de quadro / vaga') +
+        '</p></div>' +
+        '<div class="row">' +
+        (showEditBtn ? '<button class="btn btn-outline" id="mov-edit-btn">Editar</button>' : '') +
+        (movement.status === 'RASCUNHO'
+          ? '<button class="btn btn-outline" id="mov-cancel-btn">Cancelar Rascunho</button><button class="btn" id="mov-submit-btn">Submeter para Aprovação</button>'
+          : '') +
+        '</div></div>' +
+        (state.editing ? editFormHtml(movement) : dataCardHtml(movement)) +
         '<div style="height:16px;"></div>' +
         cardOpen('Simulador de Impacto', {
           subtitle: 'Impacto financeiro projetado para esta movimentação.',
@@ -549,6 +655,15 @@
         cardOpen('Linha do Tempo de Aprovação') +
         approvalTimelineHtml(movement.approvalSteps) +
         cardClose();
+
+      var editBtn = document.getElementById('mov-edit-btn');
+      if (editBtn) {
+        editBtn.addEventListener('click', function () {
+          state.editing = true;
+          render(movement);
+        });
+      }
+      if (state.editing) wireEditForm(movement);
 
       var simulateBtn = document.getElementById('mov-simulate-btn');
       simulateBtn.addEventListener('click', function () {

@@ -205,7 +205,7 @@ function movementInfoRowsHtml_(movement) {
     rows.push(['Solicitado por', escapeHtml_(resolveUserDisplayName_(movement.requestedByEmail))]);
   }
   rows.push(['Diretoria', escapeHtml_(movement.directorateName || '-')]);
-  rows.push(['Centro de custo', escapeHtml_(movement.costCenterName || '-')]);
+  rows.push(['Centro de resultado', escapeHtml_(movement.costCenterName || '-')]);
   if (movement.currentPositionName) rows.push(['Cargo atual', escapeHtml_(movement.currentPositionName)]);
   if (movement.newPositionName) rows.push(['Novo cargo', escapeHtml_(movement.newPositionName)]);
   if (movement.currentSalary) rows.push(['Salário atual', escapeHtml_(formatCurrencyBRL_(movement.currentSalary))]);

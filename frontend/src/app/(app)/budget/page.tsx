@@ -111,7 +111,7 @@ export default function BudgetPage() {
 
   const columns: Column<BudgetEntry>[] = [
     { key: "directorate", header: "Diretoria", render: (r) => r.directorateName ?? "—" },
-    { key: "costCenter", header: "Centro de Custo", render: (r) => r.costCenterName ?? "—" },
+    { key: "costCenter", header: "Centro de Resultado", render: (r) => r.costCenterName ?? "—" },
     { key: "position", header: "Cargo", render: (r) => r.positionName ?? "—" },
     {
       key: "movementType",
@@ -140,7 +140,7 @@ export default function BudgetPage() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Orçamento</h1>
-          <p className="text-sm text-brand-text">Controle de headcount e folha orçada por diretoria, centro de custo e cargo.</p>
+          <p className="text-sm text-brand-text">Controle de headcount e folha orçada por diretoria, centro de resultado e cargo.</p>
         </div>
         <div className="flex gap-3">
           <YearSelect value={year} onChange={setYear} />
@@ -164,11 +164,11 @@ export default function BudgetPage() {
       {canImport && (
         <Card
           title="Importar orçamento"
-          subtitle="Envie a planilha (.xlsx) com o orçamento por diretoria, centro de custo, cargo e tipo de movimentação."
+          subtitle="Envie a planilha (.xlsx) com o orçamento por diretoria, centro de resultado, cargo e tipo de movimentação."
         >
           <div className="flex flex-col gap-4">
             <p className="text-xs text-brand-text">
-              Colunas esperadas: <strong>DIRETORIA</strong>, <strong>CENTRO DE CUSTO</strong>, <strong>CARGO</strong>,{" "}
+              Colunas esperadas: <strong>DIRETORIA</strong>, <strong>CENTRO DE RESULTADO</strong>, <strong>CARGO</strong>,{" "}
               <strong>TIPO DE MOVIMENTAÇÃO</strong> (Sem Movimentação, Promoção, Mérito, Substituição, Aumento de
               Quadro ou Desligamento), seguidas das 12 colunas de mês (Jan a Dez) com o custo orçado de cada mês —
               deixe a célula em branco no(s) mês(es) sem custo orçado. Linhas idênticas são permitidas e representam
@@ -182,7 +182,7 @@ export default function BudgetPage() {
               file={file}
               onFileSelected={setFile}
               accept=".xlsx,.xls"
-              hint="Planilha (.xlsx) com diretoria, centro de custo, cargo, tipo de movimentação e 12 colunas de mês"
+              hint="Planilha (.xlsx) com diretoria, centro de resultado, cargo, tipo de movimentação e 12 colunas de mês"
             />
             <div>
               <Button onClick={handleImport} loading={importing} disabled={!file}>

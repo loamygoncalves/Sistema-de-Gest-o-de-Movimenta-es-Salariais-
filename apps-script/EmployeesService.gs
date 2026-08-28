@@ -226,16 +226,16 @@ var EmployeesService = {
       if (seen[registration]) return fail('matricula', 'Matrícula duplicada na planilha: ' + registration);
       if (!name) return fail('nome', 'Nome é obrigatório');
       if (!positionName) return fail('cargo', 'Cargo é obrigatório');
-      if (!costCenterName) return fail('centro_de_custo', 'Centro de custo é obrigatório');
+      if (!costCenterName) return fail('centro_de_custo', 'Centro de resultado é obrigatório');
 
       var position = OrgService.findPositionByName(positionName);
       if (!position) return fail('cargo', 'Cargo inexistente: ' + positionName);
       var costCenter = OrgService.findCostCenterByName(costCenterName);
-      if (!costCenter) return fail('centro_de_custo', 'Centro de custo inexistente: ' + costCenterName);
+      if (!costCenter) return fail('centro_de_custo', 'Centro de resultado inexistente: ' + costCenterName);
       if (!costCenter.directorateId) {
         return fail(
           'centro_de_custo',
-          'Centro de custo "' + costCenterName + '" não tem diretoria vinculada — cadastre a diretoria dele em Administração > Estrutura Organizacional antes de importar',
+          'Centro de resultado "' + costCenterName + '" não tem diretoria vinculada — cadastre a diretoria dele em Administração > Estrutura Organizacional antes de importar',
         );
       }
       if (currentSalary === null || currentSalary < 0) return fail('salario_atual', 'Salário atual inválido');

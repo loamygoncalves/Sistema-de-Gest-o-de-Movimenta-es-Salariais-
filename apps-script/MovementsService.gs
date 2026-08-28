@@ -95,7 +95,7 @@ var MovementsService = {
       );
     } else if (input.type === MovementType.AUMENTO_QUADRO) {
       if (!input.directorateId) throw new Error('Diretoria é obrigatória');
-      if (!input.costCenterId) throw new Error('Centro de custo é obrigatório');
+      if (!input.costCenterId) throw new Error('Centro de resultado é obrigatório');
       if (!input.positionId) throw new Error('Cargo é obrigatório');
       if (!input.quantity || Number(input.quantity) < 1) throw new Error('Quantidade de vagas deve ser maior que zero');
       if (input.plannedSalary === undefined || Number(input.plannedSalary) < 0) {
@@ -115,20 +115,60 @@ var MovementsService = {
     return created;
   },
 
-  update: function (id, input) {
+  /**
+   * Edita uma movimentação já criada — o próprio rascunho (RASCUNHO, sem
+   * restrição de perfil, comportamento original) ou, só ADMIN/RH_REMUNERACAO,
+   * uma solicitação já em aprovação (PENDENTE_APROVACAO) que precise de
+   * correção antes de decidida. Nunca muda type/employeeId — só os campos
+   * específicos do tipo, iguais aos aceitos na criação. Editar uma
+   * PENDENTE_APROVACAO sempre reroda a simulação para a fila de aprovação
+   * nunca mostrar números defasados em relação ao que foi editado.
+   */
+  update: function (id, input, user) {
     var movement = this.getRaw_(id);
-    if (movement.status !== MovementStatus.RASCUNHO) {
-      throw new Error('Somente movimentações em rascunho podem ser editadas');
+    var isPending = movement.status === MovementStatus.PENDENTE_APROVACAO;
+    if (movement.status !== MovementStatus.RASCUNHO && !isPending) {
+      throw new Error('Somente movimentações em rascunho ou pendentes de aprovação podem ser editadas');
     }
-    if (
-      movement.type === MovementType.PROMOCAO &&
-      input.newSalary !== undefined &&
-      Number(input.newSalary) < Number(movement.currentSalary)
-    ) {
-      throw new Error('Promoção não pode ter novo salário inferior ao salário atual do colaborador');
+    if (isPending && user.role !== UserRole.ADMIN && user.role !== UserRole.RH_REMUNERACAO) {
+      throw new Error('Só Administrador ou RH Remuneração podem editar uma movimentação já em aprovação');
     }
-    input.updatedAt = nowIso_();
-    return Tables.movementRequests.update(id, input);
+
+    var patch = {
+      effectiveDate: input.effectiveDate !== undefined ? input.effectiveDate : movement.effectiveDate,
+      justification: input.justification !== undefined ? input.justification : movement.justification,
+      updatedAt: nowIso_(),
+    };
+
+    if (movement.type === MovementType.PROMOCAO) {
+      var newSalaryPromo = input.newSalary !== undefined ? Number(input.newSalary) : Number(movement.newSalary);
+      if (newSalaryPromo < Number(movement.currentSalary)) {
+        throw new Error('Promoção não pode ter novo salário inferior ao salário atual do colaborador');
+      }
+      patch.newPositionId = input.newPositionId !== undefined ? input.newPositionId : movement.newPositionId;
+      patch.newSalary = newSalaryPromo;
+    } else if (movement.type === MovementType.MERITO) {
+      var newSalaryMerito = input.newSalary !== undefined ? Number(input.newSalary) : Number(movement.newSalary);
+      if (newSalaryMerito <= Number(movement.currentSalary)) {
+        throw new Error('Mérito precisa ter novo salário maior que o salário atual do colaborador');
+      }
+      patch.newSalary = newSalaryMerito;
+      patch.meritPercentage = round2_(((newSalaryMerito - Number(movement.currentSalary)) / Number(movement.currentSalary)) * 100);
+    } else if (movement.type === MovementType.AUMENTO_QUADRO) {
+      var quantity = input.quantity !== undefined ? Number(input.quantity) : Number(movement.quantity);
+      if (!quantity || quantity < 1) throw new Error('Quantidade de vagas deve ser maior que zero');
+      var plannedSalary = input.plannedSalary !== undefined ? Number(input.plannedSalary) : Number(movement.plannedSalary);
+      if (plannedSalary === undefined || plannedSalary < 0) throw new Error('Salário previsto é obrigatório');
+      patch.directorateId = input.directorateId !== undefined ? input.directorateId : movement.directorateId;
+      patch.costCenterId = input.costCenterId !== undefined ? input.costCenterId : movement.costCenterId;
+      patch.newPositionId = input.positionId !== undefined ? input.positionId : movement.newPositionId;
+      patch.quantity = quantity;
+      patch.plannedSalary = plannedSalary;
+    }
+
+    var updated = Tables.movementRequests.update(id, patch);
+    if (isPending) this.simulate(id);
+    return updated;
   },
 
   cancel: function (id) {

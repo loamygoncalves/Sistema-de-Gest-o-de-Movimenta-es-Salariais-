@@ -23,7 +23,7 @@
       '<select id="' + prefix + '-managementId">' + optionsHtml(org.managements, { placeholder: '—', selected: values.managementId }) + '</select></div>' +
       '<div class="field"><label>Coordenação</label>' +
       '<select id="' + prefix + '-coordinationId">' + optionsHtml(org.coordinations, { placeholder: '—', selected: values.coordinationId }) + '</select></div>' +
-      '<div class="field"><label>Centro de Custo</label>' +
+      '<div class="field"><label>Centro de Resultado</label>' +
       '<select id="' + prefix + '-costCenterId">' + optionsHtml(org.costCenters, { placeholder: '—', selected: values.costCenterId }) + '</select></div>' +
       '<div class="field"><label>Tipo de Contrato</label>' +
       '<select id="' + prefix + '-contractType">' +
@@ -275,7 +275,7 @@
       var body = document.getElementById('emp-body');
       body.innerHTML =
         cardOpen('Fechamento mensal da folha', {
-          subtitle: 'Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente. Ao fechar um mês mais recente que o último importado, quem estava ativo e não aparece mais na planilha é automaticamente marcado como inativo.',
+          subtitle: 'Colunas: Matrícula, Nome, Cargo, Centro de Resultado, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de resultado. Além de atualizar o salário e o centro de resultado atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente. Ao fechar um mês mais recente que o último importado, quem estava ativo e não aparece mais na planilha é automaticamente marcado como inativo.',
         }) +
         '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="emp-import-file" accept=".csv,.xlsx"></div>' +
         '<div class="form-actions"><button class="btn" id="emp-import-btn">Fechar mês</button></div>' +
@@ -406,9 +406,9 @@
             cardClose() +
             '</div>' +
             '<div style="margin-top:20px;">' +
-            cardOpen('Itens de Atenção', { subtitle: 'Centros de custo com diferença entre vagas orçadas e colaboradores ativos' }) +
+            cardOpen('Itens de Atenção', { subtitle: 'Centros de resultado com diferença entre vagas orçadas e colaboradores ativos' }) +
             (d.items && d.items.length > 0
-              ? '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Diretoria</th><th>Centro de Custo</th>' +
+              ? '<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Diretoria</th><th>Centro de Resultado</th>' +
                 '<th class="cell-num">Qtd. Orçada</th><th class="cell-num">Qtd. Atual</th><th class="cell-num">Custo Orçado</th><th class="cell-num">Custo Atual</th></tr></thead><tbody>' +
                 d.items.map(comparisonItemRow).join('') +
                 '</tbody></table></div>'

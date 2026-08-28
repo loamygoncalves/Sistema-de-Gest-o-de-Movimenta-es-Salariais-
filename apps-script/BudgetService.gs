@@ -13,7 +13,7 @@
 /** Cabeçalhos aceitos (normalizados) para cada coluna fixa da planilha. */
 var BUDGET_HEADER_ALIASES_ = {
   directorate: ['DIRETORIA'],
-  costCenter: ['CENTRO DE CUSTO', 'CENTRO_DE_CUSTO'],
+  costCenter: ['CENTRO DE RESULTADO', 'CENTRO_DE_RESULTADO', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO'],
   position: ['CARGO'],
   situation: ['TIPO DE MOVIMENTACAO', 'TIPO_DE_MOVIMENTACAO', 'SITUACAO PLANEJADA', 'SITUACAO_PLANEJADA'],
 };
@@ -193,7 +193,7 @@ var BudgetService = {
       throw new Error(
         'Planilha inválida: coluna(s) não encontrada(s): ' +
           missing.join(', ') +
-          '. Esperado: DIRETORIA, CENTRO DE CUSTO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses (jan a dez).',
+          '. Esperado: DIRETORIA, CENTRO DE RESULTADO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses (jan a dez).',
       );
     }
 
@@ -238,7 +238,7 @@ var BudgetService = {
       }
 
       if (!directorateName) return fail('diretoria', 'Diretoria é obrigatória');
-      if (!costCenterName) return fail('centro_de_custo', 'Centro de custo é obrigatório');
+      if (!costCenterName) return fail('centro_de_custo', 'Centro de resultado é obrigatório');
       if (!positionName) return fail('cargo', 'Cargo é obrigatório');
 
       var movementType = situationAliases_(situationRaw);
@@ -247,7 +247,7 @@ var BudgetService = {
       var directorate = OrgService.findDirectorateByName(directorateName);
       if (!directorate) return fail('diretoria', 'Diretoria inexistente: ' + directorateName);
       var costCenter = OrgService.findCostCenterByName(costCenterName);
-      if (!costCenter) return fail('centro_de_custo', 'Centro de custo inexistente: ' + costCenterName);
+      if (!costCenter) return fail('centro_de_custo', 'Centro de resultado inexistente: ' + costCenterName);
       var position = OrgService.findPositionByName(positionName);
       if (!position) return fail('cargo', 'Cargo inexistente: ' + positionName);
 

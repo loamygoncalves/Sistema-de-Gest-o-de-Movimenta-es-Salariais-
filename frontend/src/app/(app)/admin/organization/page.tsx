@@ -23,7 +23,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "managements", label: "Gerências" },
   { key: "coordinations", label: "Coordenações" },
   { key: "positions", label: "Cargos" },
-  { key: "costCenters", label: "Centros de Custo" },
+  { key: "costCenters", label: "Centros de Resultado" },
 ];
 
 export default function OrganizationAdminPage() {
@@ -34,7 +34,7 @@ export default function OrganizationAdminPage() {
       <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Estrutura Organizacional</h1>
-          <p className="text-sm text-brand-text">Diretorias, gerências, coordenações, cargos e centros de custo.</p>
+          <p className="text-sm text-brand-text">Diretorias, gerências, coordenações, cargos e centros de resultado.</p>
         </div>
 
         <div className="flex flex-wrap gap-1 border-b border-brand-border">
@@ -387,7 +387,7 @@ function CostCentersTab() {
       formData.append("file", importFile);
       const res = await api.upload<ImportBatch>("/cost-centers/import", formData);
       setImportBatch(res);
-      showToast("Importação de centros de custo concluída.", "success");
+      showToast("Importação de centros de resultado concluída.", "success");
       setImportFile(null);
       await reload();
     } catch (err) {
@@ -406,11 +406,11 @@ function CostCentersTab() {
   }
 
   async function handleDeleteOne(id: string) {
-    if (!window.confirm("Excluir este centro de custo? Esta ação não pode ser desfeita.")) return;
+    if (!window.confirm("Excluir este centro de resultado? Esta ação não pode ser desfeita.")) return;
     setDeleting(true);
     try {
       await api.delete(`/cost-centers/${id}`);
-      showToast("Centro de custo excluído.", "success");
+      showToast("Centro de resultado excluído.", "success");
       setSelectedIds((prev) => prev.filter((i) => i !== id));
       await reload();
     } catch (err) {
@@ -424,7 +424,7 @@ function CostCentersTab() {
     if (selectedIds.length === 0) return;
     if (
       !window.confirm(
-        `Excluir ${selectedIds.length} centro(s) de custo selecionado(s)? Esta ação não pode ser desfeita.`
+        `Excluir ${selectedIds.length} centro(s) de resultado selecionado(s)? Esta ação não pode ser desfeita.`
       )
     )
       return;
@@ -441,7 +441,7 @@ function CostCentersTab() {
           "error"
         );
       } else {
-        showToast(`${res.removed} centro(s) de custo excluído(s).`, "success");
+        showToast(`${res.removed} centro(s) de resultado excluído(s).`, "success");
       }
       setSelectedIds([]);
       await reload();
@@ -505,7 +505,7 @@ function CostCentersTab() {
       } else {
         await create(modalItem);
       }
-      showToast("Centro de custo salvo com sucesso.", "success");
+      showToast("Centro de resultado salvo com sucesso.", "success");
       setModalItem(null);
     } catch (err) {
       showToast(getErrorMessage(err), "error");
@@ -517,8 +517,8 @@ function CostCentersTab() {
   return (
     <div className="flex flex-col gap-6">
       <Card
-        title="Importar centros de custo"
-        subtitle="Envie uma planilha (.xlsx) com as colunas Código, Centro de Custo e Diretoria (opcional)."
+        title="Importar centros de resultado"
+        subtitle="Envie uma planilha (.xlsx) com as colunas Código, Centro de Resultado e Diretoria (opcional)."
       >
         <div className="flex flex-col gap-4">
           <FileDropzone file={importFile} onFileSelected={setImportFile} accept=".xlsx,.xls" />
@@ -532,7 +532,7 @@ function CostCentersTab() {
       {importBatch && <ImportResultCard batch={importBatch} />}
 
       <Card
-        title="Centros de Custo"
+        title="Centros de Resultado"
         actions={
           <div className="flex gap-2">
             {selectedIds.length > 0 && (
@@ -540,7 +540,7 @@ function CostCentersTab() {
                 Excluir selecionados ({selectedIds.length})
               </Button>
             )}
-            <Button size="sm" onClick={() => setModalItem({})}>Novo centro de custo</Button>
+            <Button size="sm" onClick={() => setModalItem({})}>Novo centro de resultado</Button>
           </div>
         }
       >
@@ -548,7 +548,7 @@ function CostCentersTab() {
         <Modal
           open={!!modalItem}
           onClose={() => setModalItem(null)}
-          title={modalItem?.id ? "Editar centro de custo" : "Novo centro de custo"}
+          title={modalItem?.id ? "Editar centro de resultado" : "Novo centro de resultado"}
           footer={
             <>
               <Button variant="outline" onClick={() => setModalItem(null)}>Cancelar</Button>

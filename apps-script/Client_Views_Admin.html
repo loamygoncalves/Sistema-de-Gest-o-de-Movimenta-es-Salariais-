@@ -146,12 +146,12 @@
       { key: 'managements', label: 'Gerências' },
       { key: 'coordinations', label: 'Coordenações' },
       { key: 'positions', label: 'Cargos' },
-      { key: 'costCenters', label: 'Centros de Custo' },
+      { key: 'costCenters', label: 'Centros de Resultado' },
     ];
 
     root.innerHTML =
       '<div class="page-header"><div><h1>Estrutura Organizacional</h1>' +
-      '<p>Diretorias, gerências, coordenações, cargos e centros de custo.</p></div></div>' +
+      '<p>Diretorias, gerências, coordenações, cargos e centros de resultado.</p></div></div>' +
       '<div class="tabs" id="org-tabs"></div><div id="org-body">' +
       loadingHtml() +
       '</div>';
@@ -394,8 +394,8 @@
             : '';
 
         body.innerHTML =
-          cardOpen('Centros de Custo', {
-            actions: bulkBtnHtml + '<button class="btn btn-sm" id="org-new-btn">+ Novo Centro de Custo</button>',
+          cardOpen('Centros de Resultado', {
+            actions: bulkBtnHtml + '<button class="btn btn-sm" id="org-new-btn">+ Novo Centro de Resultado</button>',
           }) +
           '<div class="table-wrap"><table><thead><tr><th><input type="checkbox" id="cc-select-all"' +
           (allChecked ? ' checked' : '') +
@@ -429,10 +429,10 @@
         document.querySelectorAll('[data-delete]').forEach(function (btn) {
           btn.addEventListener('click', function () {
             var id = btn.getAttribute('data-delete');
-            if (!window.confirm('Excluir este centro de custo? Esta ação não pode ser desfeita.')) return;
+            if (!window.confirm('Excluir este centro de resultado? Esta ação não pode ser desfeita.')) return;
             callApi('api_removeCostCenter', id)
               .then(function () {
-                toast('Centro de custo excluído.', 'success');
+                toast('Centro de resultado excluído.', 'success');
                 renderBody();
               })
               .catch(toastError);
@@ -443,7 +443,7 @@
         if (bulkBtn) {
           bulkBtn.addEventListener('click', function () {
             var ids = selectedIds();
-            if (!window.confirm('Excluir ' + ids.length + ' centro(s) de custo selecionado(s)? Esta ação não pode ser desfeita.')) return;
+            if (!window.confirm('Excluir ' + ids.length + ' centro(s) de resultado selecionado(s)? Esta ação não pode ser desfeita.')) return;
             callApi('api_removeCostCenters', ids)
               .then(function (result) {
                 if (result.failed && result.failed.length > 0) {
@@ -452,7 +452,7 @@
                     'error',
                   );
                 } else {
-                  toast(result.removed + ' centro(s) de custo excluído(s).', 'success');
+                  toast(result.removed + ' centro(s) de resultado excluído(s).', 'success');
                 }
                 renderBody();
               })
@@ -472,8 +472,8 @@
       // innerHTML destruiria os checkboxes/botões da tabela e seus listeners.
       var wrapper = document.createElement('div');
       wrapper.innerHTML =
-        cardOpen('Importar centros de custo', {
-          subtitle: 'Envie uma planilha (.csv ou .xlsx) com as colunas Código, Centro de Custo e Diretoria (opcional).',
+        cardOpen('Importar centros de resultado', {
+          subtitle: 'Envie uma planilha (.csv ou .xlsx) com as colunas Código, Centro de Resultado e Diretoria (opcional).',
         }) +
         '<div class="field"><label>Arquivo (.csv ou .xlsx)</label><input type="file" id="cc-import-file" accept=".csv,.xlsx"></div>' +
         '<div class="form-actions"><button class="btn" id="cc-import-btn">Importar</button></div>' +
@@ -512,22 +512,22 @@
 
     function openCostCenterModal(org) {
       openEntityModal({
-        title: 'Novo Centro de Custo',
+        title: 'Novo Centro de Resultado',
         fields: [
           { id: 'code', label: 'Código', required: true },
           { id: 'name', label: 'Nome', required: true },
           { id: 'directorateId', label: 'Diretoria', type: 'select', options: org.directorates, placeholder: 'Nenhuma' },
         ],
         validate: function (v) {
-          if (!v.code) return 'Informe o código do centro de custo.';
-          if (!v.name) return 'Informe o nome do centro de custo.';
+          if (!v.code) return 'Informe o código do centro de resultado.';
+          if (!v.name) return 'Informe o nome do centro de resultado.';
           return null;
         },
         onSubmit: function (v) {
           return callApi('api_createCostCenter', { code: v.code, name: v.name, directorateId: v.directorateId || '' });
         },
         onSuccess: function () {
-          toast('Centro de custo criado.', 'success');
+          toast('Centro de resultado criado.', 'success');
           renderBody();
         },
       });
@@ -693,8 +693,8 @@
             '</select></div>';
         } else if (role === 'GESTOR') {
           el.innerHTML =
-            '<div class="field"><label>Centros de Custo <span class="req">*</span></label>' +
-            '<p class="text-xs text-faint" style="margin-bottom:4px;">O Gestor enxerga apenas os colaboradores e o orçamento dos centros de custo marcados abaixo.</p>' +
+            '<div class="field"><label>Centros de Resultado <span class="req">*</span></label>' +
+            '<p class="text-xs text-faint" style="margin-bottom:4px;">O Gestor enxerga apenas os colaboradores e o orçamento dos centros de resultado marcados abaixo.</p>' +
             '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--slate-200);border-radius:8px;padding:8px;">' +
             (org.costCenters || [])
               .map(function (cc) {
@@ -742,7 +742,7 @@
           var checkedIds = Array.prototype.slice
             .call(modalEl.querySelectorAll('.um-cc-checkbox:checked'))
             .map(function (cb) { return cb.value; });
-          if (checkedIds.length === 0) return showError('Selecione ao menos um centro de custo.');
+          if (checkedIds.length === 0) return showError('Selecione ao menos um centro de resultado.');
           payload.costCenterIds = checkedIds;
         }
 
@@ -1056,7 +1056,7 @@
       '<div class="page-header"><div><h1>Ajuste de Orçamento</h1>' +
       '<p>Define, por ano, um percentual do orçamento importado que fica disponível — ex.: 90% reduz todo ' +
       '"orçado" em R$ exibido no Dashboard, no Simulador e no comparativo de colaboradores para 90% do que foi ' +
-      'importado (100.000,00 orçados em um centro de custo passam a aparecer como 90.000,00), refletindo em ' +
+      'importado (100.000,00 orçados em um centro de resultado passam a aparecer como 90.000,00), refletindo em ' +
       'todos os meses do ano. Não altera a planilha original nem a contagem de HC/vagas orçadas — só o valor em ' +
       'R$ mostrado. Visível e editável apenas pelo perfil Administrador.</p></div>' +
       '<div id="budget-adjustment-body">' +

@@ -115,7 +115,7 @@ export default function NewMovementPage() {
       if (!quantity || Number(quantity) < 1) next.quantity = "Informe uma quantidade válida.";
       if (!plannedSalary) next.plannedSalary = "Informe o salário planejado.";
       if (!directorateId) next.directorateId = "Selecione a diretoria.";
-      if (!costCenterId) next.costCenterId = "Selecione o centro de custo.";
+      if (!costCenterId) next.costCenterId = "Selecione o centro de resultado.";
     }
 
     setErrors(next);
@@ -254,7 +254,7 @@ export default function NewMovementPage() {
                 error={errors.directorateId}
               />
               <Select
-                label="Centro de custo"
+                label="Centro de resultado"
                 required
                 placeholder="Selecione"
                 options={costCenters.map((c) => ({ value: c.id, label: c.name }))}

@@ -22,7 +22,7 @@ import {
 /** Cabeçalhos aceitos (normalizados) para cada coluna fixa da planilha de import. */
 const COST_CENTER_HEADER_ALIASES = {
   code: ['CODIGO', 'CÓDIGO'],
-  name: ['CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'NOME'],
+  name: ['CENTRO DE RESULTADO', 'CENTRO_DE_RESULTADO', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO', 'NOME'],
   directorate: ['DIRETORIA'],
 };
 
@@ -153,7 +153,7 @@ export class OrgService {
     } catch (err) {
       throw new BadRequestException(this.costCenterDeleteErrorMessage(err));
     }
-    if (!result.affected) throw new NotFoundException('Centro de custo não encontrado');
+    if (!result.affected) throw new NotFoundException('Centro de resultado não encontrado');
   }
 
   async removeCostCenters(ids: string[]) {
@@ -163,7 +163,7 @@ export class OrgService {
       try {
         const result = await this.costCenterRepo.delete(id);
         if (result.affected) removedIds.push(id);
-        else failed.push({ id, message: 'Centro de custo não encontrado' });
+        else failed.push({ id, message: 'Centro de resultado não encontrado' });
       } catch (err) {
         failed.push({ id, message: this.costCenterDeleteErrorMessage(err) });
       }
@@ -173,9 +173,9 @@ export class OrgService {
 
   private costCenterDeleteErrorMessage(err: unknown): string {
     if (err instanceof QueryFailedError && (err as unknown as { code?: string }).code === '23503') {
-      return 'Centro de custo em uso no orçamento — não pode ser excluído.';
+      return 'Centro de resultado em uso no orçamento — não pode ser excluído.';
     }
-    return 'Erro ao excluir centro de custo';
+    return 'Erro ao excluir centro de resultado';
   }
 
   findDirectorateByName(name: string) {
@@ -208,10 +208,10 @@ export class OrgService {
     if (colIndex.code === -1 || colIndex.name === -1) {
       const missing = [
         colIndex.code === -1 ? 'código' : null,
-        colIndex.name === -1 ? 'centro de custo' : null,
+        colIndex.name === -1 ? 'centro de resultado' : null,
       ].filter(Boolean);
       throw new BadRequestException(
-        `Planilha inválida: coluna(s) não encontrada(s): ${missing.join(', ')}. Esperado: CÓDIGO, CENTRO DE CUSTO, DIRETORIA (opcional).`,
+        `Planilha inválida: coluna(s) não encontrada(s): ${missing.join(', ')}. Esperado: CÓDIGO, CENTRO DE RESULTADO, DIRETORIA (opcional).`,
       );
     }
 
@@ -253,7 +253,7 @@ export class OrgService {
         continue;
       }
       if (existingNames.has(nameKey)) {
-        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: `Centro de custo já cadastrado: ${name}` });
+        errors.push({ rowNumber: row.rowNumber, field: 'nome', message: `Centro de resultado já cadastrado: ${name}` });
         continue;
       }
 

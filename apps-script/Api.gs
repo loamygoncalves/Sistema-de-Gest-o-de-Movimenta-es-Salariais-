@@ -352,8 +352,10 @@ function api_createMovement(input) {
 }
 
 function api_updateMovement(id, input) {
-  requireUser_();
-  return stripRow_(MovementsService.update(id, input));
+  var user = requireUser_();
+  var updated = stripRow_(MovementsService.update(id, input, user));
+  recordAudit_(user.email, 'UPDATE', 'movement_requests', id, input);
+  return updated;
 }
 
 function api_cancelMovement(id) {

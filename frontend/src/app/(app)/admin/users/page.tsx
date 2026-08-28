@@ -41,10 +41,10 @@ function CostCenterCheckboxList({
   return (
     <div>
       <label className="mb-1.5 block text-sm font-medium text-brand-text">
-        Centros de custo <span className="text-red-500">*</span>
+        Centros de resultado <span className="text-red-500">*</span>
       </label>
       <div className="max-h-48 overflow-y-auto rounded-lg border border-brand-border p-2">
-        {costCenters.length === 0 && <p className="p-2 text-sm text-slate-400">Nenhum centro de custo cadastrado.</p>}
+        {costCenters.length === 0 && <p className="p-2 text-sm text-slate-400">Nenhum centro de resultado cadastrado.</p>}
         {costCenters.map((c) => (
           <label key={c.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-brand-bg">
             <input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggle(c.id)} />
@@ -53,7 +53,7 @@ function CostCenterCheckboxList({
         ))}
       </div>
       <p className="mt-1 text-xs text-slate-400">
-        O gestor só verá funcionários, orçamento e movimentações dos centros de custo selecionados.
+        O gestor só verá funcionários, orçamento e movimentações dos centros de resultado selecionados.
       </p>
     </div>
   );
@@ -78,7 +78,7 @@ function UsersAdminContent() {
       return;
     }
     if (createForm.role === "GESTOR" && !createForm.costCenterIds?.length) {
-      showToast("Selecione ao menos um centro de custo para o gestor.", "error");
+      showToast("Selecione ao menos um centro de resultado para o gestor.", "error");
       return;
     }
     setCreating(true);
@@ -97,7 +97,7 @@ function UsersAdminContent() {
   async function handleSaveEdit() {
     if (!editUser) return;
     if (editUser.role === "GESTOR" && editCostCenterIds.length === 0) {
-      showToast("Selecione ao menos um centro de custo para o gestor.", "error");
+      showToast("Selecione ao menos um centro de resultado para o gestor.", "error");
       return;
     }
     setSaving(true);

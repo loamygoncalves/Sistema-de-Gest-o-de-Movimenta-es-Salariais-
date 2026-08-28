@@ -66,7 +66,7 @@ export function SimulationPanel({ simulation }: { simulation: MovementSimulation
           Comparativo Orçamentário
         </p>
         <p className="mb-2 text-xs text-brand-text">
-          Projeção do ano inteiro (jan-dez) para o centro de custo: acumulado real dos meses já
+          Projeção do ano inteiro (jan-dez) para o centro de resultado: acumulado real dos meses já
           fechados + o restante do ano projetado a partir do último fechamento já com esta
           movimentação, comparado ao orçamento anual.
         </p>

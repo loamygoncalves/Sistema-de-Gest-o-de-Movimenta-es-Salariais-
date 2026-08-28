@@ -199,7 +199,7 @@ function EmployeeImportTab() {
     <div className="flex flex-col gap-6">
       <Card
         title="Fechamento mensal da folha"
-        subtitle="Colunas: Matrícula, Nome, Cargo, Centro de Custo, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de custo. Além de atualizar o salário e o centro de custo atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente. Ao fechar um mês mais recente que o último importado, quem estava ativo e não aparece mais na planilha é automaticamente marcado como inativo."
+        subtitle="Colunas: Matrícula, Nome, Cargo, Centro de Resultado, Admissão, Salário Atual, Mês de Referência (MM/AAAA, ex.: 08/2026). A diretoria é derivada do centro de resultado. Além de atualizar o salário e o centro de resultado atuais de cada colaborador, o sistema guarda um retrato do mês informado na planilha para que relatórios de meses passados não sejam substituídos pelo salário mais recente. Ao fechar um mês mais recente que o último importado, quem estava ativo e não aparece mais na planilha é automaticamente marcado como inativo."
       >
         <div className="flex flex-col gap-4">
           <FileDropzone file={file} onFileSelected={setFile} accept=".xlsx,.xls" />
@@ -251,7 +251,7 @@ function EmployeeComparisonTab() {
 
   const columns: Column<(typeof filteredItems)[number]>[] = [
     { key: "directorate", header: "Diretoria", render: (r) => r.directorate },
-    { key: "costCenter", header: "Centro de Custo", render: (r) => r.costCenter },
+    { key: "costCenter", header: "Centro de Resultado", render: (r) => r.costCenter },
     { key: "type", header: "Tipo", render: (r) => <ComparisonItemTypeBadge type={r.type} /> },
     { key: "budgetedCount", header: "HC Orçado", render: (r) => formatNumber(r.budgetedCount), align: "right" },
     { key: "currentCount", header: "HC Atual", render: (r) => formatNumber(r.currentCount), align: "right" },
@@ -306,7 +306,7 @@ function EmployeeComparisonTab() {
         </div>
       </Card>
 
-      <Card title="Detalhamento por diretoria/centro de custo">
+      <Card title="Detalhamento por diretoria/centro de resultado">
         <Table
           columns={columns}
           data={filteredItems}

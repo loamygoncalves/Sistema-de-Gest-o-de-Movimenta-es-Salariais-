@@ -7,11 +7,11 @@ padrão do Nest: `{ statusCode, message, error }`.
 Perfis (`role`): `ADMIN`, `RH_REMUNERACAO`, `DIRETOR`, `GESTOR`.
 `DIRETOR` tem `directorateId` e enxerga toda a diretoria; `GESTOR` tem
 `costCenterIds` (multi-seleção) e enxerga só os colaboradores/orçamento
-desses centros de custo (lista vazia = não vê nada — nunca "vê tudo" por
+desses centros de resultado (lista vazia = não vê nada — nunca "vê tudo" por
 omissão). `ADMIN`/`RH_REMUNERACAO` não têm escopo restrito. GESTOR nunca
 aprova movimentações — só solicita. O backend resolve esse escopo a partir do token
 (`resolveAccessScope`/`applyAccessScope`) e aplica automaticamente em toda
-consulta filtrável por diretoria/centro de custo — filtros de query string
+consulta filtrável por diretoria/centro de resultado — filtros de query string
 (`directorateId`/`costCenterId`) só valem para quem não tem escopo restrito.
 
 ## Auth
@@ -25,13 +25,14 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
 - `GET/POST /positions`, `GET/PATCH/DELETE /positions/:id`
 - `GET/POST /cost-centers`
 - `POST /cost-centers/import` (multipart `file`) — importação em massa a partir de uma
-  planilha com as colunas **CÓDIGO, CENTRO DE CUSTO e DIRETORIA** (diretoria é
+  planilha com as colunas **CÓDIGO, CENTRO DE RESULTADO e DIRETORIA** (aceita
+  também o cabeçalho legado CENTRO DE CUSTO; diretoria é
   opcional; quando informada, é resolvida por nome exato). Rejeita código/nome
   vazio ou duplicado (na planilha ou já cadastrado) e diretoria informada mas
   inexistente. Retorna `ImportBatch` (mesmo formato abaixo).
 - `GET /cost-centers/import/:batchId`
 - `DELETE /cost-centers/:id` — exclusão definitiva (não há reativação; `code` é
-  único). Centros de custo referenciados no orçamento não podem ser excluídos
+  único). Centros de resultado referenciados no orçamento não podem ser excluídos
   (FK RESTRICT em `budget_entries.cost_center_id`) — retorna 400 nesse caso.
 - `DELETE /cost-centers` `{ ids: string[] }` — exclusão em massa (multi-seleção).
   Cada id é processado individualmente: ids referenciados no orçamento falham
@@ -47,11 +48,11 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
 - `GET /employees/:id`
 - `POST /employees` / `PATCH /employees/:id` / `DELETE /employees/:id`
 - `POST /employees/import` (multipart `file`) — **fechamento mensal da folha**. Colunas
-  esperadas (normalizadas): `matricula, nome, cargo, centro_de_custo, admissao,
+  esperadas (normalizadas): `matricula, nome, cargo, centro_de_resultado, admissao,
   salario_atual, mes_de_referencia`. `mes_de_referencia` é `MM/AAAA` (ex.: `08/2026`) — o
   mês que está sendo fechado, lido linha a linha (não um parâmetro do arquivo inteiro); a
-  diretoria é derivada do centro de custo informado (não é mais uma coluna própria — o
-  centro de custo precisa já ter uma diretoria vinculada em Estrutura Organizacional).
+  diretoria é derivada do centro de resultado informado (não é mais uma coluna própria — o
+  centro de resultado precisa já ter uma diretoria vinculada em Estrutura Organizacional).
   Processa a planilha, atualiza `employees.current_salary`/`employees.cost_center_id` de
   cada colaborador (como sempre) e além disso grava um snapshot do mês de cada linha em
   `payroll_snapshots` — reimportar o mesmo (year, month) substitui o snapshot anterior de
@@ -66,7 +67,7 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
   maioria das vezes)
 - `GET /employees/import/:batchId`
 - `GET /employees/comparison?year=&month=` → compara base x orçada, agregando por centro
-  de custo (nunca por cargo — sempre diretoria + centro de custo) no mês de referência
+  de resultado (nunca por cargo — sempre diretoria + centro de resultado) no mês de referência
   (`month` 1-12, padrão mês corrente). O lado "atual" usa **exclusivamente** o snapshot de
   fechamento daquele mês exato (ver `POST /employees/import` acima) — nunca o salário atual
   ao vivo. Sem fechamento para o mês pedido, `hcCurrent`/`budgetSavings`/`budgetOverrun`
@@ -87,12 +88,12 @@ consulta filtrável por diretoria/centro de custo — filtros de query string
   ```
 
 ## Budget (orçamento) — módulo 1
-Orçamento por **diretoria + centro de custo + cargo** — não é vinculado a
+Orçamento por **diretoria + centro de resultado + cargo** — não é vinculado a
 colaborador (sem matrícula/nome). Cada linha tem um `movementType`
 (`SEM_MOVIMENTACAO | PROMOCAO | MERITO | SUBSTITUICAO | AUMENTO_DE_QUADRO |
 DESLIGAMENTO`) e um custo orçado por mês (`jan`..`dez`, `null` fora do
 período orçado). Múltiplas linhas podem repetir a mesma combinação
-diretoria+centro de custo+cargo+tipo — cada uma representa uma vaga/assento
+diretoria+centro de resultado+cargo+tipo — cada uma representa uma vaga/assento
 orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
 
 - `POST /budget/import?year=` (multipart `file`) → `ImportBatch`. O `year` é
@@ -131,10 +132,16 @@ já que não há colaborador para derivar).
     informa-se o novo salário; o backend calcula e persiste `meritPercentage` automaticamente
     (`newSalary` precisa ser maior que o salário atual do colaborador)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
-- `PATCH /movements/:id` (somente RASCUNHO)
+- `PATCH /movements/:id` — RASCUNHO (o próprio fluxo de rascunho, sem restrição de
+  perfil) ou PENDENTE_APROVACAO (só ADMIN/RH_REMUNERACAO, para corrigir uma
+  solicitação já em aprovação antes de decidida). Nunca muda `type`/`employeeId` —
+  só os campos específicos do tipo, os mesmos aceitos em `POST /movements`. Editar
+  uma PENDENTE_APROVACAO sempre reroda a simulação (mesmo efeito de
+  `POST /movements/:id/simulate`) para a fila de aprovação nunca mostrar números
+  defasados em relação ao que foi editado.
 - `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` a partir do fluxo
   configurado (ver seção Aprovações abaixo) + muda status para `PENDENTE_APROVACAO` + envia
-  e-mail de notificação para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de custo e o
+  e-mail de notificação para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de resultado e o
   DIRETOR da diretoria (ver seção Notificações abaixo)
 - `DELETE /movements/:id` (somente RASCUNHO, cancela)
 
@@ -160,23 +167,23 @@ já que não há colaborador para derivar).
 }
 ```
   Apesar do nome dos campos (herdado do modelo original), a comparação é
-  sempre feita pelo **centro de custo exato** (diretoria + centro de custo)
+  sempre feita pelo **centro de resultado exato** (diretoria + centro de resultado)
   da movimentação — nunca pelo orçamento da diretoria inteira, e nunca
   restrita ao cargo específico da movimentação.
 
   `currentDirectoratePayroll` e `payrollAfterApproval` usam **exclusivamente**
-  o fechamento da folha (`payroll_snapshots`) desse centro de custo — nunca
+  o fechamento da folha (`payroll_snapshots`) desse centro de resultado — nunca
   `employees.current_salary` ao vivo:
   - `currentDirectoratePayroll` = soma real (não anualizada) de todos os
     meses já fechados no ano da data efetiva da movimentação (ex.: soma de
     jan a ago se ago for o último fechamento).
   - `payrollAfterApproval` = `currentDirectoratePayroll` + uma projeção dos
     meses que faltam até dezembro: pega o total do **último mês fechado**
-    para esse centro de custo, soma o `totalMonthlyImpact` da movimentação
+    para esse centro de resultado, soma o `totalMonthlyImpact` da movimentação
     (o novo "ritmo mensal" após a mudança) e multiplica pelos meses
     restantes no ano a partir da data efetiva (`monthsRemaining`) — não é
     `currentDirectoratePayroll + totalAnnualImpact` simples, que ignoraria
-    o histórico real acumulado do centro de custo.
+    o histórico real acumulado do centro de resultado.
   - Quando a data efetiva está mais de um mês à frente do último
     fechamento (ex.: fechamento até agosto, movimentação em 01/11), os
     meses de lacuna entre os dois (setembro, outubro) replicam o total do
@@ -287,9 +294,9 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
   `openMonths`; `monthClosed` só é `true` quando TODOS os meses selecionados estão fechados.
 - `GET /dashboard/cost-centers?year=&months=&directorateId=` →
   `{ year, months, items: [{ directorateId, directorateName, costCenterId, costCenterName, budgetedCost, currentCost, difference, budgetedCount, currentCount, status }] }`
-  Orçado x Atual por centro de custo, somando o custo e mediando o headcount entre os meses
+  Orçado x Atual por centro de resultado, somando o custo e mediando o headcount entre os meses
   selecionados — é o que permite a uma diretoria (filtro `directorateId`) ver exatamente quais
-  dos seus centros de custo estão `DENTRO` ou `ACIMA` do orçamento no período escolhido.
+  dos seus centros de resultado estão `DENTRO` ou `ACIMA` do orçamento no período escolhido.
   `difference = currentCost - budgetedCost`; ordenado do maior estouro para a maior economia.
 - `GET /dashboard/movements?year=&directorateId=` → `{ promotions, merits, headcountIncrease }`
 - `GET /dashboard/financial?year=&months=&directorateId=` →
@@ -319,7 +326,7 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
   Folha de Pagamento, só que quebrada por diretoria. `directorateRanking` vem **vazio
   (`[]`)** para GESTOR (identificado por `scope.costCenterIds !== undefined`) — esse
   comparativo abrange todas as diretorias da empresa, então não faz parte do escopo de um
-  gestor restrito a alguns centros de custo.
+  gestor restrito a alguns centros de resultado.
 
 ## Regras de negócio aplicadas no backend
 1. Promoção não pode ter `newSalary < currentSalary` (400 se violar).
@@ -327,8 +334,8 @@ faz sentido "somar pessoas" entre meses). Selecionar os 12 meses dá a visão
    reajuste ou o intervalo desde o último reajuste do colaborador fogem da
    Política de Remuneração (tela ADMIN/RH_REMUNERACAO, `GET`/`PUT
    /remuneration-policy`).
-3. Se `totalAnnualImpact` fizer a folha do centro de custo (nunca do cargo
-   específico) ultrapassar o orçamento desse mesmo centro de custo,
+3. Se `totalAnnualImpact` fizer a folha do centro de resultado (nunca do cargo
+   específico) ultrapassar o orçamento desse mesmo centro de resultado,
    `exceedsBudget = true` e a movimentação pode ser submetida mesmo assim
    (decisão fica com o workflow), mas o alerta é exibido em todas as telas.
 4. Impacto acumulado do ano = soma de `movement_history.annual_impact` da

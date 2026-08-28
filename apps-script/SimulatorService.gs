@@ -278,13 +278,13 @@ var SimulatorService = {
 
     var alertMessage;
     if (!input.costCenterId) {
-      alertMessage = 'Não foi possível localizar o centro de custo para comparar com o orçamento.';
+      alertMessage = 'Não foi possível localizar o centro de resultado para comparar com o orçamento.';
     } else if (exceedsBudget) {
       var excessPercent =
         budgetedDirectoratePayroll > 0
           ? ((payrollAfterApproval - budgetedDirectoratePayroll) / budgetedDirectoratePayroll) * 100
           : 100;
-      alertMessage = 'Movimentação excede o orçamento do centro de custo em ' + excessPercent.toFixed(1) + '%.';
+      alertMessage = 'Movimentação excede o orçamento do centro de resultado em ' + excessPercent.toFixed(1) + '%.';
     } else {
       alertMessage = 'Movimentação aderente ao orçamento.';
     }

@@ -40,7 +40,7 @@ function normalizeLabel(value: unknown): string {
 /** Cabeçalhos aceitos (normalizados) para cada coluna fixa da planilha. */
 const HEADER_ALIASES = {
   directorate: ['DIRETORIA'],
-  costCenter: ['CENTRO DE CUSTO', 'CENTRO_DE_CUSTO'],
+  costCenter: ['CENTRO DE RESULTADO', 'CENTRO_DE_RESULTADO', 'CENTRO DE CUSTO', 'CENTRO_DE_CUSTO'],
   position: ['CARGO'],
   situation: ['TIPO DE MOVIMENTACAO', 'TIPO_DE_MOVIMENTACAO', 'SITUACAO PLANEJADA', 'SITUACAO_PLANEJADA'],
 };
@@ -166,7 +166,7 @@ export class BudgetService {
     if (missing.length > 0) {
       throw new BadRequestException(
         `Planilha inválida: coluna(s) não encontrada(s): ${missing.join(', ')}. ` +
-          'Esperado: DIRETORIA, CENTRO DE CUSTO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses (jan a dez).',
+          'Esperado: DIRETORIA, CENTRO DE RESULTADO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses (jan a dez).',
       );
     }
 
@@ -211,7 +211,7 @@ export class BudgetService {
         continue;
       }
       if (!costCenterName) {
-        fail('centro_de_custo', 'Centro de custo é obrigatório');
+        fail('centro_de_custo', 'Centro de resultado é obrigatório');
         continue;
       }
       if (!positionName) {
@@ -231,7 +231,7 @@ export class BudgetService {
       }
       const costCenter = await this.orgService.findCostCenterByName(costCenterName);
       if (!costCenter) {
-        fail('centro_de_custo', `Centro de custo inexistente: ${costCenterName}`);
+        fail('centro_de_custo', `Centro de resultado inexistente: ${costCenterName}`);
         continue;
       }
       const position = await this.orgService.findPositionByName(positionName);

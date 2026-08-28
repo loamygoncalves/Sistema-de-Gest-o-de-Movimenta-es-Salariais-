@@ -179,7 +179,7 @@ export class EmployeesService {
       const registration = String(data['matricula'] ?? '').trim();
       const name = String(data['nome'] ?? '').trim();
       const positionName = String(data['cargo'] ?? '').trim();
-      const costCenterName = String(data['centro_de_custo'] ?? '').trim();
+      const costCenterName = String(data['centro_de_resultado'] ?? data['centro_de_custo'] ?? '').trim();
       const currentSalary = toNumber(data['salario_atual']);
       const admissionDate = toDate(data['admissao']);
       const monthYear = toMonthYear(data['mes_de_referencia']);
@@ -201,7 +201,7 @@ export class EmployeesService {
         continue;
       }
       if (!costCenterName) {
-        errors.push({ rowNumber: row.rowNumber, field: 'centro_de_custo', message: 'Centro de custo é obrigatório' });
+        errors.push({ rowNumber: row.rowNumber, field: 'centro_de_custo', message: 'Centro de resultado é obrigatório' });
         continue;
       }
       const position = await this.orgService.findPositionByName(positionName);
@@ -211,14 +211,14 @@ export class EmployeesService {
       }
       const costCenter = await this.orgService.findCostCenterByName(costCenterName);
       if (!costCenter) {
-        errors.push({ rowNumber: row.rowNumber, field: 'centro_de_custo', message: `Centro de custo inexistente: ${costCenterName}` });
+        errors.push({ rowNumber: row.rowNumber, field: 'centro_de_custo', message: `Centro de resultado inexistente: ${costCenterName}` });
         continue;
       }
       if (!costCenter.directorateId) {
         errors.push({
           rowNumber: row.rowNumber,
           field: 'centro_de_custo',
-          message: `Centro de custo "${costCenterName}" não tem diretoria vinculada — cadastre a diretoria dele em Administração > Estrutura Organizacional antes de importar`,
+          message: `Centro de resultado "${costCenterName}" não tem diretoria vinculada — cadastre a diretoria dele em Administração > Estrutura Organizacional antes de importar`,
         });
         continue;
       }

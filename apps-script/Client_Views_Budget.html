@@ -24,7 +24,7 @@
     };
 
     root.innerHTML =
-      '<div class="page-header"><div><h1>Orçamento</h1><p>Orçamento anual de pessoal por diretoria, centro de custo e cargo.</p></div></div>' +
+      '<div class="page-header"><div><h1>Orçamento</h1><p>Orçamento anual de pessoal por diretoria, centro de resultado e cargo.</p></div></div>' +
       '<div class="filter-bar" id="budget-filters"></div>' +
       '<div class="tabs" id="budget-tabs"></div>' +
       '<div id="budget-body">' +
@@ -142,7 +142,7 @@
       }
       body.innerHTML =
         '<div class="table-wrap"><table><thead><tr>' +
-        '<th>Diretoria</th><th>Centro de Custo</th><th>Cargo</th><th>Tipo de Movimentação</th>' +
+        '<th>Diretoria</th><th>Centro de Resultado</th><th>Cargo</th><th>Tipo de Movimentação</th>' +
         BUDGET_MONTH_LABELS_.map(function (label) {
           return '<th class="cell-num">' + label + '</th>';
         }).join('') +
@@ -174,7 +174,7 @@
       body.innerHTML =
         cardOpen('Importar planilha de orçamento', {
           subtitle:
-            'Colunas esperadas: DIRETORIA, CENTRO DE CUSTO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses ' +
+            'Colunas esperadas: DIRETORIA, CENTRO DE RESULTADO, CARGO, TIPO DE MOVIMENTAÇÃO, seguidas de 12 colunas de meses ' +
             '(jan a dez — o cabeçalho pode ser uma data de cada mês do ano orçado). Cada linha é uma vaga/assento orçado ' +
             'distinto: linhas idênticas são válidas (ex.: 24 linhas iguais = 24 vagas). Tipos aceitos: Sem Movimentação, ' +
             'Promoção, Mérito, Substituição, Aumento de Quadro, Desligamento. Use "-" ou deixe em branco para meses sem ' +

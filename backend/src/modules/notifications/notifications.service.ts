@@ -85,7 +85,7 @@ export class NotificationsService {
       ['Tipo', MOVEMENT_TYPE_LABELS[movement.type] ?? movement.type],
       ['Colaborador', movement.employee?.name],
       ['Diretoria', movement.directorate?.name],
-      ['Centro de custo', movement.costCenter?.name],
+      ['Centro de resultado', movement.costCenter?.name],
       ['Cargo atual', movement.currentPosition?.name],
       ['Novo cargo', movement.newPosition?.name],
       ['Salário atual', movement.currentSalary],

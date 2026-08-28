@@ -48,7 +48,7 @@ var UsersService = {
     });
     if (existing) throw new Error('Já existe um usuário com este e-mail: ' + email);
     if (input.role === UserRole.GESTOR && (!input.costCenterIds || input.costCenterIds.length === 0)) {
-      throw new Error('Selecione ao menos um centro de custo para o Gestor.');
+      throw new Error('Selecione ao menos um centro de resultado para o Gestor.');
     }
     var created = Tables.users.insert({
       name: input.name,
@@ -86,7 +86,7 @@ var UsersService = {
         patch.costCenterIds = '';
       } else if (input.role === UserRole.GESTOR) {
         if (!input.costCenterIds || input.costCenterIds.length === 0) {
-          throw new Error('Selecione ao menos um centro de custo para o Gestor.');
+          throw new Error('Selecione ao menos um centro de resultado para o Gestor.');
         }
         patch.directorateId = '';
         patch.costCenterIds = costCenterIdsToCsv_(input.costCenterIds);

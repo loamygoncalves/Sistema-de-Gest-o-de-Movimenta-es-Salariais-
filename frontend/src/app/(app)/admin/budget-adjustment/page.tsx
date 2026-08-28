@@ -67,7 +67,7 @@ function BudgetAdjustmentAdminContent() {
         <p className="text-sm text-brand-text">
           Define, por ano, um percentual do orçamento importado que fica disponível — ex.: 90% reduz todo "orçado" em
           R$ exibido no Dashboard, no Simulador e no comparativo de colaboradores para 90% do que foi importado
-          (100.000,00 orçados em um centro de custo passam a aparecer como 90.000,00), refletindo em todos os meses
+          (100.000,00 orçados em um centro de resultado passam a aparecer como 90.000,00), refletindo em todos os meses
           do ano. Não altera a planilha original nem a contagem de HC/vagas orçadas — só o valor em R$ mostrado.
           Visível e editável apenas pelo perfil Administrador.
         </p>

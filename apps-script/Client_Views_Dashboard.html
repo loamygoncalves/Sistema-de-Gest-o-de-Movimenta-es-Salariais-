@@ -143,9 +143,9 @@
     }
 
     function costCenterTableHtml(items) {
-      if (!items || items.length === 0) return emptyStateHtml('Nenhum centro de custo com orçado ou folha fechada no período.');
+      if (!items || items.length === 0) return emptyStateHtml('Nenhum centro de resultado com orçado ou folha fechada no período.');
       return (
-        '<div class="table-wrap"><table><thead><tr><th>Diretoria</th><th>Centro de Custo</th>' +
+        '<div class="table-wrap"><table><thead><tr><th>Diretoria</th><th>Centro de Resultado</th>' +
         '<th class="cell-num">HC Orçado</th><th class="cell-num">HC Atual</th>' +
         '<th class="cell-num">Custo Orçado</th><th class="cell-num">Custo Atual</th>' +
         '<th class="cell-num">Diferença</th><th>Status</th></tr></thead><tbody>' +
@@ -343,7 +343,7 @@
         kpiTile('Impacto Anual (histórico aprovado)', fmt.currency(financial.annualImpact)) +
         kpiTile('% Orçamento Consumido (Financeiro)', fmt.percent(financial.budgetConsumedPercent), financial.budgetConsumedPercent > 100 ? 'danger' : '') +
         '</div>' +
-        cardOpen('Orçado x Atual por Centro de Custo', {
+        cardOpen('Orçado x Atual por Centro de Resultado', {
           subtitle: state.directorateId
             ? 'Filtrado pela diretoria selecionada'
             : 'Todas as diretorias — selecione uma no filtro acima para focar em uma diretoria',

@@ -162,16 +162,16 @@ erDiagram
   relatórios históricos não mudem retroativamente se um cargo for renomeado
   depois.
 - **`budget_entries` não é vinculada a colaborador**: o orçamento é por
-  (diretoria, centro de custo, cargo, tipo de movimentação), com o custo
+  (diretoria, centro de resultado, cargo, tipo de movimentação), com o custo
   orçado em 12 colunas mensais (`jan`..`dez`, nulas fora do período orçado).
   Não há matrícula/nome nem chave única — múltiplas linhas repetindo a mesma
-  combinação diretoria+centro de custo+cargo+tipo representam vagas/assentos
+  combinação diretoria+centro de resultado+cargo+tipo representam vagas/assentos
   distintos daquele tipo (ex.: 24 linhas idênticas de "Analista I / Sem
-  Movimentação" no mesmo centro de custo = 24 vagas orçadas para esse cargo).
+  Movimentação" no mesmo centro de resultado = 24 vagas orçadas para esse cargo).
   A comparação com a base atual de colaboradores (módulo 2) é feita
-  agregando por diretoria+centro de custo (nunca por cargo) num mês de
+  agregando por diretoria+centro de resultado (nunca por cargo) num mês de
   referência, não por matrícula — comparar por cargo faria um cargo
-  estourado e outro com sobra no mesmo centro de custo aparecerem como dois
+  estourado e outro com sobra no mesmo centro de resultado aparecerem como dois
   problemas separados em vez de se cancelarem.
 - **`budget_adjustments`** (tela "Ajuste de Orçamento", só ADMIN) é o Ajuste
   de Orçamento: um percentual por ano (`year` único), sem FK — não altera
@@ -199,7 +199,7 @@ erDiagram
   `SimulatorService#simulate`) projeta o ano inteiro em vez de olhar um mês
   isolado: soma os meses já fechados no ano da movimentação (real
   acumulado) + os meses que faltam até dezembro, projetados a partir do
-  **último mês fechado** desse centro de custo somado ao novo impacto
+  **último mês fechado** desse centro de resultado somado ao novo impacto
   mensal da movimentação — é essa projeção anual que é comparada ao
   orçamento anual para dizer se a movimentação estoura ou não o orçamento.
   Quando a data efetiva da movimentação está mais de um mês à frente do
@@ -225,7 +225,7 @@ erDiagram
   solicitação em aumento de quadro (obrigatório, já que não há colaborador
   para derivar).
 - **`user_cost_centers`**: escopo de um usuário `GESTOR` — uma seleção de
-  centros de custo (em vez de uma diretoria inteira, como o `DIRETOR`, que
+  centros de resultado (em vez de uma diretoria inteira, como o `DIRETOR`, que
   usa `users.directorate_id`). Ausência de linhas = o Gestor não vê nada
   (nunca "vê tudo" por omissão).
 - **`approval_workflow_steps`** é a configuração do fluxo de aprovação
