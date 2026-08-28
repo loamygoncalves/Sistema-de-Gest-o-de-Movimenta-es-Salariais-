@@ -11,7 +11,10 @@
  *      centro de custo).
  *   2. notifyMovementDecided_ — desfecho da solicitação (aprovada em todas
  *      as etapas, ou reprovada em qualquer etapa — o que encerra o fluxo),
- *      só para quem solicitou.
+ *      só para quem solicitou. Aprovação de Mérito/Promoção usa o template
+ *      celebratório de buildCareerApprovalBody_ (conquista pessoal do
+ *      colaborador); reprovação (qualquer tipo) e aprovação de Aumento de
+ *      Quadro usam o template genérico de buildGenericDecisionBody_.
  *
  * Falha de envio nunca deve impedir a ação que a originou — por isso todo
  * disparo é protegido por try/catch (mesmo padrão de recordAudit_ em Db.gs).
@@ -317,7 +320,67 @@ function buildMovementNotificationBody_(movement) {
   });
 }
 
-function buildMovementDecisionBody_(movement, approved, decidedByUser, comment) {
+/**
+ * E-mail de aprovação final para Mérito/Promoção — tom celebratório voltado
+ * a quem solicitou (normalmente o Gestor), já que aprovação em todas as
+ * etapas é o desfecho positivo de uma conquista do colaborador. Reprovação
+ * (qualquer tipo) e aprovação de Aumento de Quadro (não é uma conquista
+ * pessoal do colaborador — é abertura de vaga) continuam no template
+ * genérico de `buildGenericDecisionBody_`.
+ */
+function buildCareerApprovalBody_(movement, comment) {
+  var gestorName = resolveUserDisplayName_(movement.requestedByEmail);
+  var typeLabel = MOVEMENT_TYPE_LABELS_[movement.type] || movement.type;
+  var employeeName = movement.employeeName || 'o(a) colaborador(a)';
+  var isPromotion = movement.type === MovementType.PROMOCAO;
+  var hasNewPosition = isPromotion && !!movement.newPositionName;
+
+  var highlightRows =
+    infoRowHtml_('Data de efetivação', escapeHtml_(formatEffectiveDate_(movement.effectiveDate)), !hasNewPosition) +
+    (hasNewPosition ? infoRowHtml_('Nova função', escapeHtml_(movement.newPositionName), true) : '');
+
+  var paragraphs = [
+    'A partir deste momento, você já pode compartilhar essa conquista com o(a) colaborador(a).',
+    'Parabéns por reconhecer e incentivar o desenvolvimento da sua equipe. Este é um momento importante na ' +
+      'trajetória profissional do(a) colaborador(a) e uma oportunidade de celebrar seus resultados, dedicação e ' +
+      'evolução.',
+    'Desejamos muito sucesso nesta nova etapa e temos certeza de que este será mais um passo de uma jornada ' +
+      'repleta de conquistas.',
+    'Conte com a equipe de Remuneração caso precise de qualquer apoio.',
+  ]
+    .map(function (p) {
+      return '<p style="margin:0 0 14px 0;font-size:14px;line-height:1.6;color:#334155;">' + escapeHtml_(p) + '</p>';
+    })
+    .join('');
+
+  var bodyHtml =
+    '<tr><td style="padding:0 28px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">' +
+    highlightRows +
+    '</table></td></tr>' +
+    '<tr><td style="padding:22px 28px 4px 28px;">' +
+    paragraphs +
+    '</td></tr>' +
+    (comment ? calloutBlockHtml_('Comentário', comment, '#eafbf3', '#167a54') : '');
+
+  return emailShellHtml_({
+    eyebrow: 'Solicitação aprovada',
+    eyebrowColor: '#1f9d6c',
+    title: 'Temos uma ótima notícia!',
+    intro:
+      'Olá, ' +
+      escapeHtml_(gestorName) +
+      ' — a solicitação de ' +
+      escapeHtml_(typeLabel) +
+      ' para o(a) colaborador(a) <strong>' +
+      escapeHtml_(employeeName) +
+      '</strong> foi aprovada em todas as alçadas necessárias.',
+    bodyHtml: bodyHtml,
+    ctaLabel: 'Ver movimentação',
+    ctaUrl: safeWebAppUrl_(),
+  });
+}
+
+function buildGenericDecisionBody_(movement, approved, decidedByUser, comment) {
   var accentColor = approved ? '#1f9d6c' : '#dc2626';
   var decidedByLabel = approved ? 'Aprovado por' : 'Reprovado por';
   var decidedByName = (decidedByUser && (decidedByUser.name || decidedByUser.email)) || '-';
@@ -355,4 +418,11 @@ function buildMovementDecisionBody_(movement, approved, decidedByUser, comment) 
     ctaUrl: safeWebAppUrl_(),
     footerNote: 'Este e-mail foi enviado automaticamente pelo BEEP Remunera.',
   });
+}
+
+function buildMovementDecisionBody_(movement, approved, decidedByUser, comment) {
+  if (approved && (movement.type === MovementType.MERITO || movement.type === MovementType.PROMOCAO)) {
+    return buildCareerApprovalBody_(movement, comment);
+  }
+  return buildGenericDecisionBody_(movement, approved, decidedByUser, comment);
 }
