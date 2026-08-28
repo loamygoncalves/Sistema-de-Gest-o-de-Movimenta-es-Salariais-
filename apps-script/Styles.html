@@ -569,6 +569,7 @@
   input[type="email"],
   input[type="search"],
   input[type="file"],
+  input[type="password"],
   select,
   textarea {
     width: 100%;
@@ -970,8 +971,7 @@
     width: 90px;
     height: 90px;
     border-radius: 50%;
-    background: #fba600;
-    box-shadow: 0 0 40px 4px rgba(251, 166, 0, 0.35);
+    background: rgba(255, 255, 255, 0.12);
     right: 70px;
     bottom: 100px;
   }
@@ -1032,6 +1032,24 @@
     text-transform: uppercase;
     color: var(--brand-700);
     margin: 0 0 10px 0;
+  }
+  /* Título/campo/botão maiores que o padrão de formulário do app — o
+     próprio painel branco é o "cartão" da tela de senha, então tem espaço
+     de sobra para pedir mais destaque (ver preview aprovado). */
+  .auth-gate-form-inner h2 {
+    font-size: 25px;
+    font-weight: 800;
+  }
+  .auth-gate-form-inner input[type="password"] {
+    padding: 11px 13px;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fafafa;
+  }
+  .auth-gate-form-inner .btn {
+    padding: 13px;
+    font-size: 14.5px;
+    border-radius: 8px;
   }
 
   @media (max-width: 760px) {
