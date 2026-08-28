@@ -120,6 +120,19 @@ function api_verifyPassword(password) {
   return { ok: true };
 }
 
+/**
+ * Encerra a sessão de senha do usuário atual nesta sessão do navegador — a
+ * identidade da conta Google continua ativa, mas a próxima chamada de
+ * qualquer outra api_* volta a exigir SENHA_NAO_VERIFICADA (ver
+ * requireUser_ em Auth.gs), levando de volta à tela de senha
+ * (Client_Core.html#renderPasswordGate).
+ */
+function api_logout() {
+  var user = requireIdentifiedUser_();
+  clearPasswordVerificationThisSession_(user.id);
+  return { ok: true };
+}
+
 /** Admin: define/reseta a senha de outro usuário (ex.: usuário esqueceu a senha). */
 function api_adminSetUserPassword(targetUserId, newPassword) {
   var user = requireUser_();

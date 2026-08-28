@@ -49,6 +49,12 @@ Estas três funções podem ser chamadas mesmo com `passwordVerified: false`
   a 5 tentativas incorretas por 5 minutos (`MUITAS_TENTATIVAS`).
 - `api_adminSetUserPassword(targetUserId, newPassword)` (ADMIN) → `{ ok: true }` —
   redefine a senha de outro usuário (ex.: esqueceu a senha).
+- `api_logout()` → `{ ok: true }` — encerra a sessão de senha do usuário atual
+  nesta sessão do navegador (limpa o cache de `passwordVerified`); a
+  identidade da conta Google continua ativa, mas a próxima ação exige senha
+  de novo (`SENHA_NAO_VERIFICADA`), levando de volta à tela de senha. Botão
+  "Sair" no topbar (`Client_Core.html#renderShell`) chama isso e re-executa
+  `boot()`.
 
 ## Organização
 - `api_getOrgLookups()` → `{ directorates[], positions[], costCenters[], managements[], coordinations[] }`

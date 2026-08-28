@@ -370,6 +370,7 @@
       '<div class="main-col">' +
       '<header class="topbar"><div class="topbar-title" id="topbar-title"></div>' +
       '<div class="topbar-user"><button class="btn btn-outline btn-sm" id="change-password-btn" type="button">Alterar senha</button>' +
+      '<button class="btn btn-outline btn-sm" id="logout-btn" type="button">Sair</button>' +
       '<div class="avatar-sm">' +
       escapeHtml(initials(user.name)) +
       '</div><div class="topbar-user-meta"><div class="topbar-user-name">' +
@@ -382,6 +383,23 @@
       '</div>';
     var changePasswordBtn = document.getElementById('change-password-btn');
     if (changePasswordBtn) changePasswordBtn.addEventListener('click', openChangePasswordModal);
+    var logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout_);
+  }
+
+  /** Encerra a sessão de senha e volta para a tela de confirmação de senha. */
+  function logout_() {
+    var logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.disabled = true;
+    callApi('api_logout')
+      .then(function () {
+        window.removeEventListener('hashchange', renderRoute);
+        boot();
+      })
+      .catch(function (err) {
+        if (logoutBtn) logoutBtn.disabled = false;
+        toast(apiErrorMessage(err), 'error');
+      });
   }
 
   /** Modal para o usuário trocar a própria senha (pede a atual quando já existe uma). */

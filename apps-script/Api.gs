@@ -11,7 +11,7 @@
  * Convenção: em caso de erro, a função lança (throw); o cliente sempre
  * chama via .withFailureHandler(...) para tratar isso (ver
  * Client_Core.html). Funções de senha (api_setPassword, api_verifyPassword,
- * api_adminSetUserPassword) ficam em PasswordAuth.gs, não aqui.
+ * api_adminSetUserPassword, api_logout) ficam em PasswordAuth.gs, não aqui.
  */
 
 /**
