@@ -457,10 +457,15 @@
     var app = document.getElementById('app');
     var isSet = mode === 'set';
     app.innerHTML =
-      '<div class="full-screen-msg"><div class="card">' +
-      '<img class="sidebar-brand-logo" src="' +
+      '<div class="auth-gate-bg"><div class="auth-gate-card">' +
+      '<div class="auth-gate-card-accent"></div>' +
+      '<div class="auth-gate-card-body">' +
+      '<div class="auth-gate-brand">' +
+      '<img class="auth-gate-logo" src="' +
       BEEP_LOGO_DATA_URI +
-      '" alt="Beep Saúde" style="height:32px;margin-bottom:16px;" />' +
+      '" alt="Beep Saúde" />' +
+      '<div><span class="auth-gate-name">BEEP</span><span class="auth-gate-sub">Remunera</span></div>' +
+      '</div>' +
       '<h2 style="margin-bottom:10px;">' +
       (isSet ? 'Cadastre sua senha' : 'Confirme sua senha') +
       '</h2>' +
@@ -476,13 +481,13 @@
         : '<div class="field"><label>Senha</label><input type="password" id="pwd-gate-password" autocomplete="current-password" /></div>') +
       '<p class="field-error" id="pwd-gate-error" style="display:none;"></p>' +
       '<div style="margin-top:12px;display:flex;gap:8px;">' +
-      '<button class="btn btn-success" id="pwd-gate-submit-btn">' +
+      '<button class="btn btn-success" id="pwd-gate-submit-btn" style="width:100%;">' +
       (isSet ? 'Cadastrar e entrar' : 'Entrar') +
       '</button>' +
       '</div>' +
       '<p class="text-xs text-faint" style="margin-top:14px;">Entrou com a conta Google errada? ' +
       '<a href="https://accounts.google.com/Logout" target="_blank" rel="noopener">Saia dela aqui</a> e recarregue esta página.</p>' +
-      '</div></div>';
+      '</div></div></div>';
 
     var errEl = document.getElementById('pwd-gate-error');
     function showError(err) {

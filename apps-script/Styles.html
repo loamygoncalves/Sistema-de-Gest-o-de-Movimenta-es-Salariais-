@@ -926,6 +926,62 @@
     text-align: left;
   }
 
+  /* Tela de senha (PasswordAuth) — hero de marca mais forte que o
+     .full-screen-msg genérico (usado também na tela de "sem acesso"). */
+  .auth-gate-bg {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: radial-gradient(circle at 50% -10%, var(--brand-50) 0%, var(--slate-50) 55%);
+  }
+  .auth-gate-card {
+    width: 100%;
+    max-width: 440px;
+    background: #fff;
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--brand-100);
+    box-shadow: var(--shadow-modal);
+    overflow: hidden;
+  }
+  .auth-gate-card-accent {
+    height: 6px;
+    background: linear-gradient(90deg, var(--brand-400), var(--brand-700));
+  }
+  .auth-gate-card-body {
+    padding: 36px 32px 30px 32px;
+  }
+  .auth-gate-brand {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 28px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--slate-100);
+  }
+  .auth-gate-logo {
+    height: 52px;
+    width: auto;
+    display: block;
+    flex-shrink: 0;
+  }
+  .auth-gate-name {
+    display: block;
+    font-weight: 800;
+    font-size: 26px;
+    letter-spacing: 0.01em;
+    line-height: 1.1;
+    color: var(--brand-700);
+  }
+  .auth-gate-sub {
+    display: block;
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--slate-500);
+    margin-top: 2px;
+  }
+
   .timeline {
     list-style: none;
     margin: 0;
