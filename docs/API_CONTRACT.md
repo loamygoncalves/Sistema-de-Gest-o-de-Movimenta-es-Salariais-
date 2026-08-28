@@ -106,17 +106,29 @@ orçado distinto (24 linhas idênticas = 24 vagas daquele tipo).
   `payrollBudgeted` são do mês de referência (`month` 1-12, padrão mês
   corrente); `annualBudgeted` é a soma de todas as 12 colunas de todas as
   linhas (visão do ano inteiro).
-- `GET /budget/adjustment?year=` (ADMIN) → `{ year, percent }` (100 se nunca
-  ajustado). `PUT /budget/adjustment` (ADMIN) `{ year, percent }` — Ajuste de
-  Orçamento (tela ADMIN): um percentual por ano (ex.: 90) que reduz/aumenta
-  proporcionalmente todo "orçado" em R$ exibido no sistema (este endpoint,
-  Dashboard, Simulador, `EmployeesService#compareWithBudget`) sem alterar os
-  valores originais em `budget_entries` — o fator é aplicado só na leitura,
-  nunca gravado sobre a fonte. Não afeta contagem de HC/vagas orçadas, só
-  valores monetários. Sem ajuste salvo para o ano, o fator é 100% (sem
-  efeito). Só ADMIN tem acesso a este endpoint (leitura e escrita) — os
-  demais perfis nunca veem o percentual, apenas os valores já ajustados nos
-  outros endpoints.
+- `GET /budget/adjustment?year=` (ADMIN) → `BudgetAdjustment[]` — todas as
+  linhas configuradas para o ano, cada uma `{ id, year, directorateId, costCenterId, percent, updatedAt }`
+  (`directorateId`/`costCenterId` `null` = escopo "todos"; só `directorateId`
+  = uma diretoria inteira; ambos = um centro de resultado específico dessa
+  diretoria). `PUT /budget/adjustment` (ADMIN)
+  `{ year, directorateId?, costCenterId?, percent }` — cria ou substitui
+  (identificada por `year`+`directorateId`+`costCenterId`) uma linha do
+  Ajuste de Orçamento: um percentual (ex.: 90) que reduz/aumenta
+  proporcionalmente todo "orçado" em R$ exibido no sistema (Dashboard,
+  Simulador, `EmployeesService#compareWithBudget`) sem alterar os valores
+  originais em `budget_entries` — o fator é aplicado só na leitura, nunca
+  gravado sobre a fonte. `DELETE /budget/adjustment/:id` (ADMIN) remove uma
+  linha — o escopo dela volta a 100% (sem ajuste). Pode haver mais de uma
+  linha por ano (uma "todos" + uma ou mais escopadas); quando mais de uma se
+  aplica a uma mesma linha de orçamento (diretoria + centro de resultado), a
+  **mais específica vence** — centro de resultado exato > diretoria inteira
+  > "todos" (ver `resolveBudgetAdjustmentFactor` em
+  `common/utils/months.util.ts`, usado por `BudgetService`,
+  `DashboardService`, `EmployeesService` e `SimulatorService`). Nunca afeta
+  contagem de HC/vagas orçadas, só valores monetários. Sem nenhuma linha
+  aplicável, o fator é 100% (sem efeito). Só ADMIN tem acesso a estes
+  endpoints (leitura e escrita) — os demais perfis nunca veem o percentual,
+  apenas os valores já ajustados nos outros endpoints.
 
 ## Movements (solicitações) — módulo 3
 Transferência foi descontinuada (não existe mais como `type`). Toda

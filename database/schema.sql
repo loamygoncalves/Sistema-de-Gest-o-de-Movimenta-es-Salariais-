@@ -300,13 +300,20 @@ CREATE INDEX idx_budget_entries_position ON budget_entries(position_id);
 
 -- Ajuste de Orçamento (tela ADMIN): percentual por ano que reduz/aumenta
 -- proporcionalmente todo "orçado" em R$ exibido no sistema, aplicado só na
--- leitura (nunca sobre budget_entries) — sem linha para o ano, fator = 100%.
+-- leitura (nunca sobre budget_entries) — sem linha aplicável, fator = 100%.
+-- directorate_id/cost_center_id nulos = escopo "todos"; só directorate_id =
+-- uma diretoria inteira; ambos = um centro de resultado específico. Pode
+-- haver mais de uma linha por ano; a mais específica que casar vence (ver
+-- resolveBudgetAdjustmentFactor em common/utils/months.util.ts).
 CREATE TABLE budget_adjustments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  year INT NOT NULL UNIQUE,
+  year INT NOT NULL,
+  directorate_id UUID REFERENCES directorates(id) ON DELETE CASCADE,
+  cost_center_id UUID REFERENCES cost_centers(id) ON DELETE CASCADE,
   percent NUMERIC(5,2) NOT NULL CHECK (percent > 0 AND percent <= 300),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX idx_budget_adjustments_year ON budget_adjustments(year);
 
 -- ============================================================================
 -- PARÂMETROS DE ENCARGOS E BENEFÍCIOS

@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Put,
   Query,
@@ -47,17 +49,28 @@ export class BudgetController {
     );
   }
 
-  /** Ajuste de Orçamento (tela ADMIN) — só ADMIN vê e altera; os demais nunca têm acesso a este endpoint. */
+  /**
+   * Ajuste de Orçamento (tela ADMIN) — só ADMIN vê e altera; os demais nunca
+   * têm acesso a estes endpoints. Devolve todas as linhas configuradas para
+   * o ano (cada uma com seu escopo — "todos", uma diretoria ou um centro de
+   * resultado específico); pode haver mais de uma por ano.
+   */
   @Get('adjustment')
   @Roles(UserRole.ADMIN)
-  getAdjustment(@Query() query: BudgetAdjustmentQueryDto) {
-    return this.budgetService.getAdjustment(query.year);
+  listAdjustments(@Query() query: BudgetAdjustmentQueryDto) {
+    return this.budgetService.listAdjustments(query.year);
   }
 
   @Put('adjustment')
   @Roles(UserRole.ADMIN)
   saveAdjustment(@Body() dto: SaveBudgetAdjustmentDto) {
     return this.budgetService.saveAdjustment(dto);
+  }
+
+  @Delete('adjustment/:id')
+  @Roles(UserRole.ADMIN)
+  removeAdjustment(@Param('id') id: string) {
+    return this.budgetService.removeAdjustment(id);
   }
 
   @Post('import')

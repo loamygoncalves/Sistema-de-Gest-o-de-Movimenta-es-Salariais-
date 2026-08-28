@@ -24,6 +24,7 @@ function setupSpreadsheet() {
   migrateMovementRequestsSheet_(ss);
   migrateApprovalStepsSheet_(ss);
   migrateMovementSimulationsSheet_(ss);
+  migrateBudgetAdjustmentsSheet_(ss);
 
   Object.keys(TABLES_CONFIG).forEach(function (key) {
     var cfg = TABLES_CONFIG[key];
@@ -214,6 +215,19 @@ function migrateApprovalStepsSheet_(ss) {
  */
 function migrateMovementSimulationsSheet_(ss) {
   migrateSheetColumns_(ss, 'movementSimulations', null);
+}
+
+/**
+ * O Ajuste de Orçamento ganhou escopo (directorateId/costCenterId) — linhas
+ * já existentes (sempre "todos", já que antes só havia um ajuste global por
+ * ano) ficam com esses campos vazios, preservando o comportamento anterior.
+ */
+function migrateBudgetAdjustmentsSheet_(ss) {
+  migrateSheetColumns_(ss, 'budgetAdjustments', function (obj) {
+    obj.directorateId = obj.directorateId || '';
+    obj.costCenterId = obj.costCenterId || '';
+    return obj;
+  });
 }
 
 /**

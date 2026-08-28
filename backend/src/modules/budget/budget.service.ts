@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { paginate } from '../../common/dto/pagination-query.dto';
 import { ImportType, MONTH_KEYS, MonthKey, PlannedSituation } from '../../common/enums';
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelSheetRaw, toNumber } from '../../common/utils/excel.util';
-import { budgetAdjustmentFactor, monthKeyFromNumber, monthValue, sumAllMonths } from '../../common/utils/months.util';
+import { monthKeyFromNumber, monthValue, resolveBudgetAdjustmentFactor, sumAllMonths } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
 import { BudgetEntry } from './entities/budget-entry.entity';
@@ -61,29 +61,51 @@ export class BudgetService {
     private readonly importBatchService: ImportBatchService,
   ) {}
 
+  /** Todas as linhas de Ajuste de Orçamento configuradas para o ano, cada uma com seu escopo (ver entidade). */
+  async listAdjustments(year: number): Promise<BudgetAdjustment[]> {
+    return this.budgetAdjustmentRepo.find({ where: { year }, order: { updatedAt: 'DESC' } });
+  }
+
   /**
-   * Ajuste de Orçamento (tela ADMIN): fator (ex.: 0.9 para 90%) aplicado a
-   * todo "orçado" em R$ do ano — nunca à contagem de HC/vagas orçadas, e
-   * nunca gravado sobre `budget_entries` (ver nota da entidade).
+   * Fator do Ajuste de Orçamento aplicável a uma linha de orçamento
+   * (diretoria + centro de resultado) — a regra mais específica que casar
+   * vence (ver `resolveBudgetAdjustmentFactor`). Carrega as linhas do ano a
+   * cada chamada; para aplicar a várias linhas de orçamento de uma vez,
+   * prefira `listAdjustments` + `resolveBudgetAdjustmentFactor` direto para
+   * não repetir a consulta a cada entrada.
    */
-  async getAdjustmentFactor(year: number): Promise<number> {
-    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
-    return budgetAdjustmentFactor(row?.percent);
+  async getAdjustmentFactor(
+    year: number,
+    directorateId?: string | null,
+    costCenterId?: string | null,
+  ): Promise<number> {
+    const rows = await this.listAdjustments(year);
+    return resolveBudgetAdjustmentFactor(rows, directorateId, costCenterId);
   }
 
-  /** Percentual salvo do Ajuste de Orçamento do ano (100 se nunca ajustado). */
-  async getAdjustment(year: number): Promise<{ year: number; percent: number }> {
-    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
-    return { year, percent: row ? Number(row.percent) : 100 };
-  }
-
-  /** Salva (cria ou substitui) o percentual do Ajuste de Orçamento do ano — só ADMIN (ver controller). */
-  async saveAdjustment(dto: SaveBudgetAdjustmentDto): Promise<{ year: number; percent: number }> {
-    let row = await this.budgetAdjustmentRepo.findOne({ where: { year: dto.year } });
-    if (!row) row = this.budgetAdjustmentRepo.create({ year: dto.year });
+  /**
+   * Salva (cria ou substitui) uma linha do Ajuste de Orçamento — identificada
+   * por (year, directorateId, costCenterId); ambos nulos = escopo "todos".
+   * Só ADMIN (ver controller).
+   */
+  async saveAdjustment(dto: SaveBudgetAdjustmentDto): Promise<BudgetAdjustment> {
+    const directorateId = dto.directorateId ?? null;
+    const costCenterId = dto.costCenterId ?? null;
+    let row = await this.budgetAdjustmentRepo.findOne({
+      where: {
+        year: dto.year,
+        directorateId: directorateId === null ? IsNull() : directorateId,
+        costCenterId: costCenterId === null ? IsNull() : costCenterId,
+      } as any,
+    });
+    if (!row) row = this.budgetAdjustmentRepo.create({ year: dto.year, directorateId, costCenterId });
     row.percent = dto.percent;
-    await this.budgetAdjustmentRepo.save(row);
-    return { year: dto.year, percent: Number(row.percent) };
+    return this.budgetAdjustmentRepo.save(row);
+  }
+
+  /** Remove uma linha do Ajuste de Orçamento — o escopo dela volta a 100% (sem ajuste). Só ADMIN (ver controller). */
+  async removeAdjustment(id: string): Promise<void> {
+    await this.budgetAdjustmentRepo.delete(id);
   }
 
   async findEntries(query: BudgetEntryQueryDto, scope: AccessScope) {
@@ -123,13 +145,17 @@ export class BudgetService {
   ) {
     const referenceMonth = month ?? new Date().getMonth() + 1;
     const entries = await this.loadFiltered(year, scope, costCenterId);
-    const factor = await this.getAdjustmentFactor(year);
+    const adjustmentRows = await this.listAdjustments(year);
+    const factorFor = (entry: BudgetEntry) =>
+      resolveBudgetAdjustmentFactor(adjustmentRows, entry.directorateId, entry.costCenterId);
 
     const activeEntries = entries.filter((entry) => monthValue(entry as any, referenceMonth) !== null);
     const hcBudgeted = activeEntries.length;
-    const payrollBudgeted =
-      activeEntries.reduce((sum, entry) => sum + Number(monthValue(entry as any, referenceMonth) ?? 0), 0) * factor;
-    const annualBudgeted = entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0) * factor;
+    const payrollBudgeted = activeEntries.reduce(
+      (sum, entry) => sum + Number(monthValue(entry as any, referenceMonth) ?? 0) * factorFor(entry),
+      0,
+    );
+    const annualBudgeted = entries.reduce((sum, entry) => sum + sumAllMonths(entry as any) * factorFor(entry), 0);
 
     return {
       year,

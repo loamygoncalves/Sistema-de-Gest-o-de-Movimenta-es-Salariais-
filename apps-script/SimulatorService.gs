@@ -133,7 +133,7 @@ var SimulatorService = {
     var entries = Tables.budgetEntries.where(function (b) {
       return b.directorateId === directorateId && b.costCenterId === costCenterId;
     });
-    var factor = BudgetService.getAdjustmentFactor_(year);
+    var factor = BudgetService.getAdjustmentFactor_(year, directorateId, costCenterId);
     return entries.reduce(function (sum, entry) {
       return sum + sumAllMonths_(entry);
     }, 0) * factor;

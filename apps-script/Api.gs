@@ -223,17 +223,32 @@ function api_importBudget(base64Data, mimeType, filename, year) {
   return BudgetService.importFromFile(base64Data, mimeType, filename, year, user.email);
 }
 
-/** Ajuste de Orçamento (tela ADMIN) — só ADMIN vê e altera; os demais nunca têm acesso a esta função. */
-function api_getBudgetAdjustment(year) {
+/**
+ * Ajuste de Orçamento (tela ADMIN) — só ADMIN vê e altera; os demais nunca
+ * têm acesso a estas funções. Devolve todas as linhas configuradas para o
+ * ano (cada uma com seu escopo — "todos", uma diretoria ou um centro de
+ * resultado específico); pode haver mais de uma por ano.
+ */
+function api_listBudgetAdjustments(year) {
   var user = requireUser_();
   requireRole_(user, [UserRole.ADMIN]);
-  return BudgetService.getAdjustment(year);
+  return BudgetService.listAdjustments(year);
 }
 
-function api_saveBudgetAdjustment(year, percent) {
+function api_saveBudgetAdjustment(input) {
   var user = requireUser_();
   requireRole_(user, [UserRole.ADMIN]);
-  return BudgetService.saveAdjustment({ year: year, percent: percent });
+  var saved = BudgetService.saveAdjustment(input);
+  recordAudit_(user.email, 'SAVE', 'budget_adjustments', saved.id, input);
+  return saved;
+}
+
+function api_removeBudgetAdjustment(id) {
+  var user = requireUser_();
+  requireRole_(user, [UserRole.ADMIN]);
+  var result = BudgetService.removeAdjustment(id);
+  recordAudit_(user.email, 'DELETE', 'budget_adjustments', id, {});
+  return result;
 }
 
 // ---------------------------------------------------------------------------

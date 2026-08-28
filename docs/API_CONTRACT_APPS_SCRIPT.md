@@ -153,17 +153,28 @@ não há rejeição de linha "duplicada" na importação.
   O `year` é sobreposto pelo ano derivado do cabeçalho de mês, quando este é
   uma data real. Reimportar substitui integralmente o orçado do ano para as
   diretorias presentes no arquivo.
-- `api_getBudgetAdjustment(year)` (ADMIN) → `{ year, percent }` (100 se nunca
-  ajustado). `api_saveBudgetAdjustment(year, percent)` (ADMIN) → mesmo
-  formato — Ajuste de Orçamento (tela ADMIN, aba `AjusteOrcamento`): um
-  percentual por ano (ex.: 90) que reduz/aumenta proporcionalmente todo
-  "orçado" em R$ exibido no sistema (`api_getBudgetDashboard`, Dashboard,
-  Simulador, `EmployeesService.compareWithBudget`) sem alterar os valores
-  originais na aba `Orcamento` — o fator é aplicado só na leitura, nunca
-  gravado sobre a fonte. Não afeta contagem de HC/vagas orçadas, só valores
-  monetários. Sem ajuste salvo para o ano, o fator é 100% (sem efeito). Só
-  ADMIN tem acesso a estas funções — os demais perfis nunca veem o
-  percentual, apenas os valores já ajustados nas outras funções.
+- `api_listBudgetAdjustments(year)` (ADMIN) → linhas da aba `AjusteOrcamento`
+  para o ano, cada uma `{ id, year, directorateId, costCenterId, percent, updatedAt }`
+  (`directorateId`/`costCenterId` vazios = escopo "todos"; só `directorateId`
+  = uma diretoria inteira; ambos = um centro de resultado específico dessa
+  diretoria). `api_saveBudgetAdjustment({ year, directorateId?, costCenterId?, percent })`
+  (ADMIN) cria ou substitui (identificada por `year`+`directorateId`+`costCenterId`)
+  uma linha. `api_removeBudgetAdjustment(id)` (ADMIN) remove uma linha — o
+  escopo dela volta a 100% (sem ajuste). Ajuste de Orçamento (tela ADMIN):
+  um percentual (ex.: 90) que reduz/aumenta proporcionalmente todo "orçado"
+  em R$ exibido no sistema (`api_getBudgetDashboard`, Dashboard, Simulador,
+  `EmployeesService.compareWithBudget`) sem alterar os valores originais na
+  aba `Orcamento` — o fator é aplicado só na leitura, nunca gravado sobre a
+  fonte. Pode haver mais de uma linha por ano (uma "todos" + uma ou mais
+  escopadas); quando mais de uma se aplica a uma mesma linha de orçamento
+  (diretoria + centro de resultado), a **mais específica vence** — centro
+  de resultado exato > diretoria inteira > "todos" (ver
+  `resolveBudgetAdjustmentFactor_` em `BudgetService.gs`, usado também por
+  `DashboardService.gs`, `EmployeesService.gs` e `SimulatorService.gs`).
+  Nunca afeta contagem de HC/vagas orçadas, só valores monetários. Sem
+  nenhuma linha aplicável, o fator é 100% (sem efeito). Só ADMIN tem acesso
+  a estas funções — os demais perfis nunca veem o percentual, apenas os
+  valores já ajustados nas outras funções.
 
 ## Simulador / encargos — Módulo 4
 - `api_listChargeParameters()`, `api_createChargeParameter({name,label,valueType,value,isBenefit})`, `api_updateChargeParameter(id, patch)`

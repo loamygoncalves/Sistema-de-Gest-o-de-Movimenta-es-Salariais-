@@ -123,11 +123,17 @@ export interface BudgetDashboard {
   annualBudgeted: number;
 }
 
-// Ajuste de Orçamento (tela ADMIN, GET/PUT /budget/adjustment?year=): percentual
+// Ajuste de Orçamento (tela ADMIN, GET/PUT/DELETE /budget/adjustment): percentual
 // que reduz/aumenta proporcionalmente todo "orçado" em R$ exibido no sistema
 // (Dashboard, Simulador, comparativo de colaboradores) sem alterar os valores
-// originais importados. 100 = sem ajuste (padrão quando nunca configurado).
+// originais importados. Pode ser escopado — directorateId/costCenterId nulos =
+// "todos" (empresa inteira); só directorateId = uma diretoria inteira; ambos =
+// um centro de resultado específico. Pode haver mais de uma linha por ano; a
+// mais específica que casar com uma linha de orçamento vence.
 export interface BudgetAdjustment {
+  id: string;
   year: number;
+  directorateId: string | null;
+  costCenterId: string | null;
   percent: number;
 }

@@ -6,7 +6,7 @@ import { EmployeeStatus, ImportType, PlannedSituation } from '../../common/enums
 import { AccessScope } from '../../common/decorators/current-user.decorator';
 import { applyAccessScope } from '../../common/utils/access-scope.util';
 import { parseExcelBuffer, toDate, toMonthYear, toNumber } from '../../common/utils/excel.util';
-import { budgetAdjustmentFactor, monthValue } from '../../common/utils/months.util';
+import { monthValue, resolveBudgetAdjustmentFactor } from '../../common/utils/months.util';
 import { OrgService } from '../org/org.service';
 import { ImportBatchService } from '../imports/import-batch.service';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
@@ -30,10 +30,9 @@ export class EmployeesService {
     private readonly importBatchService: ImportBatchService,
   ) {}
 
-  /** Fator do Ajuste de Orçamento (tela ADMIN) do ano — nunca gravado sobre budget_entries, só aplicado na leitura. */
-  private async getAdjustmentFactor(year: number): Promise<number> {
-    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
-    return budgetAdjustmentFactor(row?.percent);
+  /** Linhas de Ajuste de Orçamento (tela ADMIN) do ano — nunca gravadas sobre budget_entries, só aplicadas na leitura, uma por linha de orçamento (ver resolveBudgetAdjustmentFactor). */
+  private async loadAdjustmentRows(year: number) {
+    return this.budgetAdjustmentRepo.find({ where: { year } });
   }
 
   async findAll(query: EmployeeQueryDto, scope: AccessScope) {
@@ -374,7 +373,7 @@ export class EmployeesService {
     const budgetEntries = allBudgetEntries.filter(
       (entry) => monthValue(entry as any, referenceMonth) !== null,
     );
-    const factor = await this.getAdjustmentFactor(year);
+    const adjustmentRows = await this.loadAdjustmentRows(year);
 
     const { rows: salaryRows, monthClosed } = await this.resolveMonthlySalaryRows(year, referenceMonth, scope);
 
@@ -404,7 +403,9 @@ export class EmployeesService {
         currentCost: 0,
       };
       bucket.budgetedCount += 1;
-      bucket.budgetedCost += Number(monthValue(entry as any, referenceMonth) ?? 0) * factor;
+      bucket.budgetedCost +=
+        Number(monthValue(entry as any, referenceMonth) ?? 0) *
+        resolveBudgetAdjustmentFactor(adjustmentRows, entry.directorateId, entry.costCenterId);
       buckets.set(key, bucket);
     }
 

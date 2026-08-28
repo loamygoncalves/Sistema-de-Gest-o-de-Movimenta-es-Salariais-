@@ -48,11 +48,24 @@ export class BudgetAdjustmentQueryDto {
   year: number;
 }
 
-/** Percentual do Ajuste de Orçamento (tela ADMIN) — ex.: 90 reduz todo orçado em R$ para 90% do importado. */
+/**
+ * Percentual do Ajuste de Orçamento (tela ADMIN) — ex.: 90 reduz todo orçado
+ * em R$ para 90% do importado. `directorateId`/`costCenterId` ausentes =
+ * escopo "todos" (empresa inteira); só `directorateId` = uma diretoria
+ * inteira; ambos = um centro de resultado específico dessa diretoria.
+ */
 export class SaveBudgetAdjustmentDto {
   @Type(() => Number)
   @IsInt()
   year: number;
+
+  @IsOptional()
+  @IsUUID()
+  directorateId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  costCenterId?: string;
 
   @Type(() => Number)
   @IsNumber()

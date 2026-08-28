@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { ChargeValueType, MovementType } from '../../common/enums';
-import { budgetAdjustmentFactor, sumAllMonths } from '../../common/utils/months.util';
+import { resolveBudgetAdjustmentFactor, sumAllMonths } from '../../common/utils/months.util';
 import { PayrollSnapshot } from '../employees/entities/payroll-snapshot.entity';
 import { BudgetEntry } from '../budget/entities/budget-entry.entity';
 import { BudgetAdjustment } from '../budget/entities/budget-adjustment.entity';
@@ -110,14 +110,23 @@ export class SimulatorService {
     const entries = await this.budgetRepo.find({
       where: { directorateId, costCenterId } as any,
     });
-    const factor = await this.getAdjustmentFactor(year);
+    const factor = await this.getAdjustmentFactor(year, directorateId, costCenterId);
     return entries.reduce((sum, entry) => sum + sumAllMonths(entry as any), 0) * factor;
   }
 
-  /** Fator do Ajuste de Orçamento (tela ADMIN) do ano — nunca gravado sobre budget_entries, só aplicado na leitura. */
-  private async getAdjustmentFactor(year: number): Promise<number> {
-    const row = await this.budgetAdjustmentRepo.findOne({ where: { year } });
-    return budgetAdjustmentFactor(row?.percent);
+  /**
+   * Fator do Ajuste de Orçamento (tela ADMIN) aplicável a essa diretoria +
+   * centro de resultado — a linha mais específica que casar vence (ver
+   * resolveBudgetAdjustmentFactor). Nunca gravado sobre budget_entries, só
+   * aplicado na leitura.
+   */
+  private async getAdjustmentFactor(
+    year: number,
+    directorateId: string | null | undefined,
+    costCenterId: string | null | undefined,
+  ): Promise<number> {
+    const rows = await this.budgetAdjustmentRepo.find({ where: { year } });
+    return resolveBudgetAdjustmentFactor(rows, directorateId, costCenterId);
   }
 
   /**

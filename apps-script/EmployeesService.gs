@@ -343,7 +343,7 @@ var EmployeesService = {
     var budgetEntries = allBudgetEntries.filter(function (entry) {
       return monthValue_(entry, referenceMonth) !== null;
     });
-    var factor = BudgetService.getAdjustmentFactor_(year);
+    var adjustmentRows = BudgetService.listAdjustments(year);
 
     var monthlySalaries = resolveMonthlySalaryRows_(year, referenceMonth, scope, true);
     var salaryRows = monthlySalaries.rows;
@@ -375,7 +375,7 @@ var EmployeesService = {
     budgetEntries.forEach(function (entry) {
       var bucket = getBucket(entry.directorateId, entry.costCenterId);
       bucket.budgetedCount += 1;
-      bucket.budgetedCost += Number(monthValue_(entry, referenceMonth) || 0) * factor;
+      bucket.budgetedCost += Number(monthValue_(entry, referenceMonth) || 0) * resolveBudgetAdjustmentFactor_(adjustmentRows, entry.directorateId, entry.costCenterId);
     });
 
     salaryRows.forEach(function (row) {

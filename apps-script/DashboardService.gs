@@ -78,12 +78,12 @@ var DashboardService = {
     var referenceMonths = resolveDashboardMonths_(months);
     var allBudgetEntries = BudgetService.listEntries(year, scope);
     var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, referenceMonths, scope);
-    var factor = BudgetService.getAdjustmentFactor_(year);
+    var adjustmentRows = BudgetService.listAdjustments(year);
 
     var byMonth = referenceMonths.map(function (month) {
       var budgeted = allBudgetEntries.reduce(function (sum, b) {
-        return sum + Number(monthValue_(b, month) || 0);
-      }, 0) * factor;
+        return sum + Number(monthValue_(b, month) || 0) * resolveBudgetAdjustmentFactor_(adjustmentRows, b.directorateId, b.costCenterId);
+      }, 0);
       var monthly = salariesByMonth[month];
       var current = monthly.rows.reduce(function (sum, row) { return sum + row.salary; }, 0);
       return { month: month, payrollBudgeted: budgeted, payrollCurrent: current, monthClosed: monthly.monthClosed };
@@ -116,7 +116,7 @@ var DashboardService = {
     var referenceMonths = resolveDashboardMonths_(months);
     var allBudgetEntries = BudgetService.listEntries(year, scope);
     var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, referenceMonths, scope);
-    var factor = BudgetService.getAdjustmentFactor_(year);
+    var adjustmentRows = BudgetService.listAdjustments(year);
     var directorateNames = indexById_(Tables.directorates.all());
     var costCenterNames = indexById_(Tables.costCenters.all());
 
@@ -148,7 +148,7 @@ var DashboardService = {
         var directorateName = directorateNames[entry.directorateId] ? directorateNames[entry.directorateId].name : null;
         var costCenterName = costCenterNames[entry.costCenterId] ? costCenterNames[entry.costCenterId].name : null;
         var bucket = getBucket(entry.directorateId, entry.costCenterId, directorateName, costCenterName);
-        bucket.budgetedCost += Number(value) * factor;
+        bucket.budgetedCost += Number(value) * resolveBudgetAdjustmentFactor_(adjustmentRows, entry.directorateId, entry.costCenterId);
         bucket.budgetedCountByMonth[month] = (bucket.budgetedCountByMonth[month] || 0) + 1;
       });
       salariesByMonth[month].rows.forEach(function (row) {
@@ -251,12 +251,12 @@ var DashboardService = {
     var salariesByMonth = resolveMonthlySalaryRowsForMonths_(year, allMonths, scope);
 
     var allBudgetEntries = BudgetService.listEntries(year, scope);
-    var factor = BudgetService.getAdjustmentFactor_(year);
+    var adjustmentRows = BudgetService.listAdjustments(year);
     var budgetedByMonth = {};
     allMonths.forEach(function (month) {
       budgetedByMonth[month] = allBudgetEntries.reduce(function (sum, b) {
-        return sum + Number(monthValue_(b, month) || 0);
-      }, 0) * factor;
+        return sum + Number(monthValue_(b, month) || 0) * resolveBudgetAdjustmentFactor_(adjustmentRows, b.directorateId, b.costCenterId);
+      }, 0);
     });
 
     var closedMonths = allMonths.filter(function (m) { return salariesByMonth[m].monthClosed; });

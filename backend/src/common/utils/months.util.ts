@@ -37,3 +37,39 @@ export function isActiveInMonth(
 export function budgetAdjustmentFactor(percent: number | null | undefined): number {
   return percent === null || percent === undefined ? 1 : Number(percent) / 100;
 }
+
+export interface BudgetAdjustmentRow {
+  directorateId: string | null;
+  costCenterId: string | null;
+  percent: number;
+}
+
+/**
+ * Escolhe, entre as linhas de Ajuste de Orçamento já salvas para o ano, a
+ * mais específica que casa com (directorateId, costCenterId) de uma linha
+ * de orçamento — centro de resultado exato dessa diretoria > diretoria
+ * inteira > "todos" (ambos null na linha de ajuste) — e devolve o fator
+ * correspondente (1 = sem ajuste, quando nenhuma linha casa). Compartilhado
+ * por BudgetService/DashboardService/EmployeesService/SimulatorService para
+ * a mesma precedência não divergir entre os consumidores.
+ */
+export function resolveBudgetAdjustmentFactor(
+  rows: BudgetAdjustmentRow[],
+  directorateId: string | null | undefined,
+  costCenterId: string | null | undefined,
+): number {
+  if (costCenterId != null) {
+    const costCenterRow = rows.find(
+      (r) => r.directorateId === directorateId && r.costCenterId === costCenterId,
+    );
+    if (costCenterRow) return budgetAdjustmentFactor(costCenterRow.percent);
+  }
+
+  if (directorateId != null) {
+    const directorateRow = rows.find((r) => r.directorateId === directorateId && r.costCenterId === null);
+    if (directorateRow) return budgetAdjustmentFactor(directorateRow.percent);
+  }
+
+  const globalRow = rows.find((r) => r.directorateId === null && r.costCenterId === null);
+  return budgetAdjustmentFactor(globalRow?.percent);
+}

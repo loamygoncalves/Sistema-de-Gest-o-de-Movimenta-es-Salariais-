@@ -279,7 +279,12 @@ var TABLES_CONFIG = {
   },
   budgetAdjustments: {
     sheet: 'AjusteOrcamento',
-    columns: ['id', 'year', 'percent', 'updatedAt'],
+    // directorateId/costCenterId vazios = escopo "todos" (empresa inteira);
+    // só directorateId = uma diretoria inteira; ambos = um centro de
+    // resultado específico dessa diretoria. Pode haver mais de uma linha
+    // por ano — a mais específica que casar com uma linha de orçamento
+    // vence (ver BudgetService.resolveAdjustmentFactor_).
+    columns: ['id', 'year', 'directorateId', 'costCenterId', 'percent', 'updatedAt'],
   },
   payrollSnapshots: {
     sheet: 'FechamentoFolha',
