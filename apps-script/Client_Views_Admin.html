@@ -1061,6 +1061,7 @@
       formScope: 'TODOS',
       formDirectorateId: '',
       formCostCenterId: '',
+      formCostCenterIds: [],
       formPercent: '',
     };
 
@@ -1069,9 +1070,10 @@
       '<p>Define, por ano, um percentual do orçamento importado que fica disponível — ex.: 90% reduz todo ' +
       '"orçado" em R$ exibido no Dashboard, no Simulador e no comparativo de colaboradores para 90% do que foi ' +
       'importado (100.000,00 orçados passam a aparecer como 90.000,00), refletindo em todos os meses do ano. Pode ' +
-      'valer para toda a empresa ou só para uma diretoria/centro de resultado específico — quando mais de uma ' +
-      'regra se aplicar, a mais específica vence. Não altera a planilha original nem a contagem de HC/vagas ' +
-      'orçadas — só o valor em R$ mostrado. Visível e editável apenas pelo perfil Administrador.</p></div>' +
+      'valer para toda a empresa, só para uma diretoria ou para um ou mais centros de resultado específicos — ' +
+      'quando mais de uma regra se aplicar, a mais específica vence. Não altera a planilha original nem a ' +
+      'contagem de HC/vagas orçadas — só o valor em R$ mostrado. Visível e editável apenas pelo perfil ' +
+      'Administrador.</p></div>' +
       '<div id="budget-adjustment-body">' +
       loadingHtml() +
       '</div>';
@@ -1103,6 +1105,7 @@
       state.formScope = 'TODOS';
       state.formDirectorateId = '';
       state.formCostCenterId = '';
+      state.formCostCenterIds = [];
       state.formPercent = '';
     }
 
@@ -1137,12 +1140,34 @@
             optionsHtml(org.directorates, { placeholder: 'Selecione', selected: state.formDirectorateId }) +
             '</select></label>'
           : '';
-      var costCenterFieldHtml =
-        state.formScope === 'CENTRO_RESULTADO'
-          ? '<label>Centro de Resultado<select id="budget-adjustment-costcenter">' +
-            optionsHtml(org.costCenters, { placeholder: 'Selecione', selected: state.formCostCenterId }) +
-            '</select></label>'
-          : '';
+      var costCenterFieldHtml = '';
+      if (state.formScope === 'CENTRO_RESULTADO' && state.editingId) {
+        costCenterFieldHtml =
+          '<label>Centro de Resultado<select id="budget-adjustment-costcenter">' +
+          optionsHtml(org.costCenters, { placeholder: 'Selecione', selected: state.formCostCenterId }) +
+          '</select></label>';
+      } else if (state.formScope === 'CENTRO_RESULTADO' && !state.editingId) {
+        costCenterFieldHtml =
+          '<div class="field" style="grid-column:1 / -1;"><label>Centros de Resultado</label>' +
+          '<p class="text-xs text-muted" style="margin:2px 0 4px;">Pode selecionar mais de um — o mesmo percentual será aplicado a todos os selecionados.</p>' +
+          '<div style="max-height:180px;overflow-y:auto;border:1px solid var(--slate-200);border-radius:8px;padding:8px;">' +
+          (org.costCenters || [])
+            .map(function (cc) {
+              var checked = state.formCostCenterIds.indexOf(cc.id) !== -1 ? ' checked' : '';
+              return (
+                '<label class="checkbox-row" style="display:flex;gap:6px;align-items:center;padding:2px 0;">' +
+                '<input type="checkbox" class="budget-adjustment-cc-checkbox" value="' +
+                escapeHtml(cc.id) +
+                '"' +
+                checked +
+                '><span>' +
+                escapeHtml(cc.name) +
+                '</span></label>'
+              );
+            })
+            .join('') +
+          '</div></div>';
+      }
 
       var rowsHtml =
         state.adjustments.length === 0
@@ -1175,7 +1200,7 @@
         '<label>Escopo<select id="budget-adjustment-scope">' +
         '<option value="TODOS"' + (state.formScope === 'TODOS' ? ' selected' : '') + '>Todos (empresa inteira)</option>' +
         '<option value="DIRETORIA"' + (state.formScope === 'DIRETORIA' ? ' selected' : '') + '>Uma diretoria</option>' +
-        '<option value="CENTRO_RESULTADO"' + (state.formScope === 'CENTRO_RESULTADO' ? ' selected' : '') + '>Um centro de resultado</option>' +
+        '<option value="CENTRO_RESULTADO"' + (state.formScope === 'CENTRO_RESULTADO' ? ' selected' : '') + '>Um ou mais centros de resultado</option>' +
         '</select></label>' +
         directorateFieldHtml +
         costCenterFieldHtml +
@@ -1209,6 +1234,13 @@
         }
         readFormPercentIntoState();
         renderBody();
+      });
+      body.querySelectorAll('.budget-adjustment-cc-checkbox').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+          state.formCostCenterIds = Array.prototype.slice
+            .call(body.querySelectorAll('.budget-adjustment-cc-checkbox:checked'))
+            .map(function (el) { return el.value; });
+        });
       });
       document.getElementById('budget-adjustment-save-btn').addEventListener('click', save);
       var cancelBtn = document.getElementById('budget-adjustment-cancel-btn');
@@ -1260,18 +1292,65 @@
         toast('Selecione a diretoria.', 'error');
         return;
       }
-      if (state.formScope === 'CENTRO_RESULTADO' && (!costCenterEl || !costCenterEl.value)) {
+      if (state.formScope === 'CENTRO_RESULTADO' && state.editingId && (!costCenterEl || !costCenterEl.value)) {
         toast('Selecione o centro de resultado.', 'error');
         return;
       }
+      if (state.formScope === 'CENTRO_RESULTADO' && !state.editingId && state.formCostCenterIds.length === 0) {
+        toast('Selecione ao menos um centro de resultado.', 'error');
+        return;
+      }
 
-      var input = {
+      if (state.editingId) {
+        var input = {
+          year: state.year,
+          percent: percent,
+          directorateId: state.formScope === 'TODOS' ? '' : directorateEl.value,
+          costCenterId: state.formScope === 'CENTRO_RESULTADO' ? costCenterEl.value : '',
+        };
+        callApi('api_saveBudgetAdjustment', input)
+          .then(function () {
+            toast('Ajuste de ' + state.year + ' salvo: orçado passa a ser exibido a ' + percent + '% nesse escopo.', 'success');
+            resetForm();
+            loadAndRender();
+          })
+          .catch(toastError);
+        return;
+      }
+
+      if (state.formScope === 'CENTRO_RESULTADO') {
+        var directorateId = directorateEl.value;
+        Promise.all(
+          state.formCostCenterIds.map(function (ccId) {
+            return callApi('api_saveBudgetAdjustment', {
+              year: state.year,
+              percent: percent,
+              directorateId: directorateId,
+              costCenterId: ccId,
+            });
+          })
+        )
+          .then(function () {
+            var n = state.formCostCenterIds.length;
+            toast(
+              n > 1
+                ? 'Ajuste de ' + state.year + ' salvo em ' + n + ' centros de resultado: orçado passa a ser exibido a ' + percent + '%.'
+                : 'Ajuste de ' + state.year + ' salvo: orçado passa a ser exibido a ' + percent + '% nesse escopo.',
+              'success'
+            );
+            resetForm();
+            loadAndRender();
+          })
+          .catch(toastError);
+        return;
+      }
+
+      callApi('api_saveBudgetAdjustment', {
         year: state.year,
         percent: percent,
         directorateId: state.formScope === 'TODOS' ? '' : directorateEl.value,
-        costCenterId: state.formScope === 'CENTRO_RESULTADO' ? costCenterEl.value : '',
-      };
-      callApi('api_saveBudgetAdjustment', input)
+        costCenterId: '',
+      })
         .then(function () {
           toast('Ajuste de ' + state.year + ' salvo: orçado passa a ser exibido a ' + percent + '% nesse escopo.', 'success');
           resetForm();

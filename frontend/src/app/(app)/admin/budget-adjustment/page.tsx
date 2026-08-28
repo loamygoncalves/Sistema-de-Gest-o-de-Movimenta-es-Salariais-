@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Select } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import { CostCenterCheckboxList } from "@/components/shared/CostCenterCheckboxList";
 import { useCostCenters, useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
@@ -35,6 +36,7 @@ function BudgetAdjustmentAdminContent() {
   const [scope, setScope] = useState<Scope>("TODOS");
   const [directorateId, setDirectorateId] = useState("");
   const [costCenterId, setCostCenterId] = useState("");
+  const [costCenterIds, setCostCenterIds] = useState<string[]>([]);
   const [percent, setPercent] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
 
@@ -63,6 +65,7 @@ function BudgetAdjustmentAdminContent() {
     setScope("TODOS");
     setDirectorateId("");
     setCostCenterId("");
+    setCostCenterIds([]);
     setPercent("");
   }
 
@@ -83,20 +86,49 @@ function BudgetAdjustmentAdminContent() {
       showToast("Selecione a diretoria.", "error");
       return;
     }
-    if (scope === "CENTRO_RESULTADO" && !costCenterId) {
+    if (scope === "CENTRO_RESULTADO" && !editingId && costCenterIds.length === 0) {
+      showToast("Selecione ao menos um centro de resultado.", "error");
+      return;
+    }
+    if (scope === "CENTRO_RESULTADO" && editingId && !costCenterId) {
       showToast("Selecione o centro de resultado.", "error");
       return;
     }
 
     setSaving(true);
     try {
-      await api.put<BudgetAdjustment>("/budget/adjustment", {
-        year,
-        percent: Number(percent),
-        directorateId: scope === "TODOS" ? undefined : directorateId,
-        costCenterId: scope === "CENTRO_RESULTADO" ? costCenterId : undefined,
-      });
-      showToast(`Ajuste de ${year} salvo: orçado passa a ser exibido a ${percent}% nesse escopo.`, "success");
+      if (editingId) {
+        await api.put<BudgetAdjustment>("/budget/adjustment", {
+          year,
+          percent: Number(percent),
+          directorateId: scope === "TODOS" ? undefined : directorateId,
+          costCenterId: scope === "CENTRO_RESULTADO" ? costCenterId : undefined,
+        });
+      } else if (scope === "CENTRO_RESULTADO") {
+        await Promise.all(
+          costCenterIds.map((id) =>
+            api.put<BudgetAdjustment>("/budget/adjustment", {
+              year,
+              percent: Number(percent),
+              directorateId,
+              costCenterId: id,
+            })
+          )
+        );
+      } else {
+        await api.put<BudgetAdjustment>("/budget/adjustment", {
+          year,
+          percent: Number(percent),
+          directorateId: scope === "TODOS" ? undefined : directorateId,
+        });
+      }
+      const scopeCount = scope === "CENTRO_RESULTADO" && !editingId ? costCenterIds.length : 1;
+      showToast(
+        scopeCount > 1
+          ? `Ajuste de ${year} salvo em ${scopeCount} centros de resultado: orçado passa a ser exibido a ${percent}%.`
+          : `Ajuste de ${year} salvo: orçado passa a ser exibido a ${percent}% nesse escopo.`,
+        "success"
+      );
       resetForm();
       await load(year);
     } catch (err) {
@@ -135,11 +167,11 @@ function BudgetAdjustmentAdminContent() {
       <div>
         <h1 className="text-xl font-semibold text-slate-900">Ajuste de Orçamento</h1>
         <p className="text-sm text-brand-text">
-          Define, por ano, um percentual do orçamento importado que fica disponível — ex.: 90% reduz todo "orçado" em
-          R$ exibido no Dashboard, no Simulador e no comparativo de colaboradores para 90% do que foi importado
+          Define, por ano, um percentual do orçamento importado que fica disponível — ex.: 90% reduz todo
+          &quot;orçado&quot; em R$ exibido no Dashboard, no Simulador e no comparativo de colaboradores para 90% do que foi importado
           (100.000,00 orçados passam a aparecer como 90.000,00), refletindo em todos os meses do ano. Pode valer para
-          toda a empresa ou só para uma diretoria/centro de resultado específico — quando mais de uma regra se
-          aplicar, a mais específica vence. Não altera a planilha original nem a contagem de HC/vagas orçadas — só o
+          toda a empresa, só para uma diretoria ou para um ou mais centros de resultado específicos — quando mais de
+          uma regra se aplicar, a mais específica vence. Não altera a planilha original nem a contagem de HC/vagas orçadas — só o
           valor em R$ mostrado. Visível e editável apenas pelo perfil Administrador.
         </p>
       </div>
@@ -160,6 +192,7 @@ function BudgetAdjustmentAdminContent() {
               if (e.target.value === "TODOS") {
                 setDirectorateId("");
                 setCostCenterId("");
+                setCostCenterIds([]);
               }
             }}
           />
@@ -172,7 +205,7 @@ function BudgetAdjustmentAdminContent() {
               onChange={(e) => setDirectorateId(e.target.value)}
             />
           )}
-          {scope === "CENTRO_RESULTADO" && (
+          {scope === "CENTRO_RESULTADO" && editingId && (
             <Select
               label="Centro de resultado"
               placeholder="Selecione"
@@ -180,6 +213,16 @@ function BudgetAdjustmentAdminContent() {
               value={costCenterId}
               onChange={(e) => setCostCenterId(e.target.value)}
             />
+          )}
+          {scope === "CENTRO_RESULTADO" && !editingId && (
+            <div className="sm:col-span-2 lg:col-span-1">
+              <CostCenterCheckboxList
+                selectedIds={costCenterIds}
+                onChange={setCostCenterIds}
+                label="Centros de resultado"
+                hint="Pode selecionar mais de um — o mesmo percentual será aplicado a todos os selecionados."
+              />
+            </div>
           )}
           <Input
             label="Percentual disponibilizado (%)"

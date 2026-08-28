@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Select } from "@/components/ui/Input";
 import { Table, Column } from "@/components/ui/Table";
+import { CostCenterCheckboxList } from "@/components/shared/CostCenterCheckboxList";
 import { useCrudResource } from "@/hooks/useCrudResource";
-import { useCostCenters, useDirectorates } from "@/hooks/useOrgOptions";
+import { useDirectorates } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
 import { useToast } from "@/lib/toast";
@@ -22,40 +23,6 @@ export default function UsersAdminPage() {
     <RoleGuard roles={["ADMIN"]}>
       <UsersAdminContent />
     </RoleGuard>
-  );
-}
-
-function CostCenterCheckboxList({
-  selectedIds,
-  onChange,
-}: {
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
-}) {
-  const { costCenters } = useCostCenters();
-
-  function toggle(id: string) {
-    onChange(selectedIds.includes(id) ? selectedIds.filter((i) => i !== id) : [...selectedIds, id]);
-  }
-
-  return (
-    <div>
-      <label className="mb-1.5 block text-sm font-medium text-brand-text">
-        Centros de resultado <span className="text-red-500">*</span>
-      </label>
-      <div className="max-h-48 overflow-y-auto rounded-lg border border-brand-border p-2">
-        {costCenters.length === 0 && <p className="p-2 text-sm text-slate-400">Nenhum centro de resultado cadastrado.</p>}
-        {costCenters.map((c) => (
-          <label key={c.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-brand-bg">
-            <input type="checkbox" checked={selectedIds.includes(c.id)} onChange={() => toggle(c.id)} />
-            <span>{c.name}</span>
-          </label>
-        ))}
-      </div>
-      <p className="mt-1 text-xs text-slate-400">
-        O gestor só verá funcionários, orçamento e movimentações dos centros de resultado selecionados.
-      </p>
-    </div>
   );
 }
 
