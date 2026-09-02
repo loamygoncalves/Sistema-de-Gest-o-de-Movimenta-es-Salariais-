@@ -5,6 +5,7 @@ import { Management } from './entities/management.entity';
 import { Coordination } from './entities/coordination.entity';
 import { Position } from './entities/position.entity';
 import { CostCenter } from './entities/cost-center.entity';
+import { Employee } from '../employees/entities/employee.entity';
 import { OrgService } from './org.service';
 import { OrgController } from './org.controller';
 import { ImportsModule } from '../imports/imports.module';
@@ -17,6 +18,7 @@ import { ImportsModule } from '../imports/imports.module';
       Coordination,
       Position,
       CostCenter,
+      Employee,
     ]),
     ImportsModule,
   ],

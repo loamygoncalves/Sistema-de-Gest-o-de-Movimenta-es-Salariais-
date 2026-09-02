@@ -65,8 +65,31 @@ var OrgService = {
     });
   },
 
-  listPositions: function () {
-    return Tables.positions.all().sort(function (a, b) {
+  /**
+   * Cargos. Para GESTOR (scope.costCenterIds definido — ver resolveAccessScope_
+   * em Auth.gs), mostra só os cargos que têm (ou já tiveram) pelo menos um
+   * colaborador — ativo ou inativo, por isso não filtra por status — em
+   * algum dos centros de resultado dele; os demais perfis (sem escopo
+   * restrito, ou DIRETOR) continuam vendo todos os cargos da empresa.
+   */
+  listPositions: function (scope) {
+    var all = Tables.positions.all();
+    var filtered = all;
+    if (scope && scope.costCenterIds) {
+      var costCenterIds = scope.costCenterIds;
+      if (costCenterIds.length === 0) {
+        filtered = [];
+      } else {
+        var positionIdsWithTeam = {};
+        Tables.employees.all().forEach(function (e) {
+          if (costCenterIds.indexOf(e.costCenterId) !== -1) positionIdsWithTeam[e.positionId] = true;
+        });
+        filtered = all.filter(function (p) {
+          return !!positionIdsWithTeam[p.id];
+        });
+      }
+    }
+    return filtered.sort(function (a, b) {
       return a.name.localeCompare(b.name);
     });
   },

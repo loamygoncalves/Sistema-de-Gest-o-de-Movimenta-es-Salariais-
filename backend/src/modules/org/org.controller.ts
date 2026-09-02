@@ -18,6 +18,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import {
   AuthenticatedUser,
   CurrentUser,
+  resolveAccessScope,
 } from '../../common/decorators/current-user.decorator';
 import { UserRole } from '../../common/enums';
 import { OrgService } from './org.service';
@@ -90,8 +91,8 @@ export class OrgController {
   }
 
   @Get('positions')
-  findAllPositions() {
-    return this.orgService.findAllPositions();
+  findAllPositions(@CurrentUser() user: AuthenticatedUser) {
+    return this.orgService.findAllPositions(resolveAccessScope(user));
   }
 
   @Post('positions')

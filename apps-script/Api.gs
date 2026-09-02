@@ -51,10 +51,10 @@ function api_getCurrentUser() {
 // ---------------------------------------------------------------------------
 
 function api_getOrgLookups() {
-  requireUser_();
+  var user = requireUser_();
   return {
     directorates: stripRows_(OrgService.listDirectorates()),
-    positions: stripRows_(OrgService.listPositions()),
+    positions: stripRows_(OrgService.listPositions(resolveAccessScope_(user))),
     costCenters: stripRows_(OrgService.listCostCenters()),
     managements: stripRows_(OrgService.listManagements(null)),
     coordinations: stripRows_(OrgService.listCoordinations(null)),

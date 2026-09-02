@@ -9,6 +9,8 @@ import { Management } from './entities/management.entity';
 import { Coordination } from './entities/coordination.entity';
 import { Position } from './entities/position.entity';
 import { CostCenter } from './entities/cost-center.entity';
+import { Employee } from '../employees/entities/employee.entity';
+import { AccessScope } from '../../common/decorators/current-user.decorator';
 import {
   CreateCoordinationDto,
   CreateCostCenterDto,
@@ -55,6 +57,8 @@ export class OrgService {
     private readonly positionRepo: Repository<Position>,
     @InjectRepository(CostCenter)
     private readonly costCenterRepo: Repository<CostCenter>,
+    @InjectRepository(Employee)
+    private readonly employeeRepo: Repository<Employee>,
     private readonly importBatchService: ImportBatchService,
   ) {}
 
@@ -104,9 +108,29 @@ export class OrgService {
     return this.coordinationRepo.save(this.coordinationRepo.create(dto));
   }
 
-  // Cargos
-  findAllPositions() {
-    return this.positionRepo.find({ order: { name: 'ASC' } });
+  /**
+   * Cargos. Para GESTOR (scope.costCenterIds definido — ver resolveAccessScope),
+   * mostra só os cargos que têm (ou já tiveram) pelo menos um colaborador —
+   * ativo ou inativo, por isso não filtra por status — em algum dos centros
+   * de resultado dele; os demais perfis (sem escopo restrito, ou DIRETOR)
+   * continuam vendo todos os cargos da empresa.
+   */
+  findAllPositions(scope?: AccessScope) {
+    if (!scope?.costCenterIds) {
+      return this.positionRepo.find({ order: { name: 'ASC' } });
+    }
+    if (scope.costCenterIds.length === 0) return [];
+    return this.positionRepo
+      .createQueryBuilder('position')
+      .innerJoin(
+        Employee,
+        'employee',
+        'employee.positionId = position.id AND employee.costCenterId IN (:...costCenterIds)',
+        { costCenterIds: scope.costCenterIds },
+      )
+      .distinct(true)
+      .orderBy('position.name', 'ASC')
+      .getMany();
   }
 
   findPosition(id: string) {
