@@ -209,7 +209,7 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
     informa-se o novo salário; o servidor calcula e persiste `meritPercentage` automaticamente
     (`newSalary` precisa ser maior que o salário atual do colaborador)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
-- `api_updateMovement(id, patch)` — RASCUNHO (o próprio fluxo de rascunho, sem
+- `api_updateMovement(id, patch)` — RASCUNHO ou DEVOLVIDO (o próprio fluxo de rascunho, sem
   restrição de perfil) ou PENDENTE_APROVACAO (só ADMIN/RH_REMUNERACAO, para
   corrigir uma solicitação já em aprovação antes de decidida). Nunca muda
   `type`/`employeeId` — só os campos específicos do tipo, os mesmos aceitos em
@@ -264,8 +264,10 @@ colaborador; em `AUMENTO_QUADRO` é informado na solicitação (obrigatório).
   colaborador na aba Historico. As mensagens ficam salvas na coluna
   `policyViolations` de Simulacoes (uma por linha, dentro da célula),
   visíveis tanto para quem simula/solicita quanto para quem vai aprovar.
-- `api_submitMovement(id)` → dispara a simulação, cria uma etapa de aprovação por
-  linha do fluxo configurado (ver seção Aprovações abaixo), muda o status para
+- `api_submitMovement(id)` — aceita RASCUNHO (primeira submissão) ou DEVOLVIDO (reenvio
+  após devolução, ver seção Aprovações abaixo; apaga as `approvalSteps` da rodada anterior
+  antes de recriar) → dispara a simulação, cria uma etapa de aprovação por
+  linha do fluxo configurado, muda o status para
   `PENDENTE_APROVACAO` e envia um e-mail de notificação (via `MailApp`, de
   verdade) para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de resultado e o
   DIRETOR da diretoria — ver `apps-script/Notifications.gs`.
@@ -296,8 +298,13 @@ durante todo o fluxo; a etapa "ativa" é a de menor `stepOrder` ainda
   decidedByRole, status, approverEmail, comment, decidedAt }`
 - `api_approveStep(stepId, comment?)` — se essa era a última etapa pendente, a movimentação
   vira `APROVADO` e um e-mail de decisão é enviado ao solicitante (ver seção Notificações)
-- `api_rejectStep(stepId, comment)` (comentário obrigatório na reprovação) — reprova a
-  movimentação, pula as demais etapas e envia o e-mail de decisão ao solicitante
+- `api_rejectStep(stepId, comment)` (`comment` obrigatório, não-vazio — é o motivo que o
+  solicitante vai ver) — pula as demais etapas e devolve a movimentação (`DEVOLVIDO`, não mais
+  um `REPROVADO` definitivo) para quem solicitou, com e-mail de decisão explicando o motivo.
+  O solicitante edita (`api_updateMovement`, mesma permissão de `RASCUNHO` — sem restrição de
+  perfil) e reenvia (`api_submitMovement`, aceita `DEVOLVIDO` além de `RASCUNHO`), o que apaga
+  as `approvalSteps` da rodada anterior e reinicia o fluxo do zero. `REPROVADO` continua no
+  enum só por compatibilidade com dados antigos — nenhum fluxo novo o produz.
 
 ## Histórico — Módulo 6
 - `api_listHistory({ directorateId?, positionId?, type?, costCenterId?, startDate?, endDate? })`

@@ -5,6 +5,7 @@ import { ApprovalWorkflowStep } from './entities/approval-workflow-step.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
 import { MovementSimulation } from '../movements/entities/movement-simulation.entity';
 import { MovementHistory } from '../history/entities/movement-history.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ApprovalsService } from './approvals.service';
 import { ApprovalsController } from './approvals.controller';
 import { ApprovalWorkflowService } from './approval-workflow.service';
@@ -19,6 +20,7 @@ import { ApprovalWorkflowController } from './approval-workflow.controller';
       MovementSimulation,
       MovementHistory,
     ]),
+    NotificationsModule,
   ],
   providers: [ApprovalsService, ApprovalWorkflowService],
   controllers: [ApprovalsController, ApprovalWorkflowController],

@@ -49,11 +49,17 @@
           btn.addEventListener('click', function () {
             var stepId = btn.getAttribute('data-reject');
             promptComment(
-              { title: 'Reprovar etapa', message: 'Informe o motivo da reprovação.', required: true, danger: true, confirmLabel: 'Reprovar' },
+              {
+                title: 'Devolver movimentação para ajuste',
+                message: 'Explique o que precisa ser ajustado — o solicitante vai ver este texto.',
+                required: true,
+                danger: true,
+                confirmLabel: 'Devolver',
+              },
               function (comment) {
                 callApi('api_rejectStep', stepId, comment)
                   .then(function () {
-                    toast('Etapa reprovada.', 'success');
+                    toast('Movimentação devolvida para o solicitante ajustar e reenviar.', 'success');
                     Views.approvals(root);
                   })
                   .catch(toastError);
@@ -90,7 +96,7 @@
                 step.id +
                 '">Aprovar</button><button class="btn btn-danger btn-sm" data-reject="' +
                 step.id +
-                '">Reprovar</button></div></td></tr>'
+                '">Devolver</button></div></td></tr>'
               );
             })
             .join('') +

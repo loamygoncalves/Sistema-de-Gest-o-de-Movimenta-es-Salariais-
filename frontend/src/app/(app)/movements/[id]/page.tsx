@@ -99,6 +99,8 @@ export default function MovementDetailPage() {
   if (loading) return <PageLoading />;
   if (!movement) return <p className="text-sm text-brand-text">Movimentação não encontrada.</p>;
 
+  const returnReason = steps.find((s) => s.status === "REPROVADO")?.comment ?? null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -115,18 +117,33 @@ export default function MovementDetailPage() {
           <p className="text-sm text-brand-text">{movement.employeeName ?? "Aumento de quadro / vaga"}</p>
         </div>
         <div className="flex gap-2">
-          {movement.status === "PENDENTE_APROVACAO" && hasRole("ADMIN", "RH_REMUNERACAO") && !editing && (
-            <Button variant="outline" onClick={() => setEditing(true)}>
-              Editar
-            </Button>
-          )}
-          {movement.status === "RASCUNHO" && (
+          {((movement.status === "PENDENTE_APROVACAO" && hasRole("ADMIN", "RH_REMUNERACAO")) ||
+            movement.status === "DEVOLVIDO") &&
+            !editing && (
+              <Button variant="outline" onClick={() => setEditing(true)}>
+                Editar
+              </Button>
+            )}
+          {(movement.status === "RASCUNHO" || movement.status === "DEVOLVIDO") && (
             <Button onClick={handleSubmit} loading={submitting}>
-              Submeter para aprovação
+              {movement.status === "DEVOLVIDO" ? "Reenviar para aprovação" : "Submeter para aprovação"}
             </Button>
           )}
         </div>
       </div>
+
+      {movement.status === "DEVOLVIDO" && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-800">Esta solicitação foi devolvida para ajuste</p>
+          <p className="mt-1 text-sm text-amber-800">
+            {returnReason
+              ? `Motivo: "${returnReason}"`
+              : "Reveja a linha do tempo de aprovação abaixo para ver o motivo."}
+            {" "}Edite o que for necessário e clique em &quot;Reenviar para aprovação&quot; — o fluxo de aprovação
+            reinicia do início.
+          </p>
+        </div>
+      )}
 
       {editing ? (
         <EditMovementForm

@@ -24,7 +24,11 @@ export type MovementStatus =
   | "RASCUNHO"
   | "PENDENTE_APROVACAO"
   | "APROVADO"
+  // Encerrado — histórico apenas: nenhum fluxo novo produz esse status, ver DEVOLVIDO.
   | "REPROVADO"
+  // Recusado por um aprovador, mas volta para quem solicitou (com o motivo) em vez de
+  // encerrar — pode editar e reenviar.
+  | "DEVOLVIDO"
   | "CANCELADO";
 
 export const MOVEMENT_STATUS_LABELS: Record<MovementStatus, string> = {
@@ -32,6 +36,7 @@ export const MOVEMENT_STATUS_LABELS: Record<MovementStatus, string> = {
   PENDENTE_APROVACAO: "Pendente de Aprovação",
   APROVADO: "Aprovado",
   REPROVADO: "Reprovado",
+  DEVOLVIDO: "Devolvido para ajuste",
   CANCELADO: "Cancelado",
 };
 

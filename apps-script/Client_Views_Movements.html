@@ -558,7 +558,22 @@
 
     /** ADMIN/RH_REMUNERACAO podem corrigir uma solicitação já em aprovação, se necessário. */
     function canEditMovement(movement) {
-      return movement.status === 'PENDENTE_APROVACAO' && canManage(user);
+      return (movement.status === 'PENDENTE_APROVACAO' && canManage(user)) || movement.status === 'DEVOLVIDO';
+    }
+
+    /** Caixa de destaque com o motivo da devolução (etapa REPROVADO da rodada atual) — some sozinho quando reenviada. */
+    function devolutionBannerHtml(movement) {
+      if (movement.status !== 'DEVOLVIDO') return '';
+      var rejectedStep = (movement.approvalSteps || []).filter(function (s) { return s.status === 'REPROVADO'; })[0];
+      var reason = rejectedStep && rejectedStep.comment;
+      return (
+        '<div class="banner banner-warn" style="margin-bottom:16px;">' +
+        '<p style="font-weight:600;margin:0 0 4px 0;">Esta solicitação foi devolvida para ajuste</p>' +
+        '<p style="margin:0;">' +
+        (reason ? 'Motivo: "' + escapeHtml(reason) + '"' : 'Reveja a linha do tempo de aprovação abaixo para ver o motivo.') +
+        ' Edite o que for necessário e clique em "Reenviar para Aprovação" — o fluxo de aprovação reinicia do início.' +
+        '</p></div>'
+      );
     }
 
     function dataCardHtml(movement) {
@@ -701,8 +716,11 @@
         (showEditBtn ? '<button class="btn btn-outline" id="mov-edit-btn">Editar</button>' : '') +
         (movement.status === 'RASCUNHO'
           ? '<button class="btn btn-outline" id="mov-cancel-btn">Cancelar Rascunho</button><button class="btn" id="mov-submit-btn">Submeter para Aprovação</button>'
+          : movement.status === 'DEVOLVIDO'
+          ? '<button class="btn" id="mov-submit-btn">Reenviar para Aprovação</button>'
           : '') +
         '</div></div>' +
+        devolutionBannerHtml(movement) +
         (state.editing ? editFormHtml(movement) : dataCardHtml(movement)) +
         '<div style="height:16px;"></div>' +
         cardOpen('Simulador de Impacto', {
@@ -748,9 +766,10 @@
         submitBtn.addEventListener('click', function () {
           submitBtn.disabled = true;
           submitBtn.classList.add('is-loading');
+          var wasDevolved = movement.status === 'DEVOLVIDO';
           callApi('api_submitMovement', movement.id)
             .then(function () {
-              toast('Movimentação submetida para aprovação.', 'success');
+              toast(wasDevolved ? 'Movimentação reenviada para aprovação.' : 'Movimentação submetida para aprovação.', 'success');
               Views.movementDetail(root, movement.id);
             })
             .catch(function (err) {

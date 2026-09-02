@@ -156,21 +156,24 @@ export class MovementsService {
   }
 
   /**
-   * Edita uma movimentação já criada — o próprio rascunho (RASCUNHO, sem
-   * restrição de perfil, comportamento original) ou, só ADMIN/RH_REMUNERACAO,
-   * uma solicitação já em aprovação (PENDENTE_APROVACAO) que precise de
-   * correção antes de decidida (ver ApprovalsController). Nunca muda
-   * type/employeeId — só os campos específicos do tipo, iguais aos aceitos
-   * na criação. Reedita a movimentação PENDENTE_APROVACAO sempre reroda a
-   * simulação (this.simulate) para a fila de aprovação nunca mostrar
-   * números defasados em relação ao que foi editado.
+   * Edita uma movimentação já criada — o próprio rascunho ou uma devolvida
+   * (RASCUNHO/DEVOLVIDO, sem restrição de perfil, comportamento original)
+   * ou, só ADMIN/RH_REMUNERACAO, uma solicitação já em aprovação
+   * (PENDENTE_APROVACAO) que precise de correção antes de decidida (ver
+   * ApprovalsController). Nunca muda type/employeeId — só os campos
+   * específicos do tipo, iguais aos aceitos na criação. Reedita a
+   * movimentação PENDENTE_APROVACAO sempre reroda a simulação
+   * (this.simulate) para a fila de aprovação nunca mostrar números
+   * defasados em relação ao que foi editado.
    */
   async update(id: string, dto: UpdateMovementDto, user: AuthenticatedUser): Promise<MovementRequest> {
     const movement = await this.loadMovementOrFail(id);
     const isPending = movement.status === MovementStatus.PENDENTE_APROVACAO;
-    if (movement.status !== MovementStatus.RASCUNHO && !isPending) {
+    const isEditableFreely =
+      movement.status === MovementStatus.RASCUNHO || movement.status === MovementStatus.DEVOLVIDO;
+    if (!isEditableFreely && !isPending) {
       throw new ForbiddenException(
-        'Somente movimentações em rascunho ou pendentes de aprovação podem ser editadas',
+        'Somente movimentações em rascunho, devolvidas ou pendentes de aprovação podem ser editadas',
       );
     }
     if (isPending && ![UserRole.ADMIN, UserRole.RH_REMUNERACAO].includes(user.role)) {
@@ -271,10 +274,20 @@ export class MovementsService {
     return this.simulationRepo.save(simulation);
   }
 
+  /**
+   * Submete um RASCUNHO para aprovação, ou reenvia um DEVOLVIDO — mesma
+   * ação nos dois casos (o solicitante editou ou não, ver update()), mas
+   * para DEVOLVIDO primeiro apaga as etapas da rodada anterior (já
+   * decididas/puladas) antes de criar as novas, reiniciando o fluxo de
+   * aprovação do zero (ver ApprovalsService#clearStepsForMovement).
+   */
   async submit(id: string): Promise<MovementRequest> {
     const movement = await this.loadMovementOrFail(id);
-    if (movement.status !== MovementStatus.RASCUNHO) {
-      throw new ForbiddenException('Somente movimentações em rascunho podem ser submetidas');
+    if (movement.status !== MovementStatus.RASCUNHO && movement.status !== MovementStatus.DEVOLVIDO) {
+      throw new ForbiddenException('Somente movimentações em rascunho ou devolvidas podem ser submetidas');
+    }
+    if (movement.status === MovementStatus.DEVOLVIDO) {
+      await this.approvalsService.clearStepsForMovement(id);
     }
 
     await this.simulate(id);

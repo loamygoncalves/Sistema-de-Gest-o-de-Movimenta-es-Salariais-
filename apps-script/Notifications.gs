@@ -86,7 +86,7 @@ function notifyMovementDecided_(movement, decision, decidedByUser, comment) {
     var approved = decision === MovementStatus.APROVADO;
     var subject =
       'BEEP Remunera — solicitação ' +
-      (approved ? 'aprovada' : 'reprovada') +
+      (approved ? 'aprovada' : 'devolvida para ajuste') +
       ': ' +
       movementNotificationTitle_(movement);
     var body = buildMovementDecisionBody_(movement, approved, decidedByUser, comment);
@@ -416,7 +416,7 @@ function buildCareerApprovalBody_(movement) {
 
 function buildGenericDecisionBody_(movement, approved, decidedByUser, comment) {
   var accentColor = approved ? '#1f9d6c' : '#dc2626';
-  var decidedByLabel = approved ? 'Aprovado por' : 'Reprovado por';
+  var decidedByLabel = approved ? 'Aprovado por' : 'Devolvido por';
   var decidedByName = (decidedByUser && (decidedByUser.name || decidedByUser.email)) || '-';
   var decidedByRoleLabel =
     decidedByUser && decidedByUser.role ? APPROVER_ROLE_LABELS_[decidedByUser.role] || decidedByUser.role : '';
@@ -441,12 +441,12 @@ function buildGenericDecisionBody_(movement, approved, decidedByUser, comment) {
       : '');
 
   return emailShellHtml_({
-    eyebrow: approved ? 'Solicitação aprovada' : 'Solicitação reprovada',
+    eyebrow: approved ? 'Solicitação aprovada' : 'Solicitação devolvida',
     eyebrowColor: accentColor,
     title: escapeHtml_(movementNotificationTitle_(movement)),
     intro: approved
       ? 'Sua solicitação foi aprovada em todas as etapas do fluxo de aprovação. Resumo abaixo:'
-      : 'Sua solicitação foi reprovada e o fluxo foi encerrado. Resumo abaixo:',
+      : 'Sua solicitação foi devolvida para ajuste — reveja o motivo abaixo, edite se necessário e reenvie para aprovação.',
     bodyHtml: bodyHtml,
     ctaLabel: 'Ver movimentação',
     ctaUrl: safeWebAppUrl_(),

@@ -116,19 +116,21 @@ var MovementsService = {
   },
 
   /**
-   * Edita uma movimentação já criada — o próprio rascunho (RASCUNHO, sem
-   * restrição de perfil, comportamento original) ou, só ADMIN/RH_REMUNERACAO,
-   * uma solicitação já em aprovação (PENDENTE_APROVACAO) que precise de
-   * correção antes de decidida. Nunca muda type/employeeId — só os campos
-   * específicos do tipo, iguais aos aceitos na criação. Editar uma
-   * PENDENTE_APROVACAO sempre reroda a simulação para a fila de aprovação
-   * nunca mostrar números defasados em relação ao que foi editado.
+   * Edita uma movimentação já criada — o próprio rascunho ou uma devolvida
+   * (RASCUNHO/DEVOLVIDO, sem restrição de perfil, comportamento original)
+   * ou, só ADMIN/RH_REMUNERACAO, uma solicitação já em aprovação
+   * (PENDENTE_APROVACAO) que precise de correção antes de decidida. Nunca
+   * muda type/employeeId — só os campos específicos do tipo, iguais aos
+   * aceitos na criação. Editar uma PENDENTE_APROVACAO sempre reroda a
+   * simulação para a fila de aprovação nunca mostrar números defasados em
+   * relação ao que foi editado.
    */
   update: function (id, input, user) {
     var movement = this.getRaw_(id);
     var isPending = movement.status === MovementStatus.PENDENTE_APROVACAO;
-    if (movement.status !== MovementStatus.RASCUNHO && !isPending) {
-      throw new Error('Somente movimentações em rascunho ou pendentes de aprovação podem ser editadas');
+    var isEditableFreely = movement.status === MovementStatus.RASCUNHO || movement.status === MovementStatus.DEVOLVIDO;
+    if (!isEditableFreely && !isPending) {
+      throw new Error('Somente movimentações em rascunho, devolvidas ou pendentes de aprovação podem ser editadas');
     }
     if (isPending && user.role !== UserRole.ADMIN && user.role !== UserRole.RH_REMUNERACAO) {
       throw new Error('Só Administrador ou RH Remuneração podem editar uma movimentação já em aprovação');
@@ -183,10 +185,20 @@ var MovementsService = {
     return SimulatorService.simulateAndPersist(id);
   },
 
+  /**
+   * Submete um RASCUNHO para aprovação, ou reenvia um DEVOLVIDO — mesma
+   * ação nos dois casos (o solicitante editou ou não, ver update()), mas
+   * para DEVOLVIDO primeiro apaga as etapas da rodada anterior (já
+   * decididas/puladas) antes de criar as novas, reiniciando o fluxo de
+   * aprovação do zero (ver ApprovalsService.clearStepsForMovement).
+   */
   submit: function (id) {
     var movement = this.getRaw_(id);
-    if (movement.status !== MovementStatus.RASCUNHO) {
-      throw new Error('Somente movimentações em rascunho podem ser submetidas');
+    if (movement.status !== MovementStatus.RASCUNHO && movement.status !== MovementStatus.DEVOLVIDO) {
+      throw new Error('Somente movimentações em rascunho ou devolvidas podem ser submetidas');
+    }
+    if (movement.status === MovementStatus.DEVOLVIDO) {
+      ApprovalsService.clearStepsForMovement(id);
     }
     this.simulate(id);
     ApprovalsService.createStepsForMovement(id);

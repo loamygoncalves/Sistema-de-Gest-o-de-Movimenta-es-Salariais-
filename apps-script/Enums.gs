@@ -63,7 +63,11 @@ var MovementStatus = {
   RASCUNHO: 'RASCUNHO',
   PENDENTE_APROVACAO: 'PENDENTE_APROVACAO',
   APROVADO: 'APROVADO',
+  // Encerrado — histórico apenas: nenhum código novo produz esse status, ver DEVOLVIDO.
   REPROVADO: 'REPROVADO',
+  // Recusado por um aprovador, mas volta para quem solicitou (com o motivo) em vez de
+  // encerrar — pode editar e reenviar (ApprovalsService.reject / MovementsService.submit).
+  DEVOLVIDO: 'DEVOLVIDO',
   CANCELADO: 'CANCELADO',
 };
 

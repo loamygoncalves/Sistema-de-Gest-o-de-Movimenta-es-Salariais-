@@ -91,6 +91,13 @@ var ApprovalsService = {
     });
   },
 
+  /** Apaga as etapas (de uma rodada anterior, já decididas) de uma movimentação DEVOLVIDO antes de reenviar — ver MovementsService.submit, que chama isso e depois createStepsForMovement de novo, reiniciando o fluxo do zero. */
+  clearStepsForMovement: function (movementRequestId) {
+    Tables.approvalSteps
+      .where(function (s) { return s.movementRequestId === movementRequestId; })
+      .forEach(function (s) { Tables.approvalSteps.remove(s.id); });
+  },
+
   timeline: function (movementRequestId) {
     var steps = Tables.approvalSteps.where(function (s) {
       return s.movementRequestId === movementRequestId;
@@ -209,6 +216,14 @@ var ApprovalsService = {
     return Tables.approvalSteps.get(step.id);
   },
 
+  /**
+   * Recusa uma etapa — em vez de encerrar definitivamente, devolve a
+   * movimentação para quem solicitou (status DEVOLVIDO) junto com o motivo,
+   * para que edite (se necessário) e reenvie — ver
+   * MovementsService.submit/update, que passam a aceitar DEVOLVIDO como
+   * RASCUNHO. `comment` é obrigatório (validado em Api.gs) — é o motivo que
+   * o solicitante vai ver.
+   */
   reject: function (stepId, user, comment) {
     var loaded = this._loadActionableStep(stepId, user);
     var step = loaded.step;
@@ -228,8 +243,8 @@ var ApprovalsService = {
       }
     });
 
-    Tables.movementRequests.update(movement.id, { status: MovementStatus.REPROVADO, updatedAt: nowIso_() });
-    notifyMovementDecided_(MovementsService.get(movement.id), MovementStatus.REPROVADO, user, comment);
+    Tables.movementRequests.update(movement.id, { status: MovementStatus.DEVOLVIDO, updatedAt: nowIso_() });
+    notifyMovementDecided_(MovementsService.get(movement.id), MovementStatus.DEVOLVIDO, user, comment);
     recordAudit_(user.email, 'REJECT', 'movement_requests', movement.id, { step: step.stepOrder, comment: comment });
     return Tables.approvalSteps.get(step.id);
   },

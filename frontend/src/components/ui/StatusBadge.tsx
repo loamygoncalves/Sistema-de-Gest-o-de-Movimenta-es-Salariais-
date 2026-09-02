@@ -19,6 +19,7 @@ const MOVEMENT_STATUS_COLOR: Record<MovementStatus, "slate" | "green" | "red" | 
   PENDENTE_APROVACAO: "amber",
   APROVADO: "green",
   REPROVADO: "red",
+  DEVOLVIDO: "amber",
   CANCELADO: "slate",
 };
 

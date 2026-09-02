@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { LessThan, Repository } from 'typeorm';
 import { ApprovalStatus, MovementStatus, UserRole } from '../../common/enums';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
+import { NotificationsService } from '../notifications/notifications.service';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
 import { MovementSimulation } from '../movements/entities/movement-simulation.entity';
 import { MovementHistory } from '../history/entities/movement-history.entity';
@@ -22,6 +23,7 @@ export class ApprovalsService {
     private readonly simulationRepo: Repository<MovementSimulation>,
     @InjectRepository(MovementHistory)
     private readonly historyRepo: Repository<MovementHistory>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /** Cria uma ApprovalStep por etapa configurada em ApprovalWorkflowStep, na ordem cadastrada. */
@@ -42,6 +44,11 @@ export class ApprovalsService {
       }),
     );
     return this.stepRepo.save(steps);
+  }
+
+  /** Apaga as etapas (de uma rodada anterior, já decididas) de uma movimentação DEVOLVIDO antes de reenviar — ver MovementsService#submit, que chama isso e depois createStepsForMovement de novo, reiniciando o fluxo do zero. */
+  async clearStepsForMovement(movementRequestId: string): Promise<void> {
+    await this.stepRepo.delete({ movementRequestId });
   }
 
   /** DTO alinhado ao que o frontend consome (ver docs/API_CONTRACT.md). */
@@ -179,11 +186,21 @@ export class ApprovalsService {
     if (remaining === 0) {
       await this.movementRepo.update(movement.id, { status: MovementStatus.APROVADO });
       await this.recordHistory(movement);
+      const approved = await this.movementRepo.findOneOrFail({ where: { id: movement.id } });
+      await this.notificationsService.notifyMovementDecided(approved, MovementStatus.APROVADO, user, comment);
     }
 
     return this.stepRepo.findOneOrFail({ where: { id: step.id } });
   }
 
+  /**
+   * Recusa uma etapa — em vez de encerrar definitivamente, devolve a
+   * movimentação para quem solicitou (status DEVOLVIDO) junto com o motivo,
+   * para que edite (se necessário) e reenvie — ver
+   * MovementsService#submit/update, que passam a aceitar DEVOLVIDO como
+   * RASCUNHO. `comment` é obrigatório (RejectApprovalDto) — é o motivo que o
+   * solicitante vai ver.
+   */
   async reject(stepId: string, user: AuthenticatedUser, comment: string): Promise<ApprovalStep> {
     const { step, movement } = await this.loadActionableStep(stepId, user);
 
@@ -200,7 +217,9 @@ export class ApprovalsService {
       { status: ApprovalStatus.PULADO },
     );
 
-    await this.movementRepo.update(movement.id, { status: MovementStatus.REPROVADO });
+    await this.movementRepo.update(movement.id, { status: MovementStatus.DEVOLVIDO });
+    const returned = await this.movementRepo.findOneOrFail({ where: { id: movement.id } });
+    await this.notificationsService.notifyMovementDecided(returned, MovementStatus.DEVOLVIDO, user, comment);
 
     return this.stepRepo.findOneOrFail({ where: { id: step.id } });
   }

@@ -1,9 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { UserRole } from '../../common/enums';
+import { MovementStatus, UserRole } from '../../common/enums';
+import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { User } from '../users/entities/user.entity';
 import { MovementRequest } from '../movements/entities/movement-request.entity';
+
+const APPROVER_ROLE_LABELS: Record<string, string> = {
+  ADMIN: 'Administrador',
+  RH_REMUNERACAO: 'RH Remuneração',
+  DIRETOR: 'Diretor',
+};
 
 const MOVEMENT_TYPE_LABELS: Record<string, string> = {
   PROMOCAO: 'Promoção',
@@ -12,11 +19,16 @@ const MOVEMENT_TYPE_LABELS: Record<string, string> = {
 };
 
 /**
- * Ponto único de disparo de e-mail de notificação quando uma solicitação de
- * movimentação é submetida (ver MovementsService#submit). Destinatários:
- * Administrador, RH Remuneração, o(s) Gestor(es) do centro de custo da
- * movimentação e o Diretor da diretoria envolvida — espelha
- * apps-script/Notifications.gs#notifyMovementSubmitted_.
+ * Ponto único de disparo de e-mail de notificação. Dois eventos:
+ *   1. notifyMovementSubmitted — nova solicitação, para Administrador, RH
+ *      Remuneração, o(s) Gestor(es) do centro de custo e o Diretor da
+ *      diretoria envolvida — espelha
+ *      apps-script/Notifications.gs#notifyMovementSubmitted_.
+ *   2. notifyMovementDecided — desfecho, só para quem solicitou: aprovada
+ *      (todas as etapas) ou devolvida para ajuste (qualquer etapa recusa —
+ *      volta para o solicitante com o motivo em vez de encerrar
+ *      definitivamente, ver ApprovalsService#reject) — espelha
+ *      apps-script/Notifications.gs#notifyMovementDecided_.
  *
  * Sem credenciais SMTP configuradas neste ambiente, o envio real ainda não
  * está implementado aqui (ao contrário do Apps Script, que envia de verdade
@@ -45,6 +57,44 @@ export class NotificationsService {
       await Promise.all(recipients.map((email) => this.send(email, subject, body)));
     } catch (err) {
       this.logger.warn(`Falha ao preparar notificação de movimentação: ${err}`);
+    }
+  }
+
+  /**
+   * `status` é APROVADO (todas as etapas concluídas) ou DEVOLVIDO (uma
+   * etapa recusou — volta para o solicitante com `comment` como motivo).
+   * `decidedByUser` é quem tomou a decisão (a última etapa, no caso de
+   * aprovação).
+   */
+  async notifyMovementDecided(
+    movement: MovementRequest,
+    status: MovementStatus.APROVADO | MovementStatus.DEVOLVIDO,
+    decidedByUser: AuthenticatedUser,
+    comment?: string,
+  ): Promise<void> {
+    try {
+      const to = movement.requestedBy?.email;
+      if (!to) return;
+
+      const approved = status === MovementStatus.APROVADO;
+      const subject = `BEEP Remunera — solicitação ${approved ? 'aprovada' : 'devolvida para ajuste'}: ${this.title(movement)}`;
+      const decidedByRoleLabel = APPROVER_ROLE_LABELS[decidedByUser.role] ?? decidedByUser.role;
+
+      const header: [string, string | undefined][] = [
+        [approved ? 'Aprovado por' : 'Devolvido por', `${decidedByUser.name} (${decidedByRoleLabel})`],
+        ['Comentário', comment],
+      ];
+      const body =
+        header
+          .filter(([, value]) => value)
+          .map(([label, value]) => `${label}: ${value}`)
+          .join('\n') +
+        '\n\n' +
+        this.buildBody(movement);
+
+      await this.send(to, subject, body);
+    } catch (err) {
+      this.logger.warn(`Falha ao preparar notificação de decisão de movimentação: ${err}`);
     }
   }
 

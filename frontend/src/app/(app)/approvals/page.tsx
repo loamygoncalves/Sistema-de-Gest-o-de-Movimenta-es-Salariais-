@@ -42,7 +42,7 @@ export default function ApprovalsPage() {
   async function handleConfirm() {
     if (!modalStep) return;
     if (modalStep.action === "reject" && !comment.trim()) {
-      showToast("Informe um comentário para reprovar a movimentação.", "error");
+      showToast("Informe o motivo para devolver a movimentação.", "error");
       return;
     }
     setSubmitting(true);
@@ -51,7 +51,9 @@ export default function ApprovalsPage() {
         comment: comment.trim() || undefined,
       });
       showToast(
-        modalStep.action === "approve" ? "Movimentação aprovada." : "Movimentação reprovada.",
+        modalStep.action === "approve"
+          ? "Movimentação aprovada."
+          : "Movimentação devolvida para o solicitante ajustar e reenviar.",
         "success"
       );
       setModalStep(null);
@@ -85,7 +87,7 @@ export default function ApprovalsPage() {
             Detalhes
           </Button>
           <Button size="sm" variant="danger" onClick={() => setModalStep({ step: r, action: "reject" })}>
-            Reprovar
+            Devolver
           </Button>
           <Button size="sm" onClick={() => setModalStep({ step: r, action: "approve" })}>
             Aprovar
@@ -113,7 +115,7 @@ export default function ApprovalsPage() {
       <Modal
         open={!!modalStep}
         onClose={() => setModalStep(null)}
-        title={modalStep?.action === "approve" ? "Aprovar movimentação" : "Reprovar movimentação"}
+        title={modalStep?.action === "approve" ? "Aprovar movimentação" : "Devolver movimentação para ajuste"}
         footer={
           <>
             <Button variant="outline" onClick={() => setModalStep(null)}>
@@ -130,11 +132,11 @@ export default function ApprovalsPage() {
         }
       >
         <Textarea
-          label="Comentário"
+          label={modalStep?.action === "reject" ? "Motivo da devolução" : "Comentário"}
           required={modalStep?.action === "reject"}
           placeholder={
             modalStep?.action === "reject"
-              ? "Explique o motivo da reprovação..."
+              ? "Explique o que precisa ser ajustado — o solicitante vai ver este texto..."
               : "Comentário opcional..."
           }
           value={comment}

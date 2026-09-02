@@ -144,15 +144,17 @@ já que não há colaborador para derivar).
     informa-se o novo salário; o backend calcula e persiste `meritPercentage` automaticamente
     (`newSalary` precisa ser maior que o salário atual do colaborador)
   - `AUMENTO_QUADRO`: `{ type, positionId, quantity, plannedSalary, directorateId, costCenterId, effectiveDate, justification }`
-- `PATCH /movements/:id` — RASCUNHO (o próprio fluxo de rascunho, sem restrição de
+- `PATCH /movements/:id` — RASCUNHO ou DEVOLVIDO (o próprio fluxo de rascunho, sem restrição de
   perfil) ou PENDENTE_APROVACAO (só ADMIN/RH_REMUNERACAO, para corrigir uma
   solicitação já em aprovação antes de decidida). Nunca muda `type`/`employeeId` —
   só os campos específicos do tipo, os mesmos aceitos em `POST /movements`. Editar
   uma PENDENTE_APROVACAO sempre reroda a simulação (mesmo efeito de
   `POST /movements/:id/simulate`) para a fila de aprovação nunca mostrar números
   defasados em relação ao que foi editado.
-- `POST /movements/:id/submit` → dispara simulação + cria `approvalSteps` a partir do fluxo
-  configurado (ver seção Aprovações abaixo) + muda status para `PENDENTE_APROVACAO` + envia
+- `POST /movements/:id/submit` — aceita RASCUNHO (primeira submissão) ou DEVOLVIDO
+  (reenvio após devolução, ver seção Aprovações abaixo; apaga as `approvalSteps` da
+  rodada anterior antes de recriar) → dispara simulação + cria `approvalSteps` a partir do fluxo
+  configurado + muda status para `PENDENTE_APROVACAO` + envia
   e-mail de notificação para ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) do centro de resultado e o
   DIRETOR da diretoria (ver seção Notificações abaixo)
 - `DELETE /movements/:id` (somente RASCUNHO, cancela)
@@ -239,14 +241,20 @@ já que não há colaborador para derivar).
   bloqueia simulação/submissão, só alimenta a sinalização.
 
 ## Notificações
-Ao submeter uma movimentação (`POST /movements/:id/submit`), o backend
-resolve os destinatários (ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) cujo escopo
-inclui o `costCenterId` da movimentação, e o DIRETOR da diretoria) e monta um
-e-mail de resumo. Neste ambiente não há credenciais SMTP configuradas — o
+Dois eventos disparam e-mail:
+1. Ao submeter uma movimentação (`POST /movements/:id/submit`), o backend
+   resolve os destinatários (ADMIN, RH_REMUNERACAO, o(s) GESTOR(es) cujo escopo
+   inclui o `costCenterId` da movimentação, e o DIRETOR da diretoria) e monta um
+   e-mail de resumo.
+2. Ao decidir a última etapa (`POST /approvals/:stepId/approve` ou `/reject`),
+   só quem solicitou recebe: aprovada (todas as etapas concluídas) ou devolvida
+   para ajuste (`comment` da recusa como motivo).
+
+Neste ambiente não há credenciais SMTP configuradas — o
 envio real ainda não está implementado (o corpo/destinatários são resolvidos
 e registrados via log, prontos para plugar um provedor real). A versão Apps
 Script do sistema envia o e-mail de verdade via `MailApp`, usando a própria
-conta Google do deploy.
+conta Google do deploy, com um template HTML com a identidade visual Beep.
 
 ## Aprovações — módulo 5
 O fluxo de aprovação é configurável (ADMIN, tela Fluxo de Aprovação): uma
@@ -264,7 +272,13 @@ em `approvalSteps`. GESTOR nunca aprova, só solicita.
   usuário logado; DIRETOR só vê movimentações da própria diretoria)
 - `POST /approvals/:stepId/approve` `{ comment? }` — se essa era a última etapa pendente, a
   movimentação vira `APROVADO`
-- `POST /approvals/:stepId/reject` `{ comment }` — reprova a movimentação e pula as demais etapas
+- `POST /approvals/:stepId/reject` `{ comment }` (`comment` obrigatório, não-vazio — é o motivo que o
+  solicitante vai ver) — pula as demais etapas e devolve a movimentação (`DEVOLVIDO`, não mais um
+  `REPROVADO` definitivo) para quem solicitou; o solicitante pode editar (`PATCH /movements/:id`,
+  mesma permissão de `RASCUNHO` — sem restrição de perfil) e reenviar (`POST /movements/:id/submit`,
+  aceita `DEVOLVIDO` além de `RASCUNHO`), o que apaga as `approvalSteps` da rodada anterior e reinicia
+  o fluxo do zero. `REPROVADO` continua existindo no enum só por compatibilidade com dados antigos —
+  nenhum fluxo novo o produz.
 - `GET /approvals/movement/:movementId` → linha do tempo completa, cada etapa com
   `{ id, order, eligibleRoles, decidedByRole, status, approverId, approverName, comment, decidedAt }`
 

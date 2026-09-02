@@ -417,6 +417,9 @@ function api_approveStep(stepId, comment) {
 
 function api_rejectStep(stepId, comment) {
   var user = requireUser_();
+  if (!comment || !String(comment).trim()) {
+    throw new Error('Informe o motivo da recusa.');
+  }
   return stripRow_(ApprovalsService.reject(stepId, user, comment));
 }
 
