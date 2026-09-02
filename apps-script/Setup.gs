@@ -25,6 +25,7 @@ function setupSpreadsheet() {
   migrateApprovalStepsSheet_(ss);
   migrateMovementSimulationsSheet_(ss);
   migrateBudgetAdjustmentsSheet_(ss);
+  migratePositionsSheet_(ss);
 
   Object.keys(TABLES_CONFIG).forEach(function (key) {
     var cfg = TABLES_CONFIG[key];
@@ -226,6 +227,14 @@ function migrateBudgetAdjustmentsSheet_(ss) {
   migrateSheetColumns_(ss, 'budgetAdjustments', function (obj) {
     obj.directorateId = obj.directorateId || '';
     obj.costCenterId = obj.costCenterId || '';
+    return obj;
+  });
+}
+
+/** Cargos ganhou `hideSalaryFromManager` (oculta salário desse cargo para GESTOR, ex.: Gerente/Diretor) — default false para linhas existentes. */
+function migratePositionsSheet_(ss) {
+  migrateSheetColumns_(ss, 'positions', function (obj) {
+    obj.hideSalaryFromManager = obj.hideSalaryFromManager === true;
     return obj;
   });
 }

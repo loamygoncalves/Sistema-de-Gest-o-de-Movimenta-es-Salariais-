@@ -60,6 +60,10 @@ export class CreatePositionDto {
   @IsOptional()
   @IsString()
   careerLevel?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  hideSalaryFromManager?: boolean;
 }
 
 export class UpdatePositionDto {
@@ -70,6 +74,10 @@ export class UpdatePositionDto {
   @IsOptional()
   @IsString()
   careerLevel?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  hideSalaryFromManager?: boolean;
 
   @IsOptional()
   @IsBoolean()

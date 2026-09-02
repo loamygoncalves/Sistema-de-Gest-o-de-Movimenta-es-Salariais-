@@ -289,6 +289,7 @@ function PositionsTab() {
     { key: "level", header: "Nível", render: (r) => r.level ?? "—" },
     { key: "min", header: "Faixa Mínima", render: (r) => formatCurrency(r.salaryRangeMin), align: "right" },
     { key: "max", header: "Faixa Máxima", render: (r) => formatCurrency(r.salaryRangeMax), align: "right" },
+    { key: "hideSalaryFromManager", header: "Salário oculto p/ Gestor", render: (r) => (r.hideSalaryFromManager ? "Sim" : "Não") },
     {
       key: "actions",
       header: "",
@@ -355,6 +356,14 @@ function PositionsTab() {
               onChange={(e) => setModalItem((m) => ({ ...m, salaryRangeMax: Number(e.target.value) }))}
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-brand-text">
+            <input
+              type="checkbox"
+              checked={modalItem?.hideSalaryFromManager ?? false}
+              onChange={(e) => setModalItem((m) => ({ ...m, hideSalaryFromManager: e.target.checked }))}
+            />
+            Ocultar salário deste cargo para o perfil Gestor (ex.: Gerente, Diretor)
+          </label>
         </div>
       </Modal>
     </Card>

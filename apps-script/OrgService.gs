@@ -110,6 +110,7 @@ var OrgService = {
     return Tables.positions.insert({
       name: input.name,
       careerLevel: input.careerLevel || '',
+      hideSalaryFromManager: input.hideSalaryFromManager === true,
       active: true,
       createdAt: nowIso_(),
     });

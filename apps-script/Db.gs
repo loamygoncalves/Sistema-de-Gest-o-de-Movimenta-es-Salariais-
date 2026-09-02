@@ -202,7 +202,7 @@ var TABLES_CONFIG = {
   },
   positions: {
     sheet: 'Cargos',
-    columns: ['id', 'name', 'careerLevel', 'active', 'createdAt'],
+    columns: ['id', 'name', 'careerLevel', 'hideSalaryFromManager', 'active', 'createdAt'],
   },
   costCenters: {
     sheet: 'CentrosCusto',

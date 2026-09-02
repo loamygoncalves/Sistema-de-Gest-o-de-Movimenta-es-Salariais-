@@ -35,7 +35,25 @@ export class EmployeesService {
     return this.budgetAdjustmentRepo.find({ where: { year } });
   }
 
-  async findAll(query: EmployeeQueryDto, scope: AccessScope) {
+  /**
+   * Oculta `currentSalary` (null, nunca o valor real) dos colaboradores cujo
+   * cargo está marcado `hideSalaryFromManager` (ex.: Gerente/Diretor) — só
+   * quando `mask` é true (chamadores internos nunca passam isso, só o
+   * controller para requisições de GESTOR). Mutação in-memory da resposta,
+   * nunca persistida.
+   */
+  private maskRestrictedSalaries(employees: Employee[], mask: boolean): Employee[] {
+    if (mask) {
+      employees.forEach((employee) => {
+        if (employee.position?.hideSalaryFromManager) {
+          (employee as unknown as { currentSalary: number | null }).currentSalary = null;
+        }
+      });
+    }
+    return employees;
+  }
+
+  async findAll(query: EmployeeQueryDto, scope: AccessScope, maskSalaryForManager = false) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const qb = this.employeeRepo
@@ -57,12 +75,14 @@ export class EmployeesService {
       .take(limit);
 
     const [items, total] = await qb.getManyAndCount();
+    this.maskRestrictedSalaries(items, maskSalaryForManager);
     return paginate(items, total, page, limit);
   }
 
-  async findOne(id: string): Promise<Employee> {
+  async findOne(id: string, maskSalaryForManager = false): Promise<Employee> {
     const employee = await this.employeeRepo.findOne({ where: { id } });
     if (!employee) throw new NotFoundException('Colaborador não encontrado');
+    this.maskRestrictedSalaries([employee], maskSalaryForManager);
     return employee;
   }
 

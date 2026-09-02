@@ -31,7 +31,7 @@ export class EmployeesController {
 
   @Get()
   findAll(@Query() query: EmployeeQueryDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.employeesService.findAll(query, resolveAccessScope(user));
+    return this.employeesService.findAll(query, resolveAccessScope(user), user.role === UserRole.GESTOR);
   }
 
   @Get('comparison')
@@ -54,8 +54,8 @@ export class EmployeesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.employeesService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.employeesService.findOne(id, user.role === UserRole.GESTOR);
   }
 
   @Post()

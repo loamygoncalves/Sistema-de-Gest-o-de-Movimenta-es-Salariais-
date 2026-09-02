@@ -156,12 +156,12 @@ function api_listEmployees(filters) {
   var user = requireUser_();
   filters = filters || {};
   var scope = mergeAccessScope_(resolveAccessScope_(user), filters.directorateId, filters.costCenterId);
-  return stripRows_(EmployeesService.list(filters, scope));
+  return stripRows_(EmployeesService.list(filters, scope, user.role === UserRole.GESTOR));
 }
 
 function api_getEmployee(id) {
-  requireUser_();
-  return stripRow_(EmployeesService.get(id));
+  var user = requireUser_();
+  return stripRow_(EmployeesService.get(id, user.role === UserRole.GESTOR));
 }
 
 function api_createEmployee(input) {

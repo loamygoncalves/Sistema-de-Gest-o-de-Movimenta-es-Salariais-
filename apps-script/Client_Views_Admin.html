@@ -313,6 +313,8 @@
             '</td><td>' +
             escapeHtml(p.careerLevel || '—') +
             '</td><td>' +
+            (p.hideSalaryFromManager ? '<span class="pill pill-red">Sim</span>' : '—') +
+            '</td><td>' +
             activePill(p.active) +
             '</td><td><button class="btn btn-outline btn-sm" data-edit="' +
             p.id +
@@ -320,7 +322,7 @@
           );
         })
         .join('');
-      tableShell('Cargos', '+ Novo Cargo', function () { openPositionModal(null); }, rows, ['Nome', 'Nível de Carreira', 'Status', '']);
+      tableShell('Cargos', '+ Novo Cargo', function () { openPositionModal(null); }, rows, ['Nome', 'Nível de Carreira', 'Salário oculto p/ Gestor', 'Status', '']);
       document.querySelectorAll('[data-edit]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var item = (org.positions || []).filter(function (p) { return p.id === btn.getAttribute('data-edit'); })[0];
@@ -335,6 +337,12 @@
         fields: [
           { id: 'name', label: 'Nome', required: true, value: existing ? existing.name : '' },
           { id: 'careerLevel', label: 'Nível de Carreira', value: existing ? existing.careerLevel : '' },
+          {
+            id: 'hideSalaryFromManager',
+            label: 'Ocultar salário deste cargo para o perfil Gestor (ex.: Gerente, Diretor)',
+            type: 'checkbox',
+            checked: existing ? !!existing.hideSalaryFromManager : false,
+          },
           existing ? { id: 'active', label: 'Cargo ativo', type: 'checkbox', checked: !!existing.active } : null,
         ].filter(Boolean),
         validate: function (v) {
@@ -342,7 +350,7 @@
           return null;
         },
         onSubmit: function (v) {
-          var payload = { name: v.name, careerLevel: v.careerLevel || '' };
+          var payload = { name: v.name, careerLevel: v.careerLevel || '', hideSalaryFromManager: v.hideSalaryFromManager };
           if (existing) {
             payload.active = v.active;
             return callApi('api_updatePosition', existing.id, payload);

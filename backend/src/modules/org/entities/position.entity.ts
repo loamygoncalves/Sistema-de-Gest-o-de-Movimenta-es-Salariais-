@@ -16,6 +16,10 @@ export class Position {
   @Column({ length: 50, nullable: true, name: 'career_level' })
   careerLevel?: string;
 
+  /** Oculta o salário dos colaboradores desse cargo para o perfil GESTOR (ex.: Gerente/Diretor). */
+  @Column({ default: false, name: 'hide_salary_from_manager' })
+  hideSalaryFromManager: boolean;
+
   @Column({ default: true })
   active: boolean;
 

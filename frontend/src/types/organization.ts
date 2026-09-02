@@ -30,6 +30,8 @@ export interface Position {
   level?: string;
   salaryRangeMin?: number;
   salaryRangeMax?: number;
+  /** Oculta o salário dos colaboradores desse cargo para o perfil GESTOR (ex.: Gerente/Diretor). */
+  hideSalaryFromManager?: boolean;
 }
 
 export interface CostCenter {

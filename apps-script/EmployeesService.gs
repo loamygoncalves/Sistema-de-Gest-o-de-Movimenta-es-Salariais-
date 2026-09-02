@@ -110,7 +110,7 @@ function deactivateMissingEmployees_(previousLatest, currentEmployeeIds) {
 }
 
 var EmployeesService = {
-  list: function (filters, scope) {
+  list: function (filters, scope, maskSalaryForManager) {
     filters = filters || {};
     scope = scope || {};
     var search = filters.search ? String(filters.search).toLowerCase() : null;
@@ -130,22 +130,32 @@ var EmployeesService = {
       return a.name.localeCompare(b.name);
     });
 
-    return this._withRelations(items);
+    return this._withRelations(items, maskSalaryForManager);
   },
 
-  get: function (id) {
+  get: function (id, maskSalaryForManager) {
     var e = Tables.employees.get(id);
     if (!e) throw new Error('Colaborador não encontrado: ' + id);
-    return this._withRelations([e])[0];
+    return this._withRelations([e], maskSalaryForManager)[0];
   },
 
-  _withRelations: function (employees) {
+  /**
+   * `maskSalaryForManager` oculta (null, nunca o valor real) o salário dos
+   * colaboradores cujo cargo está marcado `hideSalaryFromManager` (ex.:
+   * Gerente/Diretor) — só quando true (Api.gs só passa isso para GESTOR;
+   * chamadores internos nunca passam, então nunca mascaram por padrão).
+   */
+  _withRelations: function (employees, maskSalaryForManager) {
     var positions = indexById_(Tables.positions.all());
     var directorates = indexById_(Tables.directorates.all());
     return employees.map(function (e) {
       var copy = shallowCopy_(e);
-      copy.positionName = positions[e.positionId] ? positions[e.positionId].name : null;
+      var position = positions[e.positionId];
+      copy.positionName = position ? position.name : null;
       copy.directorateName = directorates[e.directorateId] ? directorates[e.directorateId].name : null;
+      if (maskSalaryForManager && position && position.hideSalaryFromManager) {
+        copy.currentSalary = null;
+      }
       return copy;
     });
   },

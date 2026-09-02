@@ -221,7 +221,7 @@
               '</td><td>' +
               fmt.date(e.admissionDate) +
               '</td><td class="cell-num">' +
-              (state.salariesVisible ? fmt.currency(e.currentSalary) : '••••••') +
+              (e.currentSalary == null ? '—' : state.salariesVisible ? fmt.currency(e.currentSalary) : '••••••') +
               '</td><td>' +
               badge('employeeStatus', e.status) +
               '</td></tr>'
@@ -519,7 +519,7 @@
         fieldRow('Tipo de Contrato', escapeHtml(labelFor('contractType', employee.contractType))) +
         fieldRow('Cidade / UF', escapeHtml((employee.city || '—') + (employee.state ? ' / ' + employee.state : ''))) +
         fieldRow('Data de Admissão', fmt.date(employee.admissionDate)) +
-        fieldRow('Salário Atual', fmt.currency(employee.currentSalary)) +
+        fieldRow('Salário Atual', employee.currentSalary == null ? '—' : fmt.currency(employee.currentSalary)) +
         '</dl>' +
         cardClose();
 
