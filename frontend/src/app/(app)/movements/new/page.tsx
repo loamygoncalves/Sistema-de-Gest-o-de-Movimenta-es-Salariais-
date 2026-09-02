@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { EmployeePicker } from "@/components/shared/EmployeePicker";
+import { SalaryPercentInputs } from "@/components/shared/SalaryPercentInputs";
 import { useCostCenters, useDirectorates, usePositions } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
 import { getErrorMessage } from "@/lib/format";
@@ -19,22 +20,6 @@ import {
 } from "@/types";
 
 const TYPE_OPTIONS = Object.entries(MOVEMENT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
-
-// Mostra o salário atual do colaborador e, assim que um novo salário válido
-// é digitado, o % de reajuste que ele representa — usado tanto em Promoção
-// quanto em Mérito (que agora também parte do novo salário, não do %).
-function reajusteHint(employee: Employee | null, newSalaryStr: string, label: string): string | undefined {
-  if (!employee) return undefined;
-  const current = employee.currentSalary;
-  const currentFormatted = current.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-  const newSalary = Number(newSalaryStr);
-  if (newSalaryStr && !Number.isNaN(newSalary) && current > 0) {
-    const percent = ((newSalary - current) / current) * 100;
-    const sign = percent >= 0 ? "+" : "";
-    return `${label}: ${currentFormatted} (${sign}${percent.toFixed(2)}% de reajuste)`;
-  }
-  return `${label}: ${currentFormatted}`;
-}
 
 export default function NewMovementPage() {
   const router = useRouter();
@@ -197,7 +182,7 @@ export default function NewMovementPage() {
           )}
 
           {type === "PROMOCAO" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-4">
               <Select
                 label="Novo cargo"
                 required
@@ -207,30 +192,16 @@ export default function NewMovementPage() {
                 onChange={(e) => setNewPositionId(e.target.value)}
                 error={errors.newPositionId}
               />
-              <Input
-                label="Novo salário"
-                type="number"
-                step="0.01"
-                required
-                value={newSalary}
-                onChange={(e) => setNewSalary(e.target.value)}
-                error={errors.newSalary}
-                hint={reajusteHint(employee, newSalary, "Salário atual")}
-              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <SalaryPercentInputs currentSalary={employee?.currentSalary} newSalary={newSalary} onNewSalaryChange={setNewSalary} salaryError={errors.newSalary} />
+              </div>
             </div>
           )}
 
           {type === "MERITO" && (
-            <Input
-              label="Novo salário"
-              type="number"
-              step="0.01"
-              required
-              value={newSalary}
-              onChange={(e) => setNewSalary(e.target.value)}
-              error={errors.newSalary}
-              hint={reajusteHint(employee, newSalary, "Salário atual") ?? "O percentual de mérito é calculado automaticamente a partir do novo salário."}
-            />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <SalaryPercentInputs currentSalary={employee?.currentSalary} newSalary={newSalary} onNewSalaryChange={setNewSalary} salaryError={errors.newSalary} />
+            </div>
           )}
 
           {type === "AUMENTO_QUADRO" && (

@@ -12,22 +12,61 @@
     });
   }
 
-  /**
-   * Mostra o salário atual do colaborador e, assim que um novo salário
-   * válido é digitado, o % de reajuste que ele representa — usado por
-   * Promoção e Mérito (que agora também parte do novo salário, não do %).
-   */
-  function reajusteHintText_(emp, newSalaryStr) {
+  /** Mostra o salário atual do colaborador — usado por Promoção e Mérito, ao lado dos campos de novo salário/percentual (ver wireSalaryPercentSync_). */
+  function reajusteHintText_(emp) {
     if (!emp) return '';
-    var current = Number(emp.currentSalary);
-    var text = 'Salário atual: ' + fmt.currency(current);
-    var newSalary = Number(newSalaryStr);
-    if (newSalaryStr && !isNaN(newSalary) && current > 0) {
-      var percent = ((newSalary - current) / current) * 100;
-      var sign = percent >= 0 ? '+' : '';
-      text += ' (' + sign + percent.toFixed(2) + '% de reajuste)';
+    return 'Salário atual: ' + fmt.currency(Number(emp.currentSalary));
+  }
+
+  /**
+   * Liga um input de "novo salário" e um de "percentual de reajuste" para se
+   * atualizarem um ao outro a partir do salário atual do colaborador —
+   * preencher qualquer um dos dois calcula o outro automaticamente.
+   * `getCurrentSalary` é uma função (não um valor fixo) porque o colaborador
+   * selecionado pode mudar depois que os campos já existem no DOM. Retorna
+   * `{ refresh }` para o chamador recalcular o percentual quando o salário
+   * atual mudar por fora (troca de colaborador), sem perder o que o usuário
+   * já digitou no campo que ele estava editando.
+   */
+  function wireSalaryPercentSync_(salaryInputId, percentInputId, getCurrentSalary) {
+    var salEl = document.getElementById(salaryInputId);
+    var pctEl = document.getElementById(percentInputId);
+    if (!salEl || !pctEl) return { refresh: function () {} };
+    var lastEdited = null;
+
+    function recomputePercentFromSalary() {
+      var current = getCurrentSalary();
+      var salary = Number(salEl.value);
+      if (!current || current <= 0 || salEl.value === '' || isNaN(salary)) {
+        pctEl.value = '';
+        return;
+      }
+      pctEl.value = (((salary - current) / current) * 100).toFixed(2);
     }
-    return text;
+
+    salEl.addEventListener('input', function () {
+      lastEdited = 'salary';
+      recomputePercentFromSalary();
+    });
+
+    pctEl.addEventListener('input', function () {
+      lastEdited = 'percent';
+      var current = getCurrentSalary();
+      if (!current || current <= 0 || pctEl.value === '') {
+        if (pctEl.value === '') salEl.value = '';
+        return;
+      }
+      var percent = Number(pctEl.value);
+      if (isNaN(percent)) return;
+      salEl.value = (current * (1 + percent / 100)).toFixed(2);
+    });
+
+    return {
+      refresh: function () {
+        if (lastEdited === 'percent') return;
+        recomputePercentFromSalary();
+      },
+    };
   }
 
   function metricTile(label, value, highlight) {
@@ -284,6 +323,8 @@
           '</select><p class="field-error" id="mn-err-newPositionId" style="display:none;"></p></div>' +
           '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="mn-newSalary">' +
           '<p class="field-hint" id="mn-hint-newSalary"></p><p class="field-error" id="mn-err-newSalary" style="display:none;"></p></div>' +
+          '<div class="field"><label>Percentual de Reajuste (%)</label><input type="number" step="0.01" id="mn-newPercent">' +
+          '<p class="field-hint">Preencha um dos dois — o outro é calculado automaticamente.</p></div>' +
           '</div>'
         );
       }
@@ -291,8 +332,12 @@
         return (
           '<div class="field"><label>Colaborador <span class="req">*</span></label><div id="mn-employee-picker"></div>' +
           '<p class="field-error" id="mn-err-employee" style="display:none;"></p></div>' +
+          '<div class="form-grid">' +
           '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="mn-newSalary">' +
-          '<p class="field-hint" id="mn-hint-newSalary"></p><p class="field-error" id="mn-err-newSalary" style="display:none;"></p></div>'
+          '<p class="field-hint" id="mn-hint-newSalary"></p><p class="field-error" id="mn-err-newSalary" style="display:none;"></p></div>' +
+          '<div class="field"><label>Percentual de Reajuste (%)</label><input type="number" step="0.01" id="mn-newPercent">' +
+          '<p class="field-hint">Preencha um dos dois — o outro é calculado automaticamente.</p></div>' +
+          '</div>'
         );
       }
       if (t === 'AUMENTO_QUADRO') {
@@ -347,12 +392,13 @@
       }
     }
 
+    var salaryPercentSync = null;
+
     function updateSalaryHint() {
       var hint = document.getElementById('mn-hint-newSalary');
-      if (!hint) return;
       var emp = employeePicker && employeePicker.getSelected();
-      var salEl = document.getElementById('mn-newSalary');
-      hint.textContent = reajusteHintText_(emp, salEl ? salEl.value : '');
+      if (hint) hint.textContent = reajusteHintText_(emp);
+      if (salaryPercentSync) salaryPercentSync.refresh();
     }
 
     function renderTypeFields() {
@@ -368,6 +414,10 @@
       }
       var salEl = document.getElementById('mn-newSalary');
       if (salEl) salEl.addEventListener('input', updateSalaryHint);
+      salaryPercentSync = wireSalaryPercentSync_('mn-newSalary', 'mn-newPercent', function () {
+        var emp = employeePicker && employeePicker.getSelected();
+        return emp ? Number(emp.currentSalary) : null;
+      });
 
       if (prefill && prefill.newSalary != null && salEl) {
         salEl.value = prefill.newSalary;
@@ -549,11 +599,18 @@
           '<div class="field"><label>Novo Cargo</label><select id="me-newPositionId">' +
           optionsHtml(org.positions, { placeholder: 'Selecione', selected: movement.newPositionId }) +
           '</select></div>' +
-          '<div class="field"><label>Novo Salário</label><input type="number" step="0.01" id="me-newSalary" value="' + (movement.newSalary != null ? movement.newSalary : '') + '"></div>';
+          '<div class="form-grid">' +
+          '<div class="field"><label>Novo Salário</label><input type="number" step="0.01" id="me-newSalary" value="' + (movement.newSalary != null ? movement.newSalary : '') + '"></div>' +
+          '<div class="field"><label>Percentual de Reajuste (%)</label><input type="number" step="0.01" id="me-newPercent">' +
+          '<p class="field-hint">Preencha um dos dois — o outro é calculado automaticamente.</p></div>' +
+          '</div>';
       } else if (movement.type === 'MERITO') {
         typeFields =
-          '<div class="field"><label>Novo Salário</label><input type="number" step="0.01" id="me-newSalary" value="' + (movement.newSalary != null ? movement.newSalary : '') + '">' +
-          '<p class="field-hint">O percentual de mérito é recalculado automaticamente a partir do novo salário.</p></div>';
+          '<div class="form-grid">' +
+          '<div class="field"><label>Novo Salário</label><input type="number" step="0.01" id="me-newSalary" value="' + (movement.newSalary != null ? movement.newSalary : '') + '"></div>' +
+          '<div class="field"><label>Percentual de Reajuste (%)</label><input type="number" step="0.01" id="me-newPercent">' +
+          '<p class="field-hint">Preencha um dos dois — o outro é calculado automaticamente.</p></div>' +
+          '</div>';
       } else if (movement.type === 'AUMENTO_QUADRO') {
         typeFields =
           '<div class="form-grid">' +
@@ -587,6 +644,11 @@
       function v(id) {
         var el = document.getElementById('me-' + id);
         return el ? el.value : '';
+      }
+      if (movement.type === 'PROMOCAO' || movement.type === 'MERITO') {
+        wireSalaryPercentSync_('me-newSalary', 'me-newPercent', function () {
+          return movement.currentSalary != null ? Number(movement.currentSalary) : null;
+        });
       }
       document.getElementById('mov-edit-cancel-btn').addEventListener('click', function () {
         state.editing = false;
@@ -776,12 +838,13 @@
       renderTypeFields();
     }
 
+    var simSalaryPercentSync = null;
+
     function updateSimSalaryHint() {
       var hint = document.getElementById('sim-hint-newSalary');
-      if (!hint) return;
       var emp = employeePicker && employeePicker.getSelected();
-      var salEl = document.getElementById('sim-newSalary');
-      hint.textContent = reajusteHintText_(emp, salEl ? salEl.value : '');
+      if (hint) hint.textContent = reajusteHintText_(emp);
+      if (simSalaryPercentSync) simSalaryPercentSync.refresh();
     }
 
     function renderTypeFields() {
@@ -794,14 +857,24 @@
           '</select><p class="field-error" id="sim-err-newPositionId" style="display:none;"></p></div>' +
           '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="sim-newSalary">' +
           '<p class="field-hint" id="sim-hint-newSalary"></p><p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>' +
+          '<div class="field"><label>Percentual de Reajuste (%)</label><input type="number" step="0.01" id="sim-newPercent">' +
+          '<p class="field-hint">Preencha um dos dois — o outro é calculado automaticamente.</p></div>' +
           '</div>';
       } else {
         el.innerHTML =
+          '<div class="form-grid">' +
           '<div class="field"><label>Novo Salário <span class="req">*</span></label><input type="number" step="0.01" id="sim-newSalary">' +
-          '<p class="field-hint" id="sim-hint-newSalary"></p><p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>';
+          '<p class="field-hint" id="sim-hint-newSalary"></p><p class="field-error" id="sim-err-newSalary" style="display:none;"></p></div>' +
+          '<div class="field"><label>Percentual de Reajuste (%)</label><input type="number" step="0.01" id="sim-newPercent">' +
+          '<p class="field-hint">Preencha um dos dois — o outro é calculado automaticamente.</p></div>' +
+          '</div>';
       }
       var salEl = document.getElementById('sim-newSalary');
       if (salEl) salEl.addEventListener('input', updateSimSalaryHint);
+      simSalaryPercentSync = wireSalaryPercentSync_('sim-newSalary', 'sim-newPercent', function () {
+        var emp = employeePicker && employeePicker.getSelected();
+        return emp ? Number(emp.currentSalary) : null;
+      });
       updateSimSalaryHint();
     }
 

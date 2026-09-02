@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Input, Select, Textarea } from "@/components/ui/Input";
 import { PageLoading } from "@/components/ui/Spinner";
 import { MovementStatusBadge, ApprovalStatusBadge } from "@/components/ui/StatusBadge";
+import { SalaryPercentInputs } from "@/components/shared/SalaryPercentInputs";
 import { SimulationPanel } from "@/components/shared/SimulationPanel";
 import { useCostCenters, useDirectorates, usePositions } from "@/hooks/useOrgOptions";
 import { api } from "@/lib/api";
@@ -304,24 +305,12 @@ function EditMovementForm({
               value={newPositionId}
               onChange={(e) => setNewPositionId(e.target.value)}
             />
-            <Input
-              label="Novo salário"
-              type="number"
-              step="0.01"
-              value={newSalary}
-              onChange={(e) => setNewSalary(e.target.value)}
-            />
+            <div />
+            <SalaryPercentInputs currentSalary={movement.currentSalary} newSalary={newSalary} onNewSalaryChange={setNewSalary} />
           </>
         )}
         {movement.type === "MERITO" && (
-          <Input
-            label="Novo salário"
-            type="number"
-            step="0.01"
-            value={newSalary}
-            onChange={(e) => setNewSalary(e.target.value)}
-            hint="O percentual de mérito é recalculado automaticamente a partir do novo salário."
-          />
+          <SalaryPercentInputs currentSalary={movement.currentSalary} newSalary={newSalary} onNewSalaryChange={setNewSalary} />
         )}
         {movement.type === "AUMENTO_QUADRO" && (
           <>
